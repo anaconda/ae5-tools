@@ -1,0 +1,30 @@
+{% set data = load_setup_py_data() %}
+
+package:
+  name: ae5_tools
+  version: {{ data.get('version') }}
+
+source:
+  path: ../
+
+build:
+  number: 0
+  noarch: python
+  script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv "
+
+requirements:
+  host:
+    - python
+    - setuptools
+  run:
+    - python>=3.6
+    - requests
+    - pandas
+    - click
+    - click-repl
+
+about:
+  home: https://github.com/Anaconda-Platform/nb_conda_kernels
+  license: BSD 3-Clause
+  license_file: LICENSE
+  summary: 'Launch Jupyter kernels for any installed conda environment.'
