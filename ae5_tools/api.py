@@ -17,7 +17,7 @@ class AECluster(object):
         self.session = requests.Session()
         self.username = username
 
-        url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth?client_id=anaconda-platform&scope=openid+email+offline_access&response_type=code&redirect_uri=https%3A%2F%2F{self.hostname}%2Flogin'
+        url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth?client_id=anaconda-platform&scope=openid+email&response_type=code&redirect_uri=https%3A%2F%2F{self.hostname}%2Flogin'
         r = self.session.get(url, **self.request_args)
         tree = html.fromstring(r.text)
         form = tree.xpath("//form[@id='kc-form-login']")
@@ -28,6 +28,9 @@ class AECluster(object):
 
         headers = {'x-xsrftoken': r.cookies['_xsrf']}
         self.session_args = {'headers':headers, 'cookies':r.cookies}
+
+    def __del__(self):
+        self.session.get(f'https://{self.hostname}/logout', **self.session_args, **self.request_args)
 
     def _format_kwargs(self, kwargs, **kwargs2):
         kwargs.update(kwargs2)
