@@ -1,132 +1,167 @@
-import stat
 import getpass
 import json
 import os
-import warnings
+import sys
+import requests
+import urllib3
 
+from http.cookiejar import LWPCookieJar
+from datetime import datetime
+from dateutil import tz
 
-def yes_no(question, default=None):
-    dstr = 'Y/n' if default == 'y' else 'y/N' if default == 'n' else 'Y/N'
-    while True:
-        response = input(f'{question} [{default}]? ')
-        response = response.lower()[:1] or default
-        if response in ('y', 'n'):
-            return response == 'y'
-        print("Must enter 'y' or 'n'.")
+from lxml import html
 
-
-def my_input(request, default=None, required=True, hidden=False):
-    if not default:
-        request = f'{request}: '
-    elif hidden:
-        request = f'{request} [********]: '
-    else:
-        request = f'{request} [{default}]: '
-    while True:
-        response = (getpass.getpass if hidden else input)(request) or default
-        if response or not required:
-            return response
-        print('Must supply a value.')
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class ConfigManager:
     def __init__(self):
-        fdir = os.getenv('AE5_TOOLS_CONFIG_DIR') or '~/.ae5'
-        fpath = os.path.expanduser(os.path.join(fdir, 'creds'))
-        self._path = fpath
+        self._path = os.path.expanduser(os.getenv('AE5_TOOLS_CONFIG_DIR') or '~/.ae5')
         self._data = {}
         self.read()
 
     def read(self):
-        if os.path.isfile(self._path):
-            with open(self._path, 'r') as fp:
+        fpath = os.path.join(self._path, 'config')
+        data = {}
+        if os.path.isfile(fpath):
+            with open(fpath, 'r') as fp:
                 text = fp.read()
             if text:
                 try:
                     data = json.loads(text)
                 except json.decoder.JSONDecodeError:
-                    warnings.warn(f'Credentials file {fpath} is corrupt; no credentials loaded.')
-            self._data = {tuple(k.rsplit('@', 1)): v for k, v in data.items()}
+                    raise RuntimeError(f'Configuration file {fpath} is corrupt; please remove or correct')
+        data.setdefault('default', None)
+        accounts = data.setdefault('accounts', {})
+        cpath = os.path.join(self._path, 'cookies')
+        if os.path.isdir(cpath):
+            for fname in os.listdir(cpath):
+                if len(fname.split('@')) == 2 and os.path.isfile(os.path.join(cpath, fname)):
+                    accounts.setdefault(fname, None)
+        self._data = data
 
-    def write(self):
-        os.makedirs(os.path.dirname(self._path), mode=0o700, exist_ok=True)
-        nfile = self._path + '.new'
-        with open(nfile, 'w') as fp:
-            data = {'@'.join(k): v for k, v in self._data.items()}
-            json.dump(data, fp, sort_keys=True, indent=2)
-        os.chmod(nfile, 0o600)
-        os.rename(nfile, self._path)
+    def write(self, must_succeed=True):
+        try:
+            fpath = os.path.join(self._path, 'config')
+            os.makedirs(self._path, mode=0o700, exist_ok=True)
+            nfile = fpath + '.new'
+            with open(nfile, 'w') as fp:
+                json.dump(self._data, fp, sort_keys=False, indent=2)
+            os.chmod(nfile, 0o600)
+            os.rename(nfile, fpath)
+        except Exception:
+            if must_succeed:
+                raise
 
-    def new(self, hostname=None, username=None, password=None,
-            interactive=True, store=None, default=None):
-        if not (hostname and username and password):
-            if not interactive:
-                raise RuntimeError('Must supply hostname, username, and password')
-            hostname = my_input('Hostname', hostname)
-            username = my_input('Username', username)
-            password = my_input('Password', password, hidden=True)
-        if store is None and interactive:
-            store = yes_no('Save for future use', 'y')
-        label = (username, hostname)
-        self._data[label] = password
-        if default is None:
-            if not store:
-                default = True
-            elif interactive:
-                default = yes_no('Make default', 'y')
-        if default and len(self._data) > 1:
-            ndata = {label: self._data[label]}
-            ndata.update((k, v) for k, v in self._data.items() if k != label)
-            self._data = ndata
-        if store:
+    def set_default(self, default):
+        odefault = self._data.get('default')
+        if default != odefault:
+            self._data['default'] = default
             self.write()
-        return hostname, username, password
+
+    def store(self, hostname, username, password, default=False):
+        dirty = False
+        key = f'{username}@{hostname}'
+        opassword = self._data['accounts'].get(key)
+        if opassword != password:
+            if password:
+                self._data['accounts'][key] = password
+            else:
+                del self._data['accounts'][key]
+            dirty = True
+        odefault = self._data.get('default')
+        if default != odefault:
+            self._data['default'] = default
+            dirty = True
+        if dirty:
+            self.write()
 
     def count(self):
-        return len(self._data)
+        return len(self._data['accounts'])
 
     def list(self):
-        print('\n'.join('@'.join(k) for k in self._data))
+        from_zone = tz.tzutc()
+        to_zone = tz.tzlocal()
+        result = []
+        for key, value in self._data['accounts'].items():
+            username, hostname = key.rsplit('@', 1)
+            fname = os.path.join(self._path, 'cookies', key)
+            if os.path.isfile(fname):
+                cookies = LWPCookieJar(fname)
+                cookies.load()
+                expires = min(cookie.expires for cookie in cookies)
+                expired = any(cookie.is_expired() for cookie in cookies)
+            else:
+                status = 'no session'
+            if expired:
+                status = 'expired'
+            else:
+                expires = (datetime.utcfromtimestamp(expires)
+                           .replace(tzinfo=from_zone).astimezone(to_zone))
+                status = expires.strftime('%Y-%m-%d %H:%M:%S')
+            result.append((hostname, username, bool(value), status))
+        return result
 
     def default(self):
-        if not self._data:
-            raise RuntimeError('No saved credentials')
-        (u, h), p = next(v for v in self._data.items())
-        return h, u, p
+        key = self._data['default']
+        if key:
+            u, h, = key.rsplit('@', 1)
+            return h, u
 
-    def find(self, hostname=None, username=None, interactive=False):
-        if not self._data:
-            if interactive:
-                return config.new(interactive=True)
-            raise RuntimeError('No saved credentials')
-        if hostname is None and username is None:
-            return self.default()
-        matches = [(u, h, p) for (u, h), p in self._data.items()
-                   if (hostname is None or hostname == h)
-                   and (username is None or username == u)]
-        if len(matches) == 1:
-            return matches[0]
-        if interactive and not matches:
-            return config.new(interactive=True)
-        if interactive:
-            u0, h0, p0 = matches[0]
-            return config.new(username=u0 if all(u0 == u for u, _, _ in matches) else None,
-                              hostname=h0 if all(h0 == h for _, h, _ in matches) else None,
-                              password=p0 if all(p0 == p for _, _, p in matches) else None,
-                              interactive=True)
-        msg = 'Multiple ' if matches else 'No '
-        msg += 'credentials with'
-        if hostname:
-            msg += f' hostname "{hostname}"'
-        if username and hostname:
-            msg += ' and'
-        if username:
-            msg += f' username "{username}"'
-        msg += ' were found'
-        if matches:
-            matches = [f'  - {u}@{h}' for u, h, _ in matches]
-            msg += '\n'.join([':'] + matches)
-        raise ValueError(msg)
+    def resolve(self, hostname=None, username=None):
+        matches = []
+        for key in self._data['accounts']:
+            u, h = key.rsplit('@', 1)
+            if (hostname is None or hostname == h) and (username is None or username == u):
+                matches.append((h, u))
+            if default:
+                break
+        return matches
+
+    def session(self, hostname, username, password=None):
+        if not hostname or not username:
+            raise ValueError('Must supply username and hostname')
+        key = f'{username}@{hostname}'
+        if password is None:
+            password = self._data['accounts'].get(key)
+        fname = os.path.join(self._path, 'cookies', key)
+        cookies = LWPCookieJar(fname)
+        session = requests.Session()
+        session.cookies = cookies
+        session.verify = False
+        if os.path.exists(fname):
+            cookies.load()
+            for cookie in cookies:
+                if cookie.name == '_xsrf' and not cookie.is_expired():
+                    session.headers['x-xsrftoken'] = cookie.value
+                    r = session.get(f'https://{hostname}/api/v2/runs')
+                    if r.status_code == 200:
+                        return session
+            print(f'Session for {username}@{hostname} has expired; must log in again.')
+        else:
+            print(f'Logging into {username}@{hostname}...')
+        while not password:
+            password = getpass.getpass(f'Password: ')
+            if not password:
+                print('Must supply a password.')
+        url = f'https://{hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth?client_id=anaconda-platform&scope=openid&response_type=code&redirect_uri=https%3A%2F%2F{hostname}%2Flogin'
+        r = session.get(url)
+        tree = html.fromstring(r.text)
+        form = tree.xpath("//form[@id='kc-form-login']")
+        login_url = form[0].action
+        r = session.post(login_url, data={'username': username, 'password': password})
+        if r.status_code == 200:
+            for cookie in cookies:
+                if cookie.name == '_xsrf':
+                    session.headers['x-xsrftoken'] = cookie.value
+                    os.makedirs(os.path.dirname(fname), mode=0o700, exist_ok=True)
+                    cookies.save()
+                    os.chmod(fname, 0o600)
+                    if self._data['default'] is None:
+                        self.set_default(key)
+                    return session
+        raise RuntimeError('Unable to retrieve token')
+
 
 config = ConfigManager()
 

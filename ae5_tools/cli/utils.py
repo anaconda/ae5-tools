@@ -7,18 +7,93 @@ import pandas as pd
 from fnmatch import fnmatch
 from collections import namedtuple
 
+from ..config import config
+from ..api import AECluster
+from ..identifier import Identifier
+
+
+def add_param(param, value):
+    if value is None:
+        return
+    ctx = click.get_current_context()
+    obj = ctx.ensure_object(dict)
+    if param == 'filter':
+        ovalue = obj.get('filter') or ''
+        value = f'{ovalue},{value}' if ovalue and value else (value or ovalue)
+    obj[param] = value
+
+
+def param_callback(ctx, param, value):
+    add_param(param.name, value)
+
 
 _format_options = [
-    click.option('--filter', default='', help='Filter the rows using a comma-separated list of <field>=<value> pairs. Wildcards may be used.'),
-    click.option('--sort', default='', help='Sort the rows by a comma-separated list of fields.'),
-    click.option('--format', default='text', type=click.Choice(['text', 'csv', 'json']), help='Output format. Default is "text".'),
-    click.option('--width', default=0, help='Output width, in characters (format="text" only). Default is to limit to width of the window'),
-    click.option('--wide', is_flag=True, help='Do not limit output width (format="text" only). Equivalent to --width=infinity.'),
-    click.option('--header/--no-header', is_flag=True, default=True, help='Include header (format="text"/"csv" only)')
+    click.option('--filter', type=str, expose_value=False, callback=param_callback,
+                 help='Filter the rows using a comma-separated list of <field>=<value> pairs. Wildcards may be used.'),
+    click.option('--sort', type=str, expose_value=False, callback=param_callback,
+                 help='Sort the rows by a comma-separated list of fields.'),
+    click.option('--format', type=click.Choice(['text', 'csv', 'json']), expose_value=False, callback=param_callback,
+                 help='Output format. Default is "text".'),
+    click.option('--width', type=int, expose_value=False, callback=param_callback,
+                 help='Output width, in characters (format="text" only). Default is to limit to width of the window'),
+    click.option('--wide', is_flag=True, expose_value=False, callback=param_callback,
+                 help='Do not limit output width (format="text" only). Equivalent to --width=infinity.'),
+    click.option('--header/--no-header', default=True, expose_value=False, callback=param_callback,
+                 help='Include header (format="text"/"csv" only)')
 ]
 
 
-def format_options(single=False):
+_login_options = [
+    click.option('--hostname', type=str, expose_value=False, callback=param_callback, envvar='AE5_HOSTNAME',
+                 help='The hostname of the cluster to connect to.'),
+    click.option('--username', type=str, expose_value=False, callback=param_callback, envvar='AE5_USERNAME',
+                 help='The username to use for authentication.'),
+    click.option('--password', type=str, expose_value=False, callback=param_callback, envvar='AE5_PASSWORD',
+                 help='The password to use for authentication.')
+]
+
+
+def cluster(reconnect=False):
+    ctx = click.get_current_context()
+    obj = ctx.ensure_object(dict)
+    if 'cluster' not in obj or reconnect:
+        hostname = obj.get('hostname')
+        username = obj.get('username')
+        password = obj.get('password')
+        if not hostname and not username:
+            matches = config.default()
+            matches = [matches] if matches else []
+        else:
+            matches = config.resolve(hostname, username)
+        if len(matches) == 1:
+            hostname, username = matches[0]
+        else:
+            ask = obj.get('is_interactive')
+            if hostname or username:
+                if len(matches) == 0:
+                    msg = 'No saved sessions match'
+                else:
+                    msg = 'Multiple saved accounts match'
+                if hostname:
+                    msg += f' hostname "{hostname}"'
+                if hostname and username:
+                    msg += ' and'
+                if username:
+                    msg += f' username "{username}"'
+                if obj.get('is_interactive'):
+                    click.echo(msg)
+                else:
+                    click.UsageError(msg)
+            elif not ask:
+                click.UsageError('Must supply username and hostname')
+            hostname = click.prompt('Hostname', default=hostname, type=str)
+            username = click.prompt('Username', default=username, type=str)
+            password = click.prompt('Password', default=password, type=str, hide_input=True)
+        obj['cluster'] = AECluster(hostname, username, password)
+    return obj['cluster']
+
+
+def format_options():
     def apply(func):
         for option in reversed(_format_options):
             func = option(func)
@@ -26,63 +101,18 @@ def format_options(single=False):
     return apply
 
 
-class Identifier(namedtuple('Identifier', ['name', 'owner', 'id', 'revision'])):
-    @classmethod
-    def from_string(self, idstr):
-        rev_parts = idstr.rsplit(':', 1)
-        revision = rev_parts[1] if len(rev_parts) == 2 else ''
-        id_parts = rev_parts[0].split('/')
-        id, owner, name = '', '', ''
-        if re.match(r'[a-f0-9]{2}-[a-f0-9]{32}', id_parts[-1]):
-            id = id_parts.pop()
-        if id_parts:
-            name = id_parts.pop()
-        if id_parts:
-            owner = id_parts.pop()
-        if id_parts:
-            raise ValueError(f'Invalid identifier: {idstr}')
-        return Identifier(name, owner, id, revision)
-
-    def project_filter(self):
-        parts = []
-        if self.name and self.name != '*':
-            parts.append(f'name={self.name}')
-        if self.owner and self.owner != '*':
-            parts.append(f'owner={self.owner}')
-        if self.id and self.id != '*':
-            parts.append(f'id={self.id}')
-        if parts:
-            return ','.join(parts)
-
-    def revision_filter(self):
-        if self.revision and self.revision != '*':
-            return f'name={self.revision}'
-
-    def to_string(self, drop_revision=False):
-        if self.id:
-            if self.owner or self.name:
-                result = f'{self.owner or "*"}/{self.name or "*"}/{self.id}'
-            else:
-                result = self.id
-        elif self.owner:
-            result = f'{self.owner}/{self.name or "*"}'
-        else:
-            result = self.name
-        if self.revision and not drop_revision:
-            result = f'{result}:{self.revision}'
-        return result
+def login_options(password=True):
+    def apply(func):
+        n = 3 if password else 2
+        for option in reversed(_login_options[:n]):
+            func = option(func)
+        return func
+    return apply
 
 
 def filter_df(df, filter_string, is_revision=False):
     if filter_string in (None, ''):
         return df
-    if '=' not in filter_string:
-        filter_string = Identifier.from_string(filter_string)
-    if isinstance(filter_string, Identifier):
-        if is_revision:
-            filter_string = filter_string.revision_filter()
-        else:
-            filter_string = filter_string.project_filter()
     filters = filter_string.split(',')
     for filter in filters:
         if '=' not in filter:
@@ -100,8 +130,8 @@ def sort_df(df, columns):
     return df
 
 
-def print_df(df, header=True, width=None):
-    if not width:
+def print_df(df, header=True, width=0):
+    if width <= 0:
         # http://granitosaurus.rocks/getting-terminal-size.html
         for i in range(3):
             try:
@@ -140,29 +170,31 @@ def print_df(df, header=True, width=None):
     if header:
         print(head)
         print(dash)
-    print('\n'.join(final))
+    if len(final):
+        print('\n'.join(final))
 
 
-def print_output(result, filter, sort, format, wide, width, header):
+def print_output(result):
+    obj = click.get_current_context().find_object(dict)
     is_single = isinstance(result, pd.Series)
     if is_single:
         result = result.T.reset_index()
         result.columns = ['field', 'value']
-    if filter:
-        result = filter_df(result, filter, is_single)
-    if sort:
-        result = sort_df(result, sort)
-    if format == 'text':
-        width = 99999999 if wide else width
-        print_df(result, header, width)
-    elif format == 'csv':
-        print(result.to_csv(index=False, header=header))
-    elif format == 'json':
+    if obj.get('filter'):
+        result = filter_df(result, obj['filter'], is_single)
+    if obj.get('sort'):
+        result = sort_df(result, obj['sort'])
+    if obj.get('format') == 'csv':
+        print(result.to_csv(index=False, header=obj.get('header', True)))
+    elif obj.get('format') == 'json':
         if is_single:
             result = result.set_index('field').value
-        orient = 'index' if is_single else 'records'
+            orient = 'index'
+        else:
+            orient = 'records'
         result = json.loads(result.to_json(orient=orient, date_format='iso'))
         print(json.dumps(result, indent=2))
     else:
-        click.UsageError(f'Invalid output format: {format}')
+        width = 99999999 if obj.get('wide') else obj.get('width') or 0
+        print_df(result, obj.get('header', True), width)
 

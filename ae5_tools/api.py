@@ -4,33 +4,27 @@ import io
 from lxml import html
 from os.path import basename
 import getpass
+import atexit
+
+from .config import config
 
 requests.packages.urllib3.disable_warnings()
+
+
+def _logout_at_exit(session, url, **args):
+    session.get(url, **args)
 
 
 class AECluster(object):
     request_args = dict(verify=False, allow_redirects=True)
 
     def __init__(self, hostname, username, password, dataframe=False):
+        if not hostname or not username:
+            raise ValueError('Must supply hostname and username')
         self.hostname = hostname
-        self._df_format = 'dataframe' if dataframe else 'json'
-        self.session = requests.Session()
         self.username = username
-
-        url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth?client_id=anaconda-platform&scope=openid+email&response_type=code&redirect_uri=https%3A%2F%2F{self.hostname}%2Flogin'
-        r = self.session.get(url, **self.request_args)
-        tree = html.fromstring(r.text)
-        form = tree.xpath("//form[@id='kc-form-login']")
-        login_url = form[0].action
-
-        data = {'username': username, 'password': password}
-        r = self.session.post(login_url, data=data, **self.request_args)
-
-        headers = {'x-xsrftoken': r.cookies['_xsrf']}
-        self.session_args = {'headers':headers, 'cookies':r.cookies}
-
-    def __del__(self):
-        self.session.get(f'https://{self.hostname}/logout', **self.session_args, **self.request_args)
+        self._df_format = 'dataframe' if dataframe else 'json'
+        self.session = config.session(hostname, username, password)
 
     def _format_kwargs(self, kwargs, **kwargs2):
         kwargs.update(kwargs2)
@@ -63,6 +57,8 @@ class AECluster(object):
                 raise RuntimeError('Not a dataframe-compatible output')
             import pandas as pd
             df = pd.DataFrame([response] if is_series else response)
+            if len(df) == 0 and kwargs.get('columns'):
+                df = pd.DataFrame(columns=kwargs['columns'])
             if kwargs['dtypes']:
                 for col, dtype in kwargs['dtypes'].items():
                     if col in df:
@@ -91,7 +87,7 @@ class AECluster(object):
         fmt_args = self._format_kwargs(kwargs)
         url = f"https://{self.hostname}/api/v2/{endpoint}"
         print('{} {}'.format(method.upper(), url))
-        response = getattr(self.session, method)(url, **kwargs, **self.session_args, **self.request_args)
+        response = getattr(self.session, method)(url, **kwargs, **self.request_args)
         return self._format_response(response, **fmt_args)
 
     def _get(self, endpoint, **kwargs):
@@ -115,7 +111,7 @@ class AECluster(object):
         return self._get('projects', columns=columns, dtypes=dtypes, **kwargs)
 
     def sessions(self, **kwargs):
-        columns = ['name', 'owner', 'resource_profile', 'state', 'id', 'created', 'updated']
+        columns = ['name', 'owner', 'resource_profile', 'id', 'state', 'created', 'updated']
         dtypes = {'created': 'datetime', 'updated': 'datetime'}
         fmt_args = self._format_kwargs(kwargs, columns=columns, dtypes=dtypes)
         resolve = kwargs.pop('simple_names', True)
@@ -130,12 +126,12 @@ class AECluster(object):
     def deployments(self, **kwargs):
         columns = ['name', 'project_name', 'owner', 'command', 'resource_profile', 'id', 'created', 'updated', 'state']
         dtypes = {'created': 'datetime', 'updated': 'datetime'}
-        return self._get('deployments', columns=columns, dtypes=dtypes)
+        return self._get('deployments', columns=columns, dtypes=dtypes, **kwargs)
 
     def jobs(self, **kwargs):
         columns = ['name', 'project_name', 'owner', 'command', 'resource_profile', 'id', 'created', 'updated', 'state']
         dtypes = {'created': 'datetime', 'updated': 'datetime'}
-        return self._get('jobs', columns=columns, dtypes=dtypes)
+        return self._get('jobs', columns=columns, dtypes=dtypes, **kwargs)
 
     def project(self, *args, id=None, name=None, owner=None):
         if id:

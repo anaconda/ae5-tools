@@ -1,29 +1,26 @@
 import click
 
-from .utils import filter_df, sort_df, print_output, format_options, Identifier
+from .utils import cluster, filter_df, sort_df, print_output, format_options, Identifier, add_param
 
 
 @click.group()
-@click.pass_context
-def project(ctx):
+def project():
     pass
 
 
 @project.command()
 @click.argument('project', required=False)
 @format_options()
-@click.pass_context
-def list(ctx, project, filter, sort, format, width, wide, header):
-    result = ctx.obj['cluster'].projects(format='dataframe')
+def list(project):
+    result = cluster().projects(format='dataframe')
     if project:
-        pfilt = Identifier.from_string(project).project_filter()
-        filter = ','.join((pfilt, filter)) if filter else pfilt
-    print_output(result, filter, sort, format, wide, width, header)
+        add_param('filter', Identifier.from_string(project).project_filter())
+    print_output(result)
 
 
-def single_project(ctx, project):
+def single_project(project):
     ident = Identifier.from_string(project)
-    result = ctx.obj['cluster'].projects(format='dataframe')
+    result = cluster().projects(format='dataframe')
     result = filter_df(result, ident.project_filter())
     if len(result) == 0:
         raise click.UsageError(f'Project not found: {project}')
@@ -35,10 +32,9 @@ def single_project(ctx, project):
 @project.command()
 @click.argument('project')
 @format_options()
-@click.pass_context
-def info(ctx, project, filter, sort, format, width, wide, header):
-    result = single_project(ctx, project)
-    print_output(result, filter, sort, format, wide, width, header)
+def info(project):
+    result = single_project(project)
+    print_output(result)
 
 
 @project.command()
@@ -55,23 +51,21 @@ def download(ctx, project, filename):
 @project.command()
 @click.argument('filename', type=click.Path(exists=True))
 @click.option('--name', default='', help='Name of the project. If not supplied, it will be taken from the basename of the file.')
-@click.pass_context
-def upload(ctx, filename, name):
+def upload(filename, name):
     print(f'Uploading {filename}...')
-    ctx.obj['cluster'].project_upload(filename, name=name or None, wait=True)
+    cluster().project_upload(filename, name=name or None, wait=True)
     print('done.')
 
 
 @project.command()
 @click.argument('project')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
-@click.pass_context
-def delete(ctx, project, yes):
-    result = single_project(ctx, project)
+def delete(project, yes):
+    result = single_project(project)
     ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
     if not yes:
         yes = click.confirm(f'Delete project {ident}')
     if yes:
         click.echo(f'Deleting {ident}...', nl=False)
-        ctx.obj['cluster'].project_delete(result.id)
+        cluster().project_delete(result.id)
         click.echo('done.')
