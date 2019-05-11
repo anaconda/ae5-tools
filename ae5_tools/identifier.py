@@ -9,7 +9,7 @@ class Identifier(namedtuple('Identifier', ['name', 'owner', 'id', 'revision'])):
         revision = rev_parts[1] if len(rev_parts) == 2 else ''
         id_parts = rev_parts[0].split('/')
         id, owner, name = '', '', ''
-        if re.match(r'[a-f0-9]{2}-[a-f0-9]{32}', id_parts[-1]):
+        if len(id_parts) == 3 or re.match(r'[a-f0-9]{2}-[a-f0-9]{32}', id_parts[-1]):
             id = id_parts.pop()
         if id_parts:
             name = id_parts.pop()
@@ -18,6 +18,11 @@ class Identifier(namedtuple('Identifier', ['name', 'owner', 'id', 'revision'])):
         if id_parts:
             raise ValueError(f'Invalid identifier: {idstr}')
         return Identifier(name, owner, id, revision)
+
+    @classmethod
+    def from_record(self, record, ignore_revision=False):
+        rev = '' if ignore_revision else (record.get('revision') or '')
+        return Identifier(record['name'], record['owner'], record['id'], rev)
 
     def project_filter(self):
         parts = []
@@ -47,3 +52,6 @@ class Identifier(namedtuple('Identifier', ['name', 'owner', 'id', 'revision'])):
         if self.revision and not drop_revision:
             result = f'{result}:{self.revision}'
         return result
+
+    def __str__(self):
+        return self.to_string()

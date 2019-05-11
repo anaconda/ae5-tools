@@ -8,22 +8,23 @@ from __future__ import absolute_import, print_function
 
 import os
 import sys
-import time
 
 import click
 import click_repl
 from prompt_toolkit.history import FileHistory
 
-from .project import project
-from .revision import revision
-from .credentials import credentials
-from .session import session
-from .deployment import deployment
-from .job import job
-from .utils import cluster, login_options
+from .commands.project import project
+from .commands.revision import revision
+from .commands.account import account
+from .commands.session import session
+from .commands.deployment import deployment
+from .commands.job import job
+
+from .login import login_options, get_account
 
 
-@click.group(invoke_without_command=True)
+@click.group(invoke_without_command=True,
+             epilog='Type "ae5 <command> --help" for help on a specific command.')
 @login_options()
 @click.pass_context
 def cli(ctx):
@@ -33,7 +34,8 @@ def cli(ctx):
         ctx.invoke(repl)
 
 
-@cli.command()
+@cli.command(hidden=True)
+@login_options()
 @click.pass_context
 def repl(ctx):
     obj = ctx.ensure_object(dict)
@@ -41,26 +43,18 @@ def repl(ctx):
     click.echo('Anaconda Enterprise 5')
     click.echo('Type "--help" for a list of commands.')
     click.echo('Type "<command> --help" for help on a specific command.')
-    prompt_kwargs = {
-        'history': FileHistory(os.path.expanduser('~/.ae5/history'))
-    }
-    click_repl.repl(click.get_current_context(), prompt_kwargs=prompt_kwargs)
-
-
-@cli.command()
-def abort():
-    cluster()
-    print('Sleeping')
-    time.sleep(5)
-    sys.exit(1)
+    hostname, username = get_account(required=False)
+    if hostname and username:
+        click.echo(f'Active account: {username}@{hostname}')
+    click_repl.repl(ctx, prompt_kwargs={'history': FileHistory(os.path.expanduser('~/.ae5/history'))})
 
 
 cli.add_command(project)
 cli.add_command(revision)
-cli.add_command(credentials)
 cli.add_command(session)
 cli.add_command(deployment)
 cli.add_command(job)
+cli.add_command(account)
 
 
 def main():

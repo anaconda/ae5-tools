@@ -63,3 +63,7 @@ screenshots/
 # npm
 package-lock.json
 
+# testing detritus
+*.ipynb
+*.tar.gz
+

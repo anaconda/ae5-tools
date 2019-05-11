@@ -6,10 +6,10 @@ Commands implemented: `ae5 <command-group> <command>`
 
 - `project`: `list`, `info`, `download`, `upload`, `delete`
 - `revision`: `list`, `info`, `download`
-- `session`: `list`, `info`
-- `deployment`: `list`, `info`
+- `session`: `list`, `info`, `open`, `stop`
+- `deployment`: `list`, `info`, `stop`
 - `job`: `list`, `info`
-- `credentials`: `list`, `add`, `remove`
+- `account`: `list`, `add`, `remove`
 
 Lots more to come, including session, deployment, and job controls. The intent is also to make it possible to allow packages to plug into the tool and provide additional commands.
 

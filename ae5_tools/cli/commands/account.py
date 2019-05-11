@@ -1,45 +1,19 @@
-import re
-import os
 import click
 import pandas as pd
-import getpass
 
-from .utils import print_output, format_options, login_options, add_param, cluster
-
-from ..config import config
-
-
-def yes_no(question, default=None):
-    dstr = 'Y/n' if default == 'y' else 'y/N' if default == 'n' else 'Y/N'
-    while True:
-        response = input(f'{question} [{dstr}]? ')
-        response = response.lower()[:1] or default
-        if response in ('y', 'n'):
-            return response == 'y'
-        print("Must enter 'y' or 'n'.")
-
-
-def my_input(request, default=None, required=True, hidden=False):
-    if not default:
-        request = f'{request}: '
-    elif hidden:
-        request = f'{request} [********]: '
-    else:
-        request = f'{request} [{default}]: '
-    while True:
-        response = (getpass.getpass if hidden else input)(request) or default
-        if response or not required:
-            return response
-        print('Must supply a value.')
+from ..utils import add_param
+from ..login import login_options, cluster
+from ..format import print_output, format_options
+from ...config import config
 
 
 @click.group()
 @click.pass_context
-def credentials(ctx):
+def account(ctx):
     pass
 
 
-@credentials.command()
+@account.command()
 @format_options()
 def list():
     h, u, p, t = [], [], [], []
@@ -52,7 +26,7 @@ def list():
     print_output(result)
 
 
-@credentials.command()
+@account.command()
 @login_options()
 @click.option('--default', default=False, is_flag=False, help='Make the default.')
 @click.option('--replace', default=False, is_flag=True, help='Do not ask for confirmation to replace.')
@@ -92,7 +66,7 @@ def add(ctx, default, replace):
     print(f'Credential successfully stored; password {pstat}included.')
 
 
-@credentials.command()
+@account.command()
 @login_options(password=False)
 @click.option('--all', default=False, is_flag=True, help='Remove all saved credentials.')
 @click.option('--yes', default=False, is_flag=True, help='Do not ask for confirmation.')
@@ -122,4 +96,3 @@ def remove(ctx, all, yes):
     if yes or click.confirm('Proceed?'):
         config._data = {k: v for k, v in config._data.items() if k not in to_remove}
         config.write()
-

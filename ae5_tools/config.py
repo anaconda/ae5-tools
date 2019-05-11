@@ -108,8 +108,9 @@ class ConfigManager:
             u, h, = key.rsplit('@', 1)
             return h, u
 
-    def resolve(self, hostname=None, username=None):
+    def resolve(self, hostname=None, username=None, default=False):
         matches = []
+        default = default and hostname is None and username is None
         for key in self._data['accounts']:
             u, h = key.rsplit('@', 1)
             if (hostname is None or hostname == h) and (username is None or username == u):
@@ -118,12 +119,54 @@ class ConfigManager:
                 break
         return matches
 
-    def session(self, hostname, username, password=None):
+    def admin_session(self, hostname, username, password=None):
+        login_url = f'https://{hostname}/auth/realms/master/protocol/openid-connect/token'
         if not hostname or not username:
             raise ValueError('Must supply username and hostname')
         key = f'{username}@{hostname}'
         if password is None:
             password = self._data['accounts'].get(key)
+        fname = os.path.join(self._path, 'tokens', key)
+        session = requests.Session()
+        session.verify = False
+        sdata = None
+        if os.path.exists(fname):
+            with open(fname, 'r') as fp:
+                sdata = fp.read()
+            if sdata:
+                sdata = json.loads(sdata)
+        if sdata and 'refresh_token' in sdata:
+            r = session.post(login_url, data={'refresh_token': sdata['refresh_token'],
+                                              'grant_type': 'refresh_token',
+                                              'client_id': 'admin-cli'})
+            if r.status_code != 200:
+                print(f'Admin token for {username}@{hostname} has expired; must log in again.')
+                sdata.clear()
+            sdata = r.json()
+        else:
+            print('Admin login required for {username}@{hostname}.')
+        if 'access_token' not in sdata:
+            while not password:
+                password = getpass.getpass(f'Password: ')
+                if not password:
+                    print('Must supply a password.')
+            r = session.post(login_url, data={'username': username, 'password': password,
+                                              'grant_type': 'password',
+                                              'client_id': 'admin-cli'})
+            if r.status_code != 200:
+                raise RuntimeError('Falied to create admin session')
+            sdata = r.json()
+        session.headers['Authorization'] = f'Bearer {sdata["access_token"]}'
+        os.makedirs(os.path.dirname(fname), mode=0o700, exist_ok=True)
+        with open(fname, 'w') as fp:
+            json.dump(sdata, fp)
+        os.chmod(fname, 0o600)
+        return session
+
+    def session(self, hostname, username, password=None):
+        if not hostname or not username:
+            raise ValueError('Must supply username and hostname')
+        key = f'{username}@{hostname}'
         fname = os.path.join(self._path, 'cookies', key)
         cookies = LWPCookieJar(fname)
         session = requests.Session()
@@ -131,15 +174,14 @@ class ConfigManager:
         session.verify = False
         if os.path.exists(fname):
             cookies.load()
-            for cookie in cookies:
-                if cookie.name == '_xsrf' and not cookie.is_expired():
-                    session.headers['x-xsrftoken'] = cookie.value
-                    r = session.get(f'https://{hostname}/api/v2/runs')
-                    if r.status_code == 200:
-                        return session
+            r = session.get(f'https://{hostname}/api/v2/runs')
+            if r.status_code == 200:
+                return session
             print(f'Session for {username}@{hostname} has expired; must log in again.')
         else:
             print(f'Logging into {username}@{hostname}...')
+        if password is None:
+            password = self._data['accounts'].get(key)
         while not password:
             password = getpass.getpass(f'Password: ')
             if not password:
@@ -151,16 +193,13 @@ class ConfigManager:
         login_url = form[0].action
         r = session.post(login_url, data={'username': username, 'password': password})
         if r.status_code == 200:
-            for cookie in cookies:
-                if cookie.name == '_xsrf':
-                    session.headers['x-xsrftoken'] = cookie.value
-                    os.makedirs(os.path.dirname(fname), mode=0o700, exist_ok=True)
-                    cookies.save()
-                    os.chmod(fname, 0o600)
-                    if self._data['default'] is None:
-                        self.set_default(key)
-                    return session
-        raise RuntimeError('Unable to retrieve token')
+            os.makedirs(os.path.dirname(fname), mode=0o700, exist_ok=True)
+            cookies.save()
+            os.chmod(fname, 0o600)
+            if self._data['default'] is None:
+                self.set_default(key)
+            return session
+        raise RuntimeError('Falied to create login session')
 
 
 config = ConfigManager()
