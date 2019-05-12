@@ -1,6 +1,8 @@
 import requests
 import time
 import io
+import re
+import pandas as pd
 from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
@@ -29,14 +31,26 @@ _DTYPES = {'created': 'datetime', 'updated': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s'}
 
 
-class AEApi(object):
-    request_args = dict(verify=False, allow_redirects=True)
+class AESessionBase(object):
+    '''Base class for AE5 API interactions.'''
 
-    def __init__(self, hostname, prefix, session, dataframe=False):
-        self.dataframe = dataframe
-        self.session = session
+    def __init__(self, prefix, session, dataframe=False):
+        '''Base class constructor.
+
+        Args:
+            prefix (str): The URL prefix to prepend to all API calls.
+                This will include the scheme, the hostname, and any
+                base path.
+            session (Requests.Session): a valid Requests session with
+                any authorization, cookies, and headers preset.
+            dataframe (bool, optional, default=False): if True, any
+                API call made with a `columns` argument will be
+                returned as a dataframe. If False, the raw JSON output
+                will be returned instead. 
+        '''
         self.prefix = prefix
-        self.hostname = hostname
+        self.session = session
+        self.dataframe = dataframe
 
     def _format_kwargs(self, kwargs):
         dataframe = kwargs.pop('dataframe', None)
@@ -88,11 +102,16 @@ class AEApi(object):
         return df
 
     def _api(self, method, endpoint, **kwargs):
+        pass_errors = kwargs.pop('pass_errors', False)
         fmt, cols = self._format_kwargs(kwargs)
-        url = f"https://{self.hostname}/{self.prefix}/{endpoint}"
-        kwargs.update(self.request_args)
+        if endpoint.startswith('/'):
+            url = '/'.join(self.prefix.split('/', 3)[:3]) + endpoint
+        else:
+            url = self.prefix + endpoint
+        kwargs.update((('verify', False), ('allow_redirects', True)))
         response = getattr(self.session, method)(url, **kwargs)
-        if 400 <= response.status_code:
+        print(response.url)
+        if 400 <= response.status_code and not pass_errors:
             msg = (f'Unexpected response: {response.status_code} {response.reason}\n'
                    f'  {method} {url}')
             raise ValueError(msg)
@@ -114,12 +133,16 @@ class AEApi(object):
         return self._api('patch', endpoint, **kwargs)
 
 
-class AECluster(AEApi):
+class AEUserSession(AESessionBase):
     def __init__(self, hostname, username, password, dataframe=False):
         if not hostname or not username:
             raise ValueError('Must supply hostname and username')
-        session = config.session(hostname, username, password)
-        super(AECluster, self).__init__(hostname, 'api/v2', session, dataframe)
+        if isinstance(password, requests.Session):
+            session = password
+        else:
+            session = config.session(hostname, username, password)
+        prefix = f'https://{hostname}/api/v2/'
+        super(AEUserSession, self).__init__(prefix, session, dataframe)
 
     def _id(self, type, ident, ignore_revision=False):
         if isinstance(ident, str):
@@ -320,15 +343,39 @@ class AECluster(AEApi):
         self._delete(f'jobs/{id}', format='response')
 
 
-class AEAdmin(AEApi):
+class AEAdminSession(AESessionBase):
     def __init__(self, hostname, username, password=None, dataframe=False):
         if not hostname or not username:
             raise ValueError('Must supply hostname and username')
-        session = config.adminsession(hostname, username, password)
-        super(AEAdmin, self).__init__(hostname, 'auth/admin/realms/AnacondaPlatform', session, dataframe)
+        session = config.admin_session(hostname, username, password)
+        prefix = f'https://{hostname}/auth/admin/realms/AnacondaPlatform/'
+        super(AEAdmin, self).__init__(prefix, session, dataframe)
+        self.hostname = hostname
 
     def user_list(self, format=None):
         return self._get(f'users', format=format, columns=_U_COLUMNS)
 
-    def user_info(self, id, format=None):
-        return self._get(f'users/{id}', format=format, columns=_U_COLUMNS)
+    def user_info(self, user_or_id, format=None):
+        if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
+            response = [self._get(f'users/{user_or_id}', format='json')]
+        else:
+            response = self._get(f'users?username={user_or_id}', format='json')
+        if len(response) == 0:
+            raise ValueError(f'Could not find user {user_or_id}')
+        return self._format_response(response[0], format, _U_COLUMNS)
+
+    def impersonate(self, user_or_id):
+        record = self.user_info(user_or_id, format='json')
+        try:
+            self._post(f'users/{record["id"]}/impersonation', format='response')
+            params = {'client_id': 'anaconda-platform', 'scope': 'openid', 'response_type': 'code',
+                      'redirect_uri': f'https://{self.hostname}/login'}
+            self._get('/auth/realms/AnacondaPlatform/protocol/openid-connect/auth', params=params, format='response')
+            nsession = requests.Session()
+            nsession.cookies, self.session.cookies = self.session.cookies, nsession.cookies
+            nsession.headers = self.session.headers.copy()
+            del nsession.headers['Authorization']
+            return AEUserSession(self.hostname, record["username"], nsession)
+        finally:
+            self.session.cookies.clear()
+

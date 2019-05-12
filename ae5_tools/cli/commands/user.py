@@ -1,4 +1,5 @@
 import click
+import re
 
 from ..login import cluster_call, login_options
 from ..utils import add_param

@@ -1,7 +1,7 @@
 import click
 
 from ..config import config
-from ..api import AECluster, AEAdmin
+from ..api import AEUserSession, AEAdminSession
 from .utils import param_callback
 
 
@@ -15,7 +15,9 @@ _login_options = [
     click.option('--admin-username', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_USERNAME',
                  help='The username to use for admin authentication.'),
     click.option('--admin-password', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_PASSWORD',
-                 help='The password to use for admin authentication.')
+                 help='The password to use for admin authentication.'),
+    click.option('--impersonate', default=False, expose_value=False, callback=param_callback, envvar='AE5_IMPERSONATE',
+                 help='If true, uses impersonation to log in as the requested user. Requires credentials for a KeyCloak administrator.')
 ]
 
 
@@ -63,10 +65,10 @@ def cluster(reconnect=False, admin=False):
     obj = ctx.ensure_object(dict)
     if admin:
         label = 'acluster'
-        cls = AEAdmin
+        cls = AEAdminSession
     else:
         label = 'cluster'
-        cls = AECluster
+        cls = AEUserSession
     if label not in obj or reconnect:
         hostname, username = get_account(required=True, admin=admin)
         obj[label] = cls(hostname, username, obj.get('password'))
