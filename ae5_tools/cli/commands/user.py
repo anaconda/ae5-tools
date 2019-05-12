@@ -1,0 +1,31 @@
+import click
+
+from ..login import cluster_call, login_options
+from ..utils import add_param
+from ..format import filter_df, print_output, format_options
+from ...identifier import Identifier
+
+
+@click.group()
+def user():
+    pass
+
+
+@user.command()
+@click.argument('username', required=False)
+@format_options()
+@login_options()
+def list(username):
+    result = cluster_call('user_list', format='dataframe', admin=True)
+    if username:
+    	add_param('filter', f'username={username}')
+    print_output(result)
+
+
+@user.command()
+@click.argument('username')
+@format_options()
+@login_options()
+def info(username):
+    result = cluster_call('user_info', username, format='dataframe', admin=True)
+    print_output(result)

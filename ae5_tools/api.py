@@ -17,48 +17,47 @@ def _logout_at_exit(session, url, **args):
     session.get(url, **args)
 
 
-_P_COLUMNS = ['name', 'owner', 'editor',  'resource_profile',                                    'id',               'created', 'updated', 'url']
+_P_COLUMNS = ['name', 'owner', 'editor',  'resource_profile',                                    'id', 'project_id', 'created', 'updated', 'url']
 _R_COLUMNS = ['name', 'owner', 'commands',                                                       'id', 'project_id', 'created', 'updated', 'url']
 _S_COLUMNS = ['name', 'owner',            'resource_profile',                           'state', 'id', 'project_id', 'created', 'updated', 'url']
 _D_COLUMNS = ['name', 'owner', 'command', 'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']
 _J_COLUMNS = ['name', 'owner', 'command', 'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']
 _C_COLUMNS = ['id', 'permission', 'type', 'first name', 'last name', 'email']
-_DTYPES = {'created': 'datetime', 'updated': 'datetime'}
+_U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id']
+_A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
+_DTYPES = {'created': 'datetime', 'updated': 'datetime',
+           'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s'}
 
 
-class AECluster(object):
+class AEApi(object):
     request_args = dict(verify=False, allow_redirects=True)
 
-    def __init__(self, hostname, username, password, dataframe=False):
-        if not hostname or not username:
-            raise ValueError('Must supply hostname and username')
+    def __init__(self, hostname, prefix, session, dataframe=False):
+        self.dataframe = dataframe
+        self.session = session
+        self.prefix = prefix
         self.hostname = hostname
-        self.username = username
-        self._df_format = 'dataframe' if dataframe else 'json'
-        self._session = config.session(hostname, username, password)
 
-    def _format_kwargs(self, kwargs, **kwargs2):
-        kwargs.update(kwargs2)
-        can_dataframe = 'columns' in kwargs or 'dtypes' in kwargs
+    def _format_kwargs(self, kwargs):
         dataframe = kwargs.pop('dataframe', None)
         format = kwargs.pop('format', None)
-        if format is None:
-            if dataframe is None:
-                format = self._df_format if can_dataframe else 'blob'
-            else:
+        if dataframe is not None:
+            if format is None:
                 format = 'dataframe' if dataframe else 'json'
-        elif dataframe is not None and bool(dataframe) != (format == 'dataframe'):
-            raise RuntimeError('Conflicting "format" and "dataframe" specifications')
-        format_kwargs = {'format': format,
-                         'columns': kwargs.pop('columns', None),
-                         'dtypes': kwargs.pop('dtypes', None)}
-        return format_kwargs
+            elif (format == 'dataframe') != dataframe:
+                raise RuntimeError('Conflicting "format" and "dataframe" specifications')
+        return format, kwargs.pop('columns', None)
 
-    def _format_response(self, response, **kwargs):
-        fmt = kwargs['format']
+    def _format_response(self, response, format, columns):
+        if format == 'response':
+            return response
+        if format == 'blob':
+            return response.content
         if isinstance(response, requests.models.Response):
             response = response.json()
-        if fmt == 'json':
+        if format is None and columns:
+            format = 'dataframe' if self.dataframe else 'json'
+        if format == 'json':
             return response
         if isinstance(response, dict):
             is_series = True
@@ -68,17 +67,19 @@ class AECluster(object):
             raise RuntimeError('Not a dataframe-compatible output')
         import pandas as pd
         df = pd.DataFrame([response] if is_series else response)
-        if len(df) == 0 and kwargs.get('columns'):
-            df = pd.DataFrame(columns=kwargs['columns'])
+        if len(df) == 0 and columns:
+            df = pd.DataFrame(columns=columns)
         for col, dtype in _DTYPES.items():
             if col in df:
                 if dtype == 'datetime':
                     df[col] = pd.to_datetime(df[col])
+                elif dtype.startswith('timestamp'):
+                    df[col] = pd.to_datetime(df[col], unit=dtype.rsplit('/', 1)[-1])
                 else:
                     df[col] = df[col].astype(dtype)
-        if kwargs['columns']:
-            cols = ([c for c in kwargs['columns'] if c in df.columns] +
-                    [c for c in df.columns if c not in kwargs['columns']])
+        if columns:
+            cols = ([c for c in columns if c in df.columns] +
+                    [c for c in df.columns if c not in columns])
             if cols:
                 df = df[cols]
         if is_series:
@@ -87,16 +88,15 @@ class AECluster(object):
         return df
 
     def _api(self, method, endpoint, **kwargs):
-        prefix = kwargs.pop('prefix', 'api/v2')
-        fmt_args = self._format_kwargs(kwargs)
-        url = f"https://{self.hostname}/{prefix}/{endpoint}"
+        fmt, cols = self._format_kwargs(kwargs)
+        url = f"https://{self.hostname}/{self.prefix}/{endpoint}"
         kwargs.update(self.request_args)
-        response = getattr(self._session, method)(url, **kwargs)
+        response = getattr(self.session, method)(url, **kwargs)
         if 400 <= response.status_code:
             msg = (f'Unexpected response: {response.status_code} {response.reason}\n'
                    f'  {method} {url}')
             raise ValueError(msg)
-        return self._format_response(response, **fmt_args)
+        return self._format_response(response, fmt, cols)
 
     def _get(self, endpoint, **kwargs):
         return self._api('get', endpoint, **kwargs)
@@ -112,6 +112,14 @@ class AECluster(object):
 
     def _patch(self, endpoint, **kwargs):
         return self._api('patch', endpoint, **kwargs)
+
+
+class AECluster(AEApi):
+    def __init__(self, hostname, username, password, dataframe=False):
+        if not hostname or not username:
+            raise ValueError('Must supply hostname and username')
+        session = config.session(hostname, username, password)
+        super(AECluster, self).__init__(hostname, 'api/v2', session, dataframe)
 
     def _id(self, type, ident, ignore_revision=False):
         if isinstance(ident, str):
@@ -154,29 +162,38 @@ class AECluster(object):
         rev = matches[0]['name']
         return id, rev
 
-    def project_list(self, **kwargs):
-        return self._get('projects', columns=_P_COLUMNS, **kwargs)
+    def project_list(self, format=None):
+        return self._get('projects', format=format, columns=_P_COLUMNS)
 
-    def project_info(self, ident, **kwargs):
+    def project_info(self, ident, format=None):
         id = self._id('projects', ident)
-        return self._get(f'projects/{id}', columns=_P_COLUMNS, **kwargs)
+        return self._get(f'projects/{id}', format=format, columns=_P_COLUMNS)
 
-    def project_collaborators(self, ident, **kwargs):
+    def project_collaborators(self, ident, format=None):
         id = self._id('projects', ident)
-        return self._get(f'projects/{id}/collaborators', columns=_C_COLUMNS, **kwargs)
+        return self._get(f'projects/{id}/collaborators', columns=_C_COLUMNS)
 
-    def revision_list(self, ident, **kwargs):
+    def project_activity(self, ident, limit=0, latest=False, format=None):
+        id = self._id('projects', ident)
+        limit = 1 if latest else (999999 if limit <= 0 else limit)
+        params = {'sort':'-updated', 'page[size]': limit}
+        response = self._get(f'projects/{id}/activity', params=params, format='json')['data']
+        if latest:
+            response = response[0]
+        return self._format_response(response, format=format, columns=_A_COLUMNS)
+
+    def revision_list(self, ident, format=None):
         id = self._id('projects', ident)
         response = self._get(f'projects/{id}/revisions', format='json')
         for rec in response:
             rec['project_id'] = 'a0-' + rec['url'].rsplit('/', 3)[-3]
-        return self._format_response(response, columns=_R_COLUMNS, **kwargs)
+        return self._format_response(response, format=format, columns=_R_COLUMNS)
 
-    def revision_info(self, ident, **kwargs):
+    def revision_info(self, ident, format=None):
         id, rev = self._revision(ident)
         rec = self._get(f'projects/{id}/revisions/{rev}', format='json')
         rec['project_id'] = 'a0-' + rec['url'].rsplit('/', 3)[-3]
-        return self._format_response(rec, columns=_R_COLUMNS, **kwargs)
+        return self._format_response(rec, format=format, columns=_R_COLUMNS)
 
     def project_download(self, ident, filename=None):
         id, rev = self._revision(ident)
@@ -188,7 +205,7 @@ class AECluster(object):
 
     def project_delete(self, ident):
         id = self._id('projects', ident)
-        self._delete(f'projects/{id}')
+        self._delete(f'projects/{id}', format='response')
 
     def project_upload(self, project_archive, name, wait=True):
         if name is None:
@@ -216,82 +233,102 @@ class AECluster(object):
             raise RuntimeError('Error processing upload: {}'.format(status['message']))
         return status
 
-    def _join_projects(self, response, name_prefix=None):
+    def _join_projects(self, response, nameprefix=None):
         if isinstance(response, dict):
             pid = 'a0-' + response['project_url'].rsplit('/', 1)[-1]
-            if name_prefix:
+            if nameprefix:
                 project = self._get(f'projects/{pid}', format='json')
-                response[f'{name_prefix}_name'] = response['name']
+                response[f'{nameprefix}_name'] = response['name']
                 response['name'] = project['name']
             response['project_id'] = pid
         else:
-            if name_prefix:
+            if nameprefix:
                 pnames = {x['id']: x['name'] for x in self.project_list(format='json')}
             for rec in response:
                 pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
-                if name_prefix:
-                    rec[f'{name_prefix}_name'] = rec['name']
+                if nameprefix:
+                    rec[f'{nameprefix}_name'] = rec['name']
                     rec['name'] = pnames[pid]
                 rec['project_id'] = pid
     
-    def session_list(self, **kwargs):
+    def session_list(self, format=None):
         response = self._get('sessions', format='json')
         self._join_projects(response, 'session')
-        return self._format_response(response, columns=_S_COLUMNS, **kwargs)
+        return self._format_response(response, format, _S_COLUMNS)
 
-    def session_info(self, ident, **kwargs):
+    def session_info(self, ident, format=None):
         id = self._id('sessions', ident)
         response = self._get(f'sessions/{id}', format='json')
         self._join_projects(response, 'session')
-        return self._format_response(response, columns=_S_COLUMNS, **kwargs)
+        return self._format_response(response, format, columns=_S_COLUMNS)
 
-    def session_start(self, ident, editor=None, wait=True):
-        project = self._id('projects', ident)
-        data = {'editor': editor or project['editor']}
-        response = self._post(f'projects/{project["id"]}/sessions', data=data, format='json')
+    def _wait(self, id, status):
+        index = 0
+        while not status['done'] and not status['error']:
+            time.sleep(5)
+            params = {'sort':'-updated', 'page[size]': index + 1}
+            activity = self._get(f'projects/{id}/activity', params=params, format='json')
+            try:
+                status = next(s for s in activity['data'] if s['id'] == status['id'])
+            except StopIteration:
+                index = index + 1
+        return status
+
+    def session_start(self, ident, wait=True, format=None):
+        id = self._id('projects', ident)
+        response = self._post(f'projects/{id}/sessions', format='json')
         if response.get('error'):
             raise RuntimeError('Error starting project: {}'.format(response['error']['message']))
-        while True:
-            status = self._get(f'projects/{response["id"]}/activity', format='json')['data'][-1]
-            if not wait or status['error'] or status['status'] == 'created':
-                break
-            time.sleep(5)
-        if status['error']:
-            raise RuntimeError('Error processing upload: {}'.format(status['message']))
-        return status
+        if wait:
+            response['action'] = self._wait(id, response['action'])
+        response['project_id'] = id
+        return self._format_response(response, format=format, columns=_S_COLUMNS)
 
     def session_stop(self, ident):
         id = self._id('sessions', ident)
-        self._delete(f'sessions/{id}')
+        self._delete(f'sessions/{id}', format='response')
 
-    def deployment_list(self, **kwargs):
+    def deployment_list(self, format=None):
         response = self._get('deployments', format='json')
         self._join_projects(response)
-        return self._format_response(response, columns=_D_COLUMNS, **kwargs)
+        return self._format_response(response, format, _D_COLUMNS)
 
-    def deployment_info(self, ident, **kwargs):
+    def deployment_info(self, ident, format=None):
         id = self._id('deployments', ident, ignore_revision=True)
         response = self._get(f'deployments/{id}', format='json')
         self._join_projects(response)
-        return self._format_response(response, columns=_D_COLUMNS, **kwargs)
+        return self._format_response(response, format, _D_COLUMNS)
 
-    def deployment_collaborators(self, ident, **kwargs):
+    def deployment_collaborators(self, ident, format=None):
         id = self._id('deployments', ident)
-        return self._get(f'deployments/{id}/collaborators', columns=_C_COLUMNS, **kwargs)
+        return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
     def deployment_stop(self, ident):
         id = self._id('deployments', ident)
-        self._delete(f'deployments/{id}')
+        self._delete(f'deployments/{id}', format='response')
 
-    def job_list(self, **kwargs):
-        return self._get('jobs', columns=_J_COLUMNS, **kwargs)
+    def job_list(self, format=None):
+        return self._get('jobs', format=format, columns=_J_COLUMNS)
 
-    def job_info(self, ident, **kwargs):
+    def job_info(self, ident, format=None):
         id = self._id('jobs', ident)
-        response = self._get(f'jobs/{id}', columns=_J_COLUMNS, **kwargs)
+        response = self._get(f'jobs/{id}', format=format, columns=_J_COLUMNS)
         return response
 
     def job_stop(self, ident):
         id = self._id('jobs', ident)
-        self._delete(f'jobs/{id}')
+        self._delete(f'jobs/{id}', format='response')
 
+
+class AEAdmin(AEApi):
+    def __init__(self, hostname, username, password=None, dataframe=False):
+        if not hostname or not username:
+            raise ValueError('Must supply hostname and username')
+        session = config.adminsession(hostname, username, password)
+        super(AEAdmin, self).__init__(hostname, 'auth/admin/realms/AnacondaPlatform', session, dataframe)
+
+    def user_list(self, format=None):
+        return self._get(f'users', format=format, columns=_U_COLUMNS)
+
+    def user_info(self, id, format=None):
+        return self._get(f'users/{id}', format=format, columns=_U_COLUMNS)

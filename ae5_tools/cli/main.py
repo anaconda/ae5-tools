@@ -19,6 +19,7 @@ from .commands.account import account
 from .commands.session import session
 from .commands.deployment import deployment
 from .commands.job import job
+from .commands.user import user
 
 from .login import login_options, get_account
 
@@ -55,6 +56,7 @@ cli.add_command(session)
 cli.add_command(deployment)
 cli.add_command(job)
 cli.add_command(account)
+cli.add_command(user)
 
 
 def main():

@@ -40,7 +40,7 @@ def info(project):
     print_output(result)
 
 
-@project.command(short_help='Obtain information about a project\'s collaborators.')
+@project.command(short_help='Retrieve the project collaborators.')
 @click.argument('project')
 @format_options()
 @login_options()
@@ -50,6 +50,43 @@ def collaborators(project):
     '''
     result = cluster_call('project_collaborators', project, format='dataframe')
     print_output(result)
+
+
+@project.command(short_help='Retrieve the activity log.')
+@click.argument('project')
+@click.option('--limit', type=int, default=10, help='Limit the output to N records.')
+@click.option('--all', is_flag=True, default=False, help='Retrieve all possible records.')
+@format_options()
+@login_options()
+def activity(project, limit, all):
+    '''Retrieve the project's acitivty log. The PROJECT need not be
+       fully specified, but it must resolve to a single project.
+    '''
+    result = cluster_call('project_activity', project, limit=0 if all else limit, format='dataframe')
+    print_output(result)
+
+
+@project.command(short_help='Retrieve the latest activity entry.')
+@click.argument('project')
+@format_options()
+@login_options()
+def status(project):
+    '''Retrieve the project's latest activity entry. The PROJECT need not be
+       fully specified, but it must resolve to a single project.
+    '''
+    result = cluster_call('project_activity', project, latest=True, format='dataframe')
+    print_output(result)
+
+
+@project.command(short_help='Start a session for a project.')
+@click.argument('project')
+@click.option('--wait/--no-wait', default=True, help='Wait for the session to complete initialization before exiting.')
+@format_options()
+@login_options()
+def start(project, wait):
+    '''Start a session for a project.'''
+    from .session import start as session_start
+    ctx.invoke(session_start, wait=wait)
 
 
 @project.command(short_help='Download an archive of a project.')

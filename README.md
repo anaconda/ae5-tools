@@ -4,12 +4,13 @@ This tool uses AE5's `/api/v2` to do cool things.
 
 Commands implemented: `ae5 <command-group> <command>`
 
-- `project`: `list`, `info`, `download`, `upload`, `delete`
+- `project`: `list`, `info`, `download`, `upload`, `delete`, `start`, `activity`, `status`, `collaborators`
 - `revision`: `list`, `info`, `download`
-- `session`: `list`, `info`, `open`, `stop`
-- `deployment`: `list`, `info`, `stop`
+- `session`: `list`, `info`, `open`, `start`, `stop`
+- `deployment`: `list`, `info`, `stop`, `collaborators`
 - `job`: `list`, `info`
 - `account`: `list`, `add`, `remove`
+- `user`: `info`, `list` (requires KeyCloak admin credentials)
 
 Lots more to come, including session, deployment, and job controls. The intent is also to make it possible to allow packages to plug into the tool and provide additional commands.
 

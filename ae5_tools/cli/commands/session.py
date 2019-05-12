@@ -39,14 +39,17 @@ def info(session):
 
 @session.command(short_help='Start a session for a project.')
 @click.argument('project')
+@click.option('--wait/--no-wait', default=True, help='Wait for the session to complete initialization before exiting.')
+@format_options()
 @login_options()
-def start(project):
+def start(project, wait):
     '''Start a session for a project.'''
     result = cluster_call('project_info', project, format='json')
     ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
     click.echo(f'Starting a session for {ident}...', nl=False)
-    cluster_call('session_start', result['id'], wait=True)
+    response = cluster_call('session_start', result['id'], wait=wait, format='dataframe')
     click.echo(f'done.')
+    print_output(response)
 
 
 @session.command(short_help='Stop a session.')
