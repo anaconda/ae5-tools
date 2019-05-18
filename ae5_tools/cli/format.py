@@ -125,7 +125,6 @@ def print_output(result):
             orient = 'index'
         else:
             orient = 'records'
-            print(result.columns)
         result = json.loads(result.to_json(orient=orient, date_format='iso'))
         print(json.dumps(result, indent=2))
     else:

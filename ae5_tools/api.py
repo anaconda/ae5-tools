@@ -176,7 +176,7 @@ class AESessionBase(object):
             msg = (f'Unexpected response: {response.status_code} {response.reason}\n'
                    f'  {method} {url}')
             raise AEUnexpectedResponseError(msg)
-        print(f'{method.upper()} {url}: {response.headers["content-type"]}')
+        print(f'{method.upper()} {url}: {response.headers.get("content-type")}')
         return self._format_response(response, fmt, cols)
 
     def _get(self, endpoint, **kwargs):
@@ -323,7 +323,7 @@ class AEUserSession(AESessionBase):
         id = self._id('projects', ident)
         self._delete(f'projects/{id}', format='response')
 
-    def project_upload(self, project_archive, name, wait=True):
+    def project_upload(self, project_archive, name, wait=True, format=None):
         if name is None:
             if type(project_archive) == bytes:
                 raise RuntimeError('Project name must be supplied for binary input')
@@ -346,7 +346,8 @@ class AEUserSession(AESessionBase):
             time.sleep(5)
         if status['error']:
             raise RuntimeError('Error processing upload: {}'.format(status['message']))
-        return status
+        response['action'] = status
+        return self._format_response(response, format, columns=_P_COLUMNS)
 
     def _join_projects(self, response, nameprefix=None):
         if isinstance(response, dict):

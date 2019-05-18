@@ -24,7 +24,5 @@ requirements:
     - click-repl
 
 about:
-  home: https://github.com/Anaconda-Platform/nb_conda_kernels
-  license: BSD 3-Clause
-  license_file: LICENSE
-  summary: 'Launch Jupyter kernels for any installed conda environment.'
+  home: https://github.com/Anaconda-Platform/ae5-tools
+  summary: 'Command-line manipulation of Anaconda Enterprise.'

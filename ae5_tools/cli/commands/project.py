@@ -106,6 +106,7 @@ def download(ctx, project, filename):
 @project.command(short_help='Upload a project to the cluster.')
 @click.argument('filename', type=click.Path(exists=True))
 @click.option('--name', default='', help='Name of the project.')
+@format_options()
 @login_options()
 def upload(filename, name):
     '''Upload a project. A new project entry is created, so the name of the
@@ -113,8 +114,8 @@ def upload(filename, name):
        of the file, but can be overridden with the --name option.
     '''
     print(f'Uploading {filename}...')
-    cluster_call('project_upload', filename, name=name or None, wait=True)
-    print('done.')
+    result = cluster_call('project_upload', filename, name=name or None, wait=True, format='dataframe')
+    print_output(result)
 
 
 @project.command(short_help='Delete a project.')
@@ -128,6 +129,6 @@ def delete(project, yes):
     if not yes:
         yes = click.confirm(f'Delete project {ident}')
     if yes:
-        click.echo(f'Deleting {ident}...', nl=False)
+        click.echo(f'Deleting {ident}...')
         result = cluster_call('project_delete', result['id'])
         click.echo('done.')
