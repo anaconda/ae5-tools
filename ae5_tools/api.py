@@ -241,11 +241,13 @@ class AEUserSession(AESessionBase):
     def _id(self, type, ident, ignore_revision=False):
         if isinstance(ident, str):
             ident = Identifier.from_string(ident)
-        if not ident.id or (ident.owner or ident.name):
+        idkey = 'project_id' if ident.id and type != 'projects' and ident.id.startswith('a0-') else 'id'
+        if not (idkey == 'id' and ident.id) or (ident.owner or ident.name):
             matches = []
             owner, name, id = ident.owner or '*', ident.name or '*', ident.id or '*'
+            idkey = 'project_id' if type != 'projects' and ident.id.startswith('a0-') else 'id'
             for record in getattr(self, type[:-1] + '_list')(format='json'):
-                if (fnmatch(record['name'], name) and fnmatch(record['owner'], owner) and fnmatch(record['id'], id)):
+                if (fnmatch(record['name'], name) and fnmatch(record['owner'], owner) and fnmatch(record[idkey], id)):
                     matches.append(record)
             if len(matches) != 1:
                 pfx = 'Multiple' if len(matches) else 'No'
@@ -323,6 +325,18 @@ class AEUserSession(AESessionBase):
         id = self._id('projects', ident)
         self._delete(f'projects/{id}', format='response')
 
+    def _wait(self, id, status):
+        index = 0
+        while not status['done'] and not status['error']:
+            time.sleep(5)
+            params = {'sort': '-updated', 'page[size]': index + 1}
+            activity = self._get(f'projects/{id}/activity', params=params, format='json')
+            try:
+                status = next(s for s in activity['data'] if s['id'] == status['id'])
+            except StopIteration:
+                index = index + 1
+        return status
+
     def project_upload(self, project_archive, name, wait=True, format=None):
         if name is None:
             if type(project_archive) == bytes:
@@ -339,14 +353,10 @@ class AEUserSession(AESessionBase):
             f.close()
         if response.get('error'):
             raise RuntimeError('Error uploading project: {}'.format(response['error']['message']))
-        while True:
-            status = self._get(f'projects/{response["id"]}/activity', format='json')['data'][-1]
-            if not wait or status['error'] or status['status'] == 'created':
-                break
-            time.sleep(5)
-        if status['error']:
-            raise RuntimeError('Error processing upload: {}'.format(status['message']))
-        response['action'] = status
+        if wait:
+            response['action'] = self._wait(response['id'], response['action'])
+        if response['action']['error']:
+            raise RuntimeError('Error processing upload: {}'.format(response['action']['message']))
         return self._format_response(response, format, columns=_P_COLUMNS)
 
     def _join_projects(self, response, nameprefix=None):
@@ -378,18 +388,6 @@ class AEUserSession(AESessionBase):
         self._join_projects(response, 'session')
         return self._format_response(response, format, columns=_S_COLUMNS)
 
-    def _wait(self, id, status):
-        index = 0
-        while not status['done'] and not status['error']:
-            time.sleep(5)
-            params = {'sort': '-updated', 'page[size]': index + 1}
-            activity = self._get(f'projects/{id}/activity', params=params, format='json')
-            try:
-                status = next(s for s in activity['data'] if s['id'] == status['id'])
-            except StopIteration:
-                index = index + 1
-        return status
-
     def session_start(self, ident, wait=True, format=None):
         id = self._id('projects', ident)
         response = self._post(f'projects/{id}/sessions', format='json')
@@ -397,7 +395,8 @@ class AEUserSession(AESessionBase):
             raise RuntimeError('Error starting project: {}'.format(response['error']['message']))
         if wait:
             response['action'] = self._wait(id, response['action'])
-        response['project_id'] = id
+        if response['action'].get('error'):
+            raise RuntimeError('Error completing session start: {}'.format(response['action']['message']))
         return self._format_response(response, format=format, columns=_S_COLUMNS)
 
     def session_stop(self, ident):

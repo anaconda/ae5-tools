@@ -7,19 +7,26 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group()
+@click.group(short_help='List, examine, open, start, and stop sessions.',
+             epilog='Type "ae5 session <command> --help" for help on a specific command.')
 def session():
     pass
 
 
-@session.command()
+@session.command(short_help='List active sessions.')
 @click.argument('session', required=False)
 @format_options()
-@login_options()
 def list(session):
+    '''List sessions. 
+
+       By default, lists all sessions visible to the authenticated user.
+       Simple filters on owner, project name, session id, or project id
+       can be performed by supplying an optional SESSION argument. Filters
+       on other fields may be applied using the --filter option.
+    '''
     result = cluster_call('session_list', format='dataframe')
     if session:
-        add_param('filter', Identifier.from_string(session).project_filter())
+        add_param('filter', Identifier.from_string(session).project_filter(session=True))
     print_output(result)
 
 
@@ -28,11 +35,16 @@ def single_session(session):
     return cluster_call('session_info', ident, format='dataframe')
 
 
-@session.command()
+@session.command(short_help='Obtain information about a single session.')
 @click.argument('session')
 @format_options()
 @login_options()
 def info(session):
+    '''Obtain information about a single session.
+
+       The SESSION identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one session.
+    '''
     result = single_session(session)
     print_output(result)
 
@@ -43,12 +55,18 @@ def info(session):
 @format_options()
 @login_options()
 def start(project, wait):
-    '''Start a session for a project.'''
+    '''Start a session for a project.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+
+       By default, this command will wait for the completion of the session
+       creation before returning. To return more quickly, use the --no-wait option.
+    '''
     result = cluster_call('project_info', project, format='json')
     ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
-    click.echo(f'Starting a session for {ident}...', nl=False)
+    click.echo(f'Starting a session for {ident}...')
     response = cluster_call('session_start', result['id'], wait=wait, format='dataframe')
-    click.echo(f'done.')
     print_output(response)
 
 
@@ -57,23 +75,34 @@ def start(project, wait):
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
 @login_options()
 def stop(session, yes):
-    '''Stop a session.'''
+    '''Stop a session.
+
+       The SESSION identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one session.
+    '''
     result = single_session(session)
     ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
     if not yes:
         yes = click.confirm(f'Stop session {ident}')
     if yes:
-        click.echo(f'Stopping {ident}...', nl=False)
+        click.echo(f'Stopping {ident}...')
         cluster_call('session_stop', result.id)
-        click.echo('done.')
 
 
-@session.command()
+@session.command(short_help='Open a session in a browser.')
 @click.argument('session')
 @click.option('--frameless', is_flag=True, default=False, help='Omit the surrounding AE session management frame.')
-@format_options()
 @login_options()
 def open(session, frameless):
+    '''Opens a session in the default browser.
+
+       The SESSION identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one session.
+
+       By default, the session will be opened in a window including the standard
+       Anaconda Enterprise project frame. To omit this frame and open only the
+       session UI, use the --frameless option.
+    '''
     result = single_session(session)
     scheme, _, hostname, _ = result.url.split('/', 3)
     if frameless:

@@ -24,14 +24,15 @@ class Identifier(namedtuple('Identifier', ['name', 'owner', 'id', 'revision'])):
         rev = '' if ignore_revision else (record.get('revision') or '')
         return Identifier(record['name'], record['owner'], record['id'], rev)
 
-    def project_filter(self):
+    def project_filter(self, session=False):
         parts = []
         if self.name and self.name != '*':
             parts.append(f'name={self.name}')
         if self.owner and self.owner != '*':
             parts.append(f'owner={self.owner}')
         if self.id and self.id != '*':
-            parts.append(f'id={self.id}')
+            key = 'project_id' if session and self.id.startswith('a0-') else 'id'
+            parts.append(f'{key}={self.id}')
         if parts:
             return ','.join(parts)
 
