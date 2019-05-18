@@ -1,10 +1,8 @@
 import click
-import re
 
 from ..login import cluster_call, login_options
 from ..utils import add_param
-from ..format import filter_df, print_output, format_options
-from ...identifier import Identifier
+from ..format import print_output, format_options
 
 
 @click.group()
@@ -19,7 +17,7 @@ def user():
 def list(username):
     result = cluster_call('user_list', format='dataframe', admin=True)
     if username:
-    	add_param('filter', f'username={username}')
+        add_param('filter', f'username={username}')
     print_output(result)
 
 

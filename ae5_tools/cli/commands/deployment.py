@@ -2,13 +2,22 @@ import click
 
 from ..login import cluster_call, login_options
 from ..utils import add_param
-from ..format import filter_df, print_output, format_options
+from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
 @click.group()
 def deployment():
     pass
+
+
+@deployment.command()
+@click.argument('path')
+@format_options()
+@login_options()
+def call(path):
+    result = cluster_call('deployment_call', path)
+    print_output(result)
 
 
 @deployment.command()
@@ -62,6 +71,3 @@ def stop(deployment, yes):
         click.echo(f'Stopping {ident}...', nl=False)
         cluster_call('deployment_stop', result.id)
         click.echo('done.')
-
-
-

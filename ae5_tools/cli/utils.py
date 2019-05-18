@@ -13,4 +13,4 @@ def add_param(param, value):
 
 
 def param_callback(ctx, param, value):
-    add_param(param.name.lower().replace('-','_'), value)
+    add_param(param.name.lower().replace('-', '_'), value)

@@ -2,7 +2,7 @@ import click
 
 from ..utils import add_param
 from ..login import login_options, cluster_call
-from ..format import filter_df, print_output, format_options
+from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
@@ -83,7 +83,8 @@ def status(project):
 @click.option('--wait/--no-wait', default=True, help='Wait for the session to complete initialization before exiting.')
 @format_options()
 @login_options()
-def start(project, wait):
+@click.pass_context
+def start(ctx, project, wait):
     '''Start a session for a project.'''
     from .session import start as session_start
     ctx.invoke(session_start, wait=wait)

@@ -2,15 +2,19 @@ import requests
 import time
 import io
 import re
+import os
+import json
 import pandas as pd
 from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
 import getpass
-import atexit
 
 from .config import config
 from .identifier import Identifier
+
+from http.cookiejar import LWPCookieJar
+
 
 requests.packages.urllib3.disable_warnings()
 
@@ -19,11 +23,11 @@ def _logout_at_exit(session, url, **args):
     session.get(url, **args)
 
 
-_P_COLUMNS = ['name', 'owner', 'editor',  'resource_profile',                                    'id', 'project_id', 'created', 'updated', 'url']
-_R_COLUMNS = ['name', 'owner', 'commands',                                                       'id', 'project_id', 'created', 'updated', 'url']
-_S_COLUMNS = ['name', 'owner',            'resource_profile',                           'state', 'id', 'project_id', 'created', 'updated', 'url']
-_D_COLUMNS = ['name', 'owner', 'command', 'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']
-_J_COLUMNS = ['name', 'owner', 'command', 'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']
+_P_COLUMNS = ['name', 'owner', 'editor',  'resource_profile',                                    'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
+_R_COLUMNS = ['name', 'owner', 'commands',                                                       'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
+_S_COLUMNS = ['name', 'owner',            'resource_profile',                           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
+_D_COLUMNS = ['name', 'owner', 'command', 'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
+_J_COLUMNS = ['name', 'owner', 'command', 'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
 _C_COLUMNS = ['id', 'permission', 'type', 'first name', 'last name', 'email']
 _U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
@@ -31,26 +35,77 @@ _DTYPES = {'created': 'datetime', 'updated': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s'}
 
 
+class AEAuthenticationError(RuntimeError):
+    pass
+
+
+class AEUnexpectedResponseError(RuntimeError):
+    pass
+
+
 class AESessionBase(object):
     '''Base class for AE5 API interactions.'''
 
-    def __init__(self, prefix, session, dataframe=False):
+    def __init__(self, hostname, username, password, prefix, dataframe, retry, password_prompt):
         '''Base class constructor.
 
         Args:
+            hostname: The FQDN of the AE5 cluster
+            username: The username associated with the connection.
+            password (str, optional): the password to use to log in, if necessary.
             prefix (str): The URL prefix to prepend to all API calls.
-                This will include the scheme, the hostname, and any
-                base path.
-            session (Requests.Session): a valid Requests session with
-                any authorization, cookies, and headers preset.
             dataframe (bool, optional, default=False): if True, any
                 API call made with a `columns` argument will be
                 returned as a dataframe. If False, the raw JSON output
-                will be returned instead. 
+                will be returned instead.
+            retry (bool, optional, default=True): if True, the constructor
+                will attempt to establish a new connection if there is no saved
+                session, or if the saved session has expired.
+            password_prompt (function, optional): if not None, this will be used
+                instead of the _password_prompt static method to request a password.
         '''
-        self.prefix = prefix
-        self.session = session
+        if not hostname or not username:
+            raise ValueError('Must supply hostname and username')
+        self.hostname = hostname
+        self.username = username
+        self.prefix = prefix.lstrip('/')
         self.dataframe = dataframe
+        if password_prompt:
+            self._password_prompt = password_prompt
+        if isinstance(password, requests.Session):
+            self.session = password
+            self.connected = True
+        else:
+            self.session = requests.Session()
+            self.session.verify = False
+            self.connect(password, retry)
+
+    @staticmethod
+    def _password_prompt(key):
+        while True:
+            password = getpass.getpass(f'Password for {key}: ')
+            if password:
+                return password
+            print('Must supply a password.')
+
+    def connect(self, password=None, retry=True):
+        self.connected = False
+        self._load()
+        if self._connected():
+            self.connected = True
+            self._set_header()
+            return
+        if not retry:
+            return
+        key = f'{self.username}@{self.hostname}'
+        if password is None:
+            password = self._password_prompt(key)
+        self._connect(password)
+        if not self._connected():
+            raise RuntimeError(f'Failed to create session for {key}')
+        self.connected = True
+        self._set_header()
+        self._save()
 
     def _format_kwargs(self, kwargs):
         dataframe = kwargs.pop('dataframe', None)
@@ -62,24 +117,13 @@ class AESessionBase(object):
                 raise RuntimeError('Conflicting "format" and "dataframe" specifications')
         return format, kwargs.pop('columns', None)
 
-    def _format_response(self, response, format, columns):
-        if format == 'response':
-            return response
-        if format == 'blob':
-            return response.content
-        if isinstance(response, requests.models.Response):
-            response = response.json()
-        if format is None and columns:
-            format = 'dataframe' if self.dataframe else 'json'
-        if format == 'json':
-            return response
+    def _format_dataframe(self, response, columns):
         if isinstance(response, dict):
             is_series = True
         elif isinstance(response, list) and all(isinstance(x, dict) for x in response):
             is_series = False
         else:
             raise RuntimeError('Not a dataframe-compatible output')
-        import pandas as pd
         df = pd.DataFrame([response] if is_series else response)
         if len(df) == 0 and columns:
             df = pd.DataFrame(columns=columns)
@@ -101,31 +145,49 @@ class AESessionBase(object):
             df.name = None
         return df
 
+    def _format_response(self, response, format, columns):
+        if format == 'response':
+            return response
+        if format == 'text':
+            return response.text
+        if format == 'blob':
+            return response.content
+        if isinstance(response, requests.models.Response):
+            response = response.json()
+        if format is None and columns:
+            format = 'dataframe' if self.dataframe else 'json'
+        if format == 'json':
+            return response
+        return self._format_dataframe(response, columns)
+
     def _api(self, method, endpoint, **kwargs):
         pass_errors = kwargs.pop('pass_errors', False)
         fmt, cols = self._format_kwargs(kwargs)
         if endpoint.startswith('/'):
-            url = '/'.join(self.prefix.split('/', 3)[:3]) + endpoint
+            endpoint = endpoint.lstrip('/')
+        elif endpoint:
+            endpoint = f'{self.prefix}/{endpoint}'
         else:
-            url = self.prefix + endpoint
+            endpoint = self.prefix
+        url = f'https://{self.hostname}/{endpoint}'
         kwargs.update((('verify', False), ('allow_redirects', True)))
         response = getattr(self.session, method)(url, **kwargs)
-        print(response.url)
         if 400 <= response.status_code and not pass_errors:
             msg = (f'Unexpected response: {response.status_code} {response.reason}\n'
                    f'  {method} {url}')
-            raise ValueError(msg)
+            raise AEUnexpectedResponseError(msg)
+        print(f'{method.upper()} {url}: {response.headers["content-type"]}')
         return self._format_response(response, fmt, cols)
 
     def _get(self, endpoint, **kwargs):
         return self._api('get', endpoint, **kwargs)
-    
+
     def _delete(self, endpoint, **kwargs):
         return self._api('delete', endpoint, **kwargs)
-    
+
     def _post(self, endpoint, **kwargs):
         return self._api('post', endpoint, **kwargs)
-        
+
     def _put(self, endpoint, **kwargs):
         return self._api('put', endpoint, **kwargs)
 
@@ -134,15 +196,47 @@ class AESessionBase(object):
 
 
 class AEUserSession(AESessionBase):
-    def __init__(self, hostname, username, password, dataframe=False):
-        if not hostname or not username:
-            raise ValueError('Must supply hostname and username')
-        if isinstance(password, requests.Session):
-            session = password
-        else:
-            session = config.session(hostname, username, password)
-        prefix = f'https://{hostname}/api/v2/'
-        super(AEUserSession, self).__init__(prefix, session, dataframe)
+    def __init__(self, hostname, username, password=None, dataframe=False, retry=True, password_prompt=None):
+        super(AEUserSession, self).__init__(hostname, username, password, 'api/v2', dataframe, retry, password_prompt)
+
+    def _set_header(self):
+        s = self.session
+        for cookie in s.cookies:
+            if cookie.name == '_xsrf':
+                s.headers['x-xsrftoken'] = cookie.value
+                break
+
+    def _load(self):
+        self._filename = os.path.join(config._path, 'cookies', f'{self.username}@{self.hostname}')
+        s = self.session
+        s.cookies = LWPCookieJar(self._filename)
+        if os.path.exists(self._filename):
+            s.cookies.load()
+            os.utime(self._filename)
+            try:
+                self._get('runs', format='response')
+            except AEUnexpectedResponseError:
+                s.cookies.clear()
+
+    def _connected(self):
+        return any(c.name == '_xsrf' for c in self.session.cookies)
+
+    def _connect(self, password):
+        params = {'client_id': 'anaconda-platform', 'scope': 'openid',
+                  'response_type': 'code', 'redirect_uri': f'https://{self.hostname}/login'}
+        text = self._get('/auth/realms/AnacondaPlatform/protocol/openid-connect/auth', params=params, format='text')
+        tree = html.fromstring(text)
+        form = tree.xpath("//form[@id='kc-form-login']")
+        login_path = '/' + form[0].action.split('/', 3)[-1]
+        resp = self._post(login_path, data={'username': self.username, 'password': password}, format='text')
+        elems = html.fromstring(resp).find_class('kc-feedback-text')
+        if elems:
+            raise AEAuthenticationError(elems[0].text)
+
+    def _save(self):
+        os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)
+        self.session.cookies.save()
+        os.chmod(self._filename, 0o600)
 
     def _id(self, type, ident, ignore_revision=False):
         if isinstance(ident, str):
@@ -151,9 +245,8 @@ class AEUserSession(AESessionBase):
             matches = []
             owner, name, id = ident.owner or '*', ident.name or '*', ident.id or '*'
             for record in getattr(self, type[:-1] + '_list')(format='json'):
-                if (fnmatch(record['name'], name) and fnmatch(record['owner'], owner)
-                    and fnmatch(record['id'], id)):
-                   matches.append(record)
+                if (fnmatch(record['name'], name) and fnmatch(record['owner'], owner) and fnmatch(record['id'], id)):
+                    matches.append(record)
             if len(matches) != 1:
                 pfx = 'Multiple' if len(matches) else 'No'
                 msg = f'{pfx} {type} found matching {owner}/{name}/{id}'
@@ -199,7 +292,7 @@ class AEUserSession(AESessionBase):
     def project_activity(self, ident, limit=0, latest=False, format=None):
         id = self._id('projects', ident)
         limit = 1 if latest else (999999 if limit <= 0 else limit)
-        params = {'sort':'-updated', 'page[size]': limit}
+        params = {'sort': '-updated', 'page[size]': limit}
         response = self._get(f'projects/{id}/activity', params=params, format='json')['data']
         if latest:
             response = response[0]
@@ -240,7 +333,6 @@ class AEUserSession(AESessionBase):
                 f = io.BytesIO(project_archive)
             else:
                 f = open(project_archive, 'rb')
-            data = {'name': name}
             response = self._post('projects/upload', files={'project_file': f},
                                   data={'name': name}, format='json')
         finally:
@@ -273,7 +365,7 @@ class AEUserSession(AESessionBase):
                     rec[f'{nameprefix}_name'] = rec['name']
                     rec['name'] = pnames[pid]
                 rec['project_id'] = pid
-    
+
     def session_list(self, format=None):
         response = self._get('sessions', format='json')
         self._join_projects(response, 'session')
@@ -289,7 +381,7 @@ class AEUserSession(AESessionBase):
         index = 0
         while not status['done'] and not status['error']:
             time.sleep(5)
-            params = {'sort':'-updated', 'page[size]': index + 1}
+            params = {'sort': '-updated', 'page[size]': index + 1}
             activity = self._get(f'projects/{id}/activity', params=params, format='json')
             try:
                 status = next(s for s in activity['data'] if s['id'] == status['id'])
@@ -315,6 +407,10 @@ class AEUserSession(AESessionBase):
         response = self._get('deployments', format='json')
         self._join_projects(response)
         return self._format_response(response, format, _D_COLUMNS)
+
+    def deployment_call(self, path, format=None):
+        response = self._get(f'deployments/{path}', format='json')
+        return self._format_response(response, format=format, columns=None)
 
     def deployment_info(self, ident, format=None):
         id = self._id('deployments', ident, ignore_revision=True)
@@ -344,13 +440,46 @@ class AEUserSession(AESessionBase):
 
 
 class AEAdminSession(AESessionBase):
-    def __init__(self, hostname, username, password=None, dataframe=False):
-        if not hostname or not username:
-            raise ValueError('Must supply hostname and username')
-        session = config.admin_session(hostname, username, password)
-        prefix = f'https://{hostname}/auth/admin/realms/AnacondaPlatform/'
-        super(AEAdmin, self).__init__(prefix, session, dataframe)
-        self.hostname = hostname
+    def __init__(self, hostname, username, password=None, dataframe=False, retry=True, password_prompt=None):
+        self._sdata = None
+        self._login_url = f'/auth/realms/master/protocol/openid-connect/token'
+        super(AEAdminSession, self).__init__(hostname, username, password,
+                                             'auth/admin/realms/AnacondaPlatform',
+                                             dataframe, retry, password_prompt)
+
+    def _load(self):
+        self._filename = os.path.join(config._path, 'tokens', f'{self.username}@{self.hostname}')
+        if os.path.exists(self._filename):
+            with open(self._filename, 'r') as fp:
+                sdata = json.load(fp)
+            os.utime(self._filename)
+            self._sdata = self._post(self._login_url,
+                                     data={'refresh_token': sdata['refresh_token'],
+                                           'grant_type': 'refresh_token',
+                                           'client_id': 'admin-cli'},
+                                     format='json', pass_errors=True)
+            self._set_header()
+
+    def _connected(self):
+        return isinstance(self._sdata, dict) and 'access_token' in self._sdata
+
+    def _set_header(self):
+        if self._connected():
+            self.session.headers['Authorization'] = f'Bearer {self._sdata["access_token"]}'
+
+    def _connect(self, password):
+        self._sdata = self._post(self._login_url,
+                                 data={'username': self.username,
+                                       'password': password,
+                                       'grant_type': 'password',
+                                       'client_id': 'admin-cli'},
+                                 format='json', pass_errors=True)
+        self._set_header()
+
+    def _save(self):
+        os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)
+        with open(self._filename, 'w') as fp:
+            json.dump(self._sdata, fp)
 
     def user_list(self, format=None):
         return self._get(f'users', format=format, columns=_U_COLUMNS)
@@ -368,7 +497,9 @@ class AEAdminSession(AESessionBase):
         record = self.user_info(user_or_id, format='json')
         try:
             self._post(f'users/{record["id"]}/impersonation', format='response')
-            params = {'client_id': 'anaconda-platform', 'scope': 'openid', 'response_type': 'code',
+            params = {'client_id': 'anaconda-platform',
+                      'scope': 'openid',
+                      'response_type': 'code',
                       'redirect_uri': f'https://{self.hostname}/login'}
             self._get('/auth/realms/AnacondaPlatform/protocol/openid-connect/auth', params=params, format='response')
             nsession = requests.Session()
@@ -378,4 +509,3 @@ class AEAdminSession(AESessionBase):
             return AEUserSession(self.hostname, record["username"], nsession)
         finally:
             self.session.cookies.clear()
-

@@ -1,7 +1,7 @@
 import click
 
 from ..login import cluster_call
-from ..format import filter_df, print_output, format_options
+from ..format import print_output, format_options
 from ...identifier import Identifier
 
 

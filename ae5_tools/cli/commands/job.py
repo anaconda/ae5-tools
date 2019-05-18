@@ -2,7 +2,7 @@ import click
 
 from ..login import cluster_call, login_options
 from ..utils import add_param
-from ..format import filter_df, print_output, format_options
+from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
@@ -22,17 +22,13 @@ def list(job):
     print_output(result)
 
 
-def single_job(job):
-    ident = Identifier.from_string(job)
-    return cluster_call('job_info', job, format='dataframe')
-
-
 @job.command()
 @click.argument('job')
 @format_options()
 @login_options()
 def info(job):
-    result = single_job(job)
+    ident = Identifier.from_string(job)
+    result = cluster_call('job_info', ident, format='dataframe')
     print_output(result)
 
 
@@ -42,10 +38,11 @@ def info(job):
 @login_options()
 def stop(job, yes):
     '''Stop a job.'''
-    result = single_job(job)
+    ident = Identifier.from_string(job)
+    result = cluster_call('job_info', ident, format='dataframe')
     if not yes:
         yes = click.confirm(f'Stop job {ident}')
     if yes:
         click.echo(f'Stopping {ident}...', nl=False)
-        cluster_call('job_stop', result.id)
+        cluster_call('job_stop', result['id'])
         click.echo('done.')

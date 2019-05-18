@@ -3,7 +3,7 @@ import webbrowser
 
 from ..login import cluster_call, login_options
 from ..utils import add_param
-from ..format import filter_df, print_output, format_options
+from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
@@ -82,4 +82,3 @@ def open(session, frameless):
         _, project_id = result.project_url.rsplit('/', 1)
         url = f'{scheme}//{hostname}/projects/detail/a0-{project_id}/view'
     webbrowser.open(url, 1, True)
-
