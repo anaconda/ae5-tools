@@ -7,8 +7,7 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group(short_help='List, examine, open, start, and stop sessions.',
-             epilog='Type "ae5 session <command> --help" for help on a specific command.')
+@click.group(epilog='Type "ae5 session <command> --help" for help on a specific command.')
 def session():
     pass
 

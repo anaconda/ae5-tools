@@ -6,10 +6,8 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group(short_help='List, examine, download, upload, and delete projects.',
-             epilog='Type "ae5 project <command> --help" for help on a specific command.')
+@click.group(epilog='Type "ae5 project <command> --help" for help on a specific command.')
 def project():
-    '''List, examine, download, upload, and delete projects.'''
     pass
 
 
@@ -144,14 +142,18 @@ def upload(filename, name):
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
 @login_options()
 def delete(project, yes):
-    '''Delete a project. The supplied PROJECT identifier may include wildcards,
-       but it must resolve to a single project.
+    '''Delete a project.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+
+       This command will currently fail if the project has an active session.
     '''
     result = cluster_call('project_info', project, format='json')
     ident = Identifier.from_record(result)
-    if not yes:
+    if yes:
+        click.echo(f'Deleting project {ident}...')
+    else:
         yes = click.confirm(f'Delete project {ident}')
     if yes:
-        click.echo(f'Deleting {ident}...')
         result = cluster_call('project_delete', result['id'])
-        click.echo('done.')

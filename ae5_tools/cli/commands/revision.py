@@ -5,7 +5,7 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group()
+@click.group(epilog='Type "ae5 revision <command> --help" for help on a specific command.')
 def revision():
     pass
 
@@ -14,6 +14,11 @@ def revision():
 @click.argument('project')
 @format_options()
 def list(project):
+    '''List available revisions for a given project.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
     result = cluster_call('revision_list', project, format='dataframe')
     print_output(result)
 
