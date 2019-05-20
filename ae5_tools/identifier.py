@@ -1,15 +1,34 @@
 import re
 from collections import namedtuple
 
+# from anaconda_platform/ui/base.py
+RE_ID = r'a[0-3]-[a-f0-9]{32}'
+SLUG_MAP = {'a0': 'projects', 'a1': 'sessions', 'a2': 'deployments', 'a3': 'channels'}
+REVERSE_SLUG_MAP = {v: k for k, v in SLUG_MAP.items()}
+
 
 class Identifier(namedtuple('Identifier', ['name', 'owner', 'id', 'revision'])):
+    @classmethod
+    def id_type(cls, idstr):
+        if re.match(RE_ID, idstr):
+            return SLUG_MAP[idstr.split('-', 1)[0]]
+        else:
+            raise ValueError(f'Invalid ID: {idstr}')
+
+    @classmethod
+    def id_prefix(cls, type):
+        try:
+            return REVERSE_SLUG_MAP[type]
+        except KeyError:
+            return ValueError(f'Invalid identifier type: {type}')
+
     @classmethod
     def from_string(self, idstr):
         rev_parts = idstr.rsplit(':', 1)
         revision = rev_parts[1] if len(rev_parts) == 2 else ''
         id_parts = rev_parts[0].split('/')
-        id, owner, name = '', '', ''
-        if len(id_parts) == 3 or re.match(r'[a-f0-9]{2}-[a-f0-9]{32}', id_parts[-1]):
+        name, owner, id = '', '', ''
+        if len(id_parts) == 3 or re.match(RE_ID, id_parts[-1]):
             id = id_parts.pop()
         if id_parts:
             name = id_parts.pop()

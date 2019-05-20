@@ -6,7 +6,10 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group()
+@click.group(short_help='list, info, stop',
+             epilog='Type "ae5 job <command> --help" for help on a specific command.')
+@format_options()
+@login_options()
 def job():
     pass
 
@@ -45,4 +48,3 @@ def stop(job, yes):
     if yes:
         click.echo(f'Stopping {ident}...', nl=False)
         cluster_call('job_stop', result['id'])
-        click.echo('done.')

@@ -1,11 +1,14 @@
 import click
 
-from ..login import cluster_call
+from ..login import cluster_call, login_options
 from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group(epilog='Type "ae5 revision <command> --help" for help on a specific command.')
+@click.group(short_help='list, info, download',
+             epilog='Type "ae5 revision <command> --help" for help on a specific command.')
+@format_options()
+@login_options()
 def revision():
     pass
 

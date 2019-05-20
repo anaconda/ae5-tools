@@ -6,12 +6,15 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group(epilog='Type "ae5 project <command> --help" for help on a specific command.')
+@click.group(short_help='list, info, collaborators, deployments, jobs, runs, activity, status, download, upload, deploy, delete',
+             epilog='Type "ae5 project <command> --help" for help on a specific command.')
+@format_options()
+@login_options()
 def project():
     pass
 
 
-@project.command(short_help='List available projects.')
+@project.command()
 @click.argument('project', required=False)
 @format_options()
 @login_options()
@@ -29,7 +32,7 @@ def list(project):
     print_output(result)
 
 
-@project.command(short_help='Obtain information about a single project.')
+@project.command()
 @click.argument('project')
 @format_options()
 @login_options()
@@ -43,7 +46,7 @@ def info(project):
     print_output(result)
 
 
-@project.command(short_help='Retrieve the project collaborators.')
+@project.command()
 @click.argument('project')
 @format_options()
 @login_options()
@@ -57,7 +60,49 @@ def collaborators(project):
     print_output(result)
 
 
-@project.command(short_help='Retrieve the activity log.')
+@project.command()
+@click.argument('project')
+@format_options()
+@login_options()
+def jobs(project):
+    '''Obtain information about a project's jobs.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    result = cluster_call('project_jobs', project, format='dataframe')
+    print_output(result)
+
+
+@project.command(short_help='Retrieve the project\'s runs.')
+@click.argument('project')
+@format_options()
+@login_options()
+def runs(project):
+    '''Obtain information about a project's runs.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    result = cluster_call('project_collaborators', project, format='dataframe')
+    print_output(result)
+
+
+@project.command()
+@click.argument('project')
+@format_options()
+@login_options()
+def deployments(project):
+    '''Obtain information about a project's deployments.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    result = cluster_call('project_deployments', project, format='dataframe')
+    print_output(result)
+
+
+@project.command()
 @click.argument('project')
 @click.option('--limit', type=int, default=10, help='Limit the output to N records.')
 @click.option('--all', is_flag=True, default=False, help='Retrieve all possible records.')
@@ -76,7 +121,7 @@ def activity(project, limit, all):
     print_output(result)
 
 
-@project.command(short_help='Retrieve the latest activity entry.')
+@project.command()
 @click.argument('project')
 @format_options()
 @login_options()
@@ -90,25 +135,13 @@ def status(project):
     print_output(result)
 
 
-@project.command(short_help='Start a session for a project.')
-@click.argument('project')
-@click.option('--wait/--no-wait', default=True, help='Wait for the session to complete initialization before exiting.')
-@format_options()
-@login_options()
-@click.pass_context
-def start(ctx, project, wait):
-    '''Start a session for a project.'''
-    from .session import start as session_start
-    ctx.invoke(session_start, project, wait=wait)
-
-
-@project.command(short_help='Download an archive of a project.')
+@project.command()
 @click.argument('project')
 @click.option('--filename', default='', help='Filename to save to. If not supplied, the filename is constructed from the name of the project.')
 @login_options()
 @click.pass_context
 def download(ctx, project, filename):
-    '''Download a project given by the identifier PROJECT.
+    '''Download an archive of a project.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
@@ -120,7 +153,7 @@ def download(ctx, project, filename):
     ctx.invoke(revision_download, revision=project, filename=filename)
 
 
-@project.command(short_help='Upload a project to the cluster.')
+@project.command()
 @click.argument('filename', type=click.Path(exists=True))
 @click.option('--name', default='', help='Name of the project.')
 @format_options()
@@ -137,7 +170,32 @@ def upload(filename, name):
     print_output(result)
 
 
-@project.command(short_help='Delete a project.')
+@project.command()
+@click.argument('project')
+@click.option('--endpoint', type=str, required=False, help='Endpoint name.')
+@click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
+@format_options()
+@login_options()
+def deploy(project, endpoint, wait):
+    '''Start a deployment for a project.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+
+       If the static endpoint is supplied, it must be of the form r'[A-Za-z0-9-]+',
+       and it will be converted to lowercase. It must not match any endpoint with
+       an active deployment, nor can it match any endpoint claimed by another project,
+       even if that project has no active deployments. If the endpoint is not supplied,
+       it will be autogenerated from the project name.
+
+       By default, this command will wait for the completion of the deployment
+       creation before returning. To return more quickly, use the --no-wait option.
+    '''
+    from .deployment import start as deployment_start
+    ctx.invoke(deployment_start, project=project, endpoint=endpoint, wait=wait)
+
+
+@project.command()
 @click.argument('project')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
 @login_options()

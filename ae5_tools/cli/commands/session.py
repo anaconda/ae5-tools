@@ -7,7 +7,10 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group(epilog='Type "ae5 session <command> --help" for help on a specific command.')
+@click.group(short_help='list, info, start, stop, open',
+             epilog='Type "ae5 session <command> --help" for help on a specific command.')
+@format_options()
+@login_options()
 def session():
     pass
 
@@ -15,6 +18,7 @@ def session():
 @session.command(short_help='List active sessions.')
 @click.argument('session', required=False)
 @format_options()
+@login_options()
 def list(session):
     '''List sessions. 
 

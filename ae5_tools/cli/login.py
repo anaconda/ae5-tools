@@ -5,19 +5,51 @@ from ..api import AESessionBase, AEUserSession, AEAdminSession, AEAuthentication
 from .utils import param_callback
 
 
+def print_login_help(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo('Logging into the AE5 cluster: options\n')
+    click.echo(click.wrap_text((
+'The CLI provides a number of options that can be used with most commands '
+'to control the authenticatio to the cluster. These options can be supplied '
+'using standard command-line options, or by setting environment variables '
+'whose names are given in parentheses below.'), initial_indent='  ', subsequent_indent='  '))
+    click.echo('')
+    click.echo(click.wrap_text((
+'For convenience, the CLI tool will re-use the last hostname and username '
+'provided, unless overridden by these options. It will not request a password '
+'if the previous session has not yet expired.'), initial_indent='  ', subsequent_indent='  '))
+    click.echo('\nOptions:')
+    for option, help in _login_help.items():
+        text = f'--{option}'
+        spacer = ' ' * (18 - len(text))
+        text = f'{text}{spacer}{help}'
+        click.echo(click.wrap_text(text, initial_indent='  ', subsequent_indent=' ' * 20))
+    ctx.exit()
+
+
+_login_help = {
+    'hostname': 'Hostname of the cluster. (AE5_HOSTNAME)',
+    'username': 'Username for user-level authentication. (AE5_USERNAME)',
+    'password': 'Password for user-level authentication. (AE5_PASSWORD)',
+    'admin-username': 'Keycloak admin username. (AE5_ADMIN_USERNAME)',
+    'admin-password': 'Keycloak admin password. (AE5_ADMIN_PASSWORD)',
+    'impersonate': ('If selected, uses impersonation to log in as the given user. '
+                    'This relies on the Keycloack admin credentials instead of '
+                    'requiring a user password. By default, standard user '
+                    'authentication is employed. (AE5_IMPERSONATE)')
+}
+
+
 _login_options = [
-    click.option('--hostname', type=str, expose_value=False, callback=param_callback, envvar='AE5_HOSTNAME',
-                 help='The hostname of the cluster to connect to.'),
-    click.option('--username', type=str, expose_value=False, callback=param_callback, envvar='AE5_USERNAME',
-                 help='The username to use for authentication.'),
-    click.option('--password', type=str, expose_value=False, callback=param_callback, envvar='AE5_PASSWORD',
-                 help='The password to use for authentication.'),
-    click.option('--admin-username', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_USERNAME',
-                 help='The username to use for admin authentication.'),
-    click.option('--admin-password', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_PASSWORD',
-                 help='The password to use for admin authentication.'),
-    click.option('--impersonate', is_flag=True, expose_value=False, callback=param_callback, envvar='AE5_IMPERSONATE',
-                 help='If true, uses impersonation to log in as the requested user. Requires credentials for a KeyCloak administrator.')
+    click.option('--hostname', type=str, expose_value=False, callback=param_callback, envvar='AE5_HOSTNAME', hidden=True),
+    click.option('--username', type=str, expose_value=False, callback=param_callback, envvar='AE5_USERNAME', hidden=True),
+    click.option('--password', type=str, expose_value=False, callback=param_callback, envvar='AE5_PASSWORD', hidden=True),
+    click.option('--admin-username', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_USERNAME', hidden=True),
+    click.option('--admin-password', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_PASSWORD', hidden=True),
+    click.option('--impersonate', is_flag=True, expose_value=False, callback=param_callback, envvar='AE5_IMPERSONATE', hidden=True),
+    click.option('--help-login', is_flag=True, callback=print_login_help, expose_value=False, is_eager=True,
+                 help='Get help on the global authentication options.')
 ]
 
 
@@ -92,4 +124,5 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=kwargs.pop('admin', False))
         return getattr(c, method)(*args, **kwargs)
     except Exception as e:
+        raise
         raise click.ClickException(str(e))

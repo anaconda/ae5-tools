@@ -19,14 +19,17 @@ from .commands.account import account
 from .commands.session import session
 from .commands.deployment import deployment
 from .commands.job import job
+from .commands.run import run
 from .commands.user import user
 
 from .login import login_options, get_account
+from .format import format_options
 
 
 @click.group(invoke_without_command=True,
              epilog='Type "ae5 <command> --help" for help on a specific command.')
 @login_options()
+@format_options()
 @click.pass_context
 def cli(ctx):
     obj = ctx.ensure_object(dict)
@@ -55,9 +58,9 @@ cli.add_command(revision)
 cli.add_command(session)
 cli.add_command(deployment)
 cli.add_command(job)
+cli.add_command(run)
 cli.add_command(account)
 cli.add_command(user)
-
 
 def main():
     cli(obj={})

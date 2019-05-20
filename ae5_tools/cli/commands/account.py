@@ -2,12 +2,17 @@ import click
 import pandas as pd
 
 from ..format import print_output, format_options
+from ..login import login_options
 from ...config import config
 
 
-@click.group()
+@click.group(short_help='list',
+             epilog='Type "ae5 account <command> --help" for help on a specific command.')
+@format_options()
+@login_options()
 @click.pass_context
 def account(ctx):
+    '''list'''
     pass
 
 

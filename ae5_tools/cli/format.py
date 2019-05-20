@@ -8,21 +8,44 @@ from fnmatch import fnmatch
 from .utils import param_callback
 
 
+def print_format_help(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo('Formatting the tabular output: options\n')
+    click.echo(click.wrap_text((
+'Most of the CLI commands provide output in tabular form. By default, the tables '
+'are rendered in text suitable for viewing in a terminal. The output can be modified '
+'in a variety of ways with the following options.'), initial_indent='  ', subsequent_indent='  '))
+    click.echo('\nOptions:')
+    for option, help in _format_help.items():
+        text = f'--{option}'
+        spacer = ' ' * (13 - len(text))
+        text = f'{text}{spacer}{help}'
+        click.echo(click.wrap_text(text, initial_indent='  ', subsequent_indent=' ' * 15))
+    ctx.exit()
+
+
+_format_help = {
+    'format': 'Output format: "text" (default), "csv", and "json".',
+    'filter': 'Filter the rows with a comma-separated list of <field>=<value> pairs. Wildcards may be used in the values.',
+    'columns': 'Limit the output to a comma-separated list of columns.',
+    'sort': 'Sort the rows by a comma-separated list of fields.',
+    'width': 'Output width, in characters. The default behavior is to determine the width of the surrounding window and truncate the table to that width. Only applies to the "text" format.',
+    'wide': 'Do not limit output width. Equivalent to --width=infinity.',
+    'no-header': 'Omit the header. Applies to "text" and "csv" formats only.'
+}
+
+
 _format_options = [
-    click.option('--filter', type=str, expose_value=False, callback=param_callback,
-                 help='Filter the rows with a comma-separated list of <field>=<value> pairs. Wildcards may be used in the values.'),
-    click.option('--columns', type=str, expose_value=False, callback=param_callback,
-                 help='Limit output to a comma-separated list of columns.'),
-    click.option('--sort', type=str, expose_value=False, callback=param_callback,
-                 help='Sort the rows by a comma-separated list of fields.'),
-    click.option('--format', type=click.Choice(['text', 'csv', 'json']), expose_value=False, callback=param_callback,
-                 help='Output format. Default is "text".'),
-    click.option('--width', type=int, expose_value=False, callback=param_callback,
-                 help='Output width, in characters (format="text" only). Default is to limit to width of the window.'),
-    click.option('--wide', is_flag=True, expose_value=False, callback=param_callback,
-                 help='Do not limit output width (format="text" only). Equivalent to --width=infinity.'),
-    click.option('--header/--no-header', default=True, expose_value=False, callback=param_callback,
-                 help='Include header (format="text"/"csv" only).')
+    click.option('--filter', type=str, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--columns', type=str, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--sort', type=str, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--format', type=click.Choice(['text', 'csv', 'json']), expose_value=False, callback=param_callback, hidden=True),
+    click.option('--width', type=int, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--wide', is_flag=True, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--header/--no-header', default=True, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--help-format', is_flag=True, callback=print_format_help, expose_value=False, is_eager=True,
+                 help='Get help on the output formatting options.')
 ]
 
 
@@ -56,9 +79,18 @@ def filter_df(df, filter_string, columns=None):
 
 
 def sort_df(df, columns):
-    columns = columns.split(',')
-    ascending = [not c.startswith('-') for c in columns]
-    columns = [c.lstrip('-') for c in columns]
+    if not columns:
+        for ndx in range(len(df.columns)):
+            if len(df.iloc[:,:ndx+1].drop_duplicates()) == len(df):
+                columns = list(df.columns[:ndx+1])
+                break
+        else:
+            return df
+        ascending = [True] * len(columns)
+    else:
+        columns = columns.split(',')
+        ascending = [not c.startswith('-') for c in columns]
+        columns = [c.lstrip('-') for c in columns]
     df = df.sort_values(by=columns, ascending=ascending)
     return df
 
@@ -113,10 +145,11 @@ def print_output(result):
     if is_single:
         result = result.T.reset_index()
         result.columns = ['field', 'value']
+    if obj.get('format') != 'json':
+        result = result.applymap(lambda x: json.dumps(x) if isinstance(x, (list, dict)) else str(x))
     if obj.get('filter') or obj.get('columns'):
         result = filter_df(result, obj.get('filter'), obj.get('columns'))
-    if obj.get('sort'):
-        result = sort_df(result, obj['sort'])
+    result = sort_df(result, obj.get('sort'))
     if obj.get('format') == 'csv':
         print(result.to_csv(index=False, header=obj.get('header', True)))
     elif obj.get('format') == 'json':
