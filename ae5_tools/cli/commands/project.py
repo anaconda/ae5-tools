@@ -6,7 +6,7 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group(short_help='list, info, collaborators, deployments, jobs, runs, activity, status, download, upload, deploy, delete',
+@click.group(short_help='list, info, download, upload, deploy, deployments, jobs, runs, activity, status, delete',
              epilog='Type "ae5 project <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
@@ -156,17 +156,18 @@ def download(ctx, project, filename):
 @project.command()
 @click.argument('filename', type=click.Path(exists=True))
 @click.option('--name', default='', help='Name of the project.')
+@click.option('--tag', default='', help='Commit tag to use for initial revision of project.')
+@click.option('--no-wait', is_flag=True, help='Do not wait for the creation seesion to complete before exiting.')
 @format_options()
 @login_options()
-def upload(filename, name):
+def upload(filename, name, tag, no_wait):
     '''Upload a project.
 
        By default, the name of the project is taken from the basename of
        the file. This can be overridden by using the --name option. The
        name must not be the same as an existing project.
     '''
-    print(f'Uploading {filename}...')
-    result = cluster_call('project_upload', filename, name=name or None, wait=True, format='dataframe')
+    result = cluster_call('project_upload', filename, name=name, tag=tag, wait=not no_wait, format='dataframe')
     print_output(result)
 
 

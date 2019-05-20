@@ -244,72 +244,85 @@ class AEUserSession(AESessionBase):
         self.session.cookies.save()
         os.chmod(self._filename, 0o600)
 
-    def _id(self, type, ident, record=False, ignore_revision=False):
+    def _id(self, type, ident, record=False, quiet=False):
         if isinstance(ident, str):
             ident = Identifier.from_string(ident)
+        idkey = 'id'
         if ident.id:
             idtype = Identifier.id_type(ident.id)
             if idtype not in (type, 'projects'):
                 raise ValueError(f'Unexpected ID type: {ident.id} ({idtype})')
-            idkey = 'id' if type == idtype else 'project_id'
+            if type != 'idtype':
+                idkey = 'project_id'
             if type == idtype and not record:
                 return ident.id
         matches = []
         # NOTE: we are retrieving all project records here, even if we have the unique
         # id and could potentially retrieve the individual record, because the full
         # listing includes a field the individual query does not (project_create_status)
-        records = self._get(f'{type}', format='json')
+        # Also, we're using our wrapper around the list API calls instead of the direct
+        # call so we get the benefit of our record cleanup.
+        records = getattr(self, type.rstrip('s') + '_list')(format='json')
         owner, name, id = ident.owner or '*', ident.name or '*', ident.id or '*'
         for rec in records:
-            if fnmatch(rec['name'], name) and fnmatch(rec['owner'], owner) and fnmatch(rec['id'], id):
+            if fnmatch(rec['name'], name) and fnmatch(rec['owner'], owner) and fnmatch(rec[idkey], id):
                 matches.append(rec)
-        if len(matches) != 1:
+        if len(matches) == 1:
+            rec = matches[0]
+            id = rec['id']
+        elif quiet:
+            id, rec = None, None
+        else:
             pfx = 'Multiple' if len(matches) else 'No'
             msg = f'{pfx} {type} found matching {owner}/{name}/{id}'
             if matches:
-                matches = [str(Identifier.from_record(r, ignore_revision)) for r in matches]
+                matches = [str(Identifier.from_record(r, True)) for r in matches]
                 msg += ':\n  - ' + '\n  - '.join(matches)
             raise ValueError(msg)
-        rec = matches[0]
         if record:
             return rec['id'], rec
         else:
             return rec['id']
 
-    def _revision(self, ident, record=False):
+    def _revision(self, ident, record=False, quiet=False):
         if isinstance(ident, str):
             ident = Identifier.from_string(ident)
-        id = self._id('projects', ident, record=record)
+        id = self._id('projects', ident, record=record, quiet=quiet)
         if record:
             id, prec = id
-        revisions = self._get(f'projects/{id}/revisions', format='json')
-        if not ident.revision or ident.revision == 'latest':
-            matches = [revisions[0]]
-        else:
-            matches = []
-            for response in revisions:
-                if fnmatch(response['name'], ident.revision):
-                    matches.append(response)
-        if len(matches) != 1:
-            pfx = 'Multiple' if len(matches) else 'No'
-            msg = f'{pfx} revisions found matching {ident.revision}'
-            if matches:
-                msg += ':\n  - ' + '\n  - '.join(matches)
-            raise ValueError(msg)
-        rev = matches[0]['name']
+        rrec, rev = None, None
+        if id:
+            revisions = self._get(f'projects/{id}/revisions', format='json')
+            if not ident.revision or ident.revision == 'latest':
+                matches = [revisions[0]]
+            else:
+                matches = []
+                for response in revisions:
+                    if fnmatch(response['name'], ident.revision):
+                        matches.append(response)
+            if len(matches) == 1:
+                rrec = matches[0]
+                rev = rrec['name']
+            elif not quiet:
+                pfx = 'Multiple' if len(matches) else 'No'
+                msg = f'{pfx} revisions found matching {ident.revision}'
+                if matches:
+                    msg += ':\n  - ' + '\n  - '.join(matches)
+                raise ValueError(msg)
         if record:
-            return id, rev, prec, matches[0]
+            return id, rev, prec, rrec
         else:
             return id, rev
 
     def project_list(self, format=None):
         return self._get('projects', format=format, columns=_P_COLUMNS)
 
-    def project_info(self, ident, format=None):
-        id, record = self._id('projects', ident, record=True)
-        collab = self.project_collaborators(id, format='json')
-        record['collaborators'] = ' '.join(c['id'] for c in collab)
-        return self._format_response(record, format=format, columns=_P_COLUMNS)
+    def project_info(self, ident, format=None, quiet=False):
+        id, record = self._id('projects', ident, record=True, quiet=quiet)
+        if id:
+            collab = self.project_collaborators(id, format='json')
+            record['collaborators'] = ' '.join(c['id'] for c in collab)
+            return self._format_response(record, format=format, columns=_P_COLUMNS)
 
     def project_collaborators(self, ident, format=None):
         id = self._id('projects', ident, record=False)
@@ -343,10 +356,11 @@ class AEUserSession(AESessionBase):
             rec['project_id'] = 'a0-' + rec['url'].rsplit('/', 3)[-3]
         return self._format_response(response, format=format, columns=_R_COLUMNS)
 
-    def revision_info(self, ident, format=None):
-        id, rev, prec, rrec = self._revision(ident, record=True)
-        rrec['project_id'] = prec['id']
-        return self._format_response(rrec, format=format, columns=_R_COLUMNS)
+    def revision_info(self, ident, format=None, quiet=False):
+        id, rev, prec, rrec = self._revision(ident, record=True, quiet=quiet)
+        if quiet:
+            rrec['project_id'] = prec['id']
+            return self._format_response(rrec, format=format, columns=_R_COLUMNS)
 
     def project_download(self, ident, filename=None):
         id, rev = self._revision(ident)
@@ -372,7 +386,7 @@ class AEUserSession(AESessionBase):
                 index = index + 1
         return status
 
-    def project_upload(self, project_archive, name, wait=True, format=None):
+    def project_upload(self, project_archive, name, tag, cleanup, wait=True, format=None):
         if name is None:
             if type(project_archive) == bytes:
                 raise RuntimeError('Project name must be supplied for binary input')
@@ -382,8 +396,11 @@ class AEUserSession(AESessionBase):
                 f = io.BytesIO(project_archive)
             else:
                 f = open(project_archive, 'rb')
-            response = self._post('projects/upload', files={'project_file': f},
-                                  data={'name': name}, format='json')
+            data = {'name': name, 'cleanup': cleanup}
+            if tag:
+                data['tag'] = tag
+            print(data)
+            response = self._post('projects/upload', files={'project_file': f}, data=data, format='json')
         finally:
             f.close()
         if response.get('error'):
@@ -419,11 +436,11 @@ class AEUserSession(AESessionBase):
         self._join_projects(response, 'session')
         return self._format_response(response, format, _S_COLUMNS)
 
-    def session_info(self, ident, format=None):
-        id = self._id('sessions', ident)
-        response = self._get(f'sessions/{id}', format='json')
-        self._join_projects(response, 'session')
-        return self._format_response(response, format, columns=_S_COLUMNS)
+    def session_info(self, ident, format=None, quiet=False):
+        id, record = self._id('sessions', ident, record=True, quiet=quiet)
+        if id:
+            self._join_projects(record, 'session')
+            return self._format_response(record, format, columns=_S_COLUMNS)
 
     def session_start(self, ident, wait=True, format=None):
         id = self._id('projects', ident)
@@ -443,20 +460,16 @@ class AEUserSession(AESessionBase):
     def deployment_list(self, format=None):
         response = self._get('deployments', format='json')
         self._join_projects(response)
-        for rec in response:
-            rec['endpoint'] = rec['url'].split('/', 3)[2].split('.', 1)[0]
+        for record in response:
+            record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(response, format, _D_COLUMNS)
 
-    def deployment_call(self, path, format=None):
-        response = self._get(f'deployments/{path}', format='json')
-        return self._format_response(response, format=format, columns=None)
-
-    def deployment_info(self, ident, format=None):
-        id = self._id('deployments', ident, ignore_revision=True)
-        rec = self._get(f'deployments/{id}', format='json')
-        self._join_projects(rec)
-        rec['endpoint'] = rec['url'].split('/', 3)[2].split('.', 1)[0]
-        return self._format_response(rec, format, _D_COLUMNS)
+    def deployment_info(self, ident, format=None, quiet=False):
+        id, record = self._id('deployments', ident, record=True, quiet=quiet)
+        if id:
+            self._join_projects(record)
+            record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
+            return self._format_response(record, format, _D_COLUMNS)
 
     def deployment_endpoints(self, format=None):
         response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')['data']
@@ -498,10 +511,10 @@ class AEUserSession(AESessionBase):
     def job_list(self, format=None):
         return self._get('jobs', format=format, columns=_J_COLUMNS)
 
-    def job_info(self, ident, format=None):
-        id = self._id('jobs', ident)
-        response = self._get(f'jobs/{id}', format=format, columns=_J_COLUMNS)
-        return response
+    def job_info(self, ident, format=None, quiet=False):
+        id, record = self._id('jobs', ident, record=True, quiet=quiet)
+        if id:
+            return self._format_response(record, format=format, columns=_J_COLUMNS)
 
     def job_stop(self, ident):
         id = self._id('jobs', ident)
@@ -510,14 +523,15 @@ class AEUserSession(AESessionBase):
     def run_list(self, format=None):
         return self._get('runs', format=format, columns=_J_COLUMNS)
 
-    def run_info(self, ident, format=None):
-        id = self._id('runs', ident)
-        response = self._get(f'runs/{id}', format=format, columns=_J_COLUMNS)
-        return response
+    def run_info(self, ident, format=None, quiet=False):
+        id, record = self._id('runs', ident, record=True, quiet=quiet)
+        if id:
+            return self._format_response(record, format=format, columns=_J_COLUMNS)
 
     def job_stop(self, ident):
         id = self._id('runs', ident)
         self._delete(f'runs/{id}', format='response')
+
 
 class AEAdminSession(AESessionBase):
     def __init__(self, hostname, username, password=None, dataframe=False, retry=True, password_prompt=None):

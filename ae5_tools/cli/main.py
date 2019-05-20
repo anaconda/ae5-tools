@@ -34,6 +34,7 @@ from .format import format_options
 def cli(ctx):
     obj = ctx.ensure_object(dict)
     obj['is_interactive'] = sys.__stdin__.isatty()
+    obj['is_console']= sys.__stdout__.isatty()
     if ctx.invoked_subcommand is None:
         ctx.invoke(repl)
 
@@ -44,12 +45,9 @@ def cli(ctx):
 def repl(ctx):
     obj = ctx.ensure_object(dict)
     obj['in_repl'] = True
-    click.echo('Anaconda Enterprise 5')
+    click.echo('Anaconda Enterprise 5 REPL')
     click.echo('Type "--help" for a list of commands.')
     click.echo('Type "<command> --help" for help on a specific command.')
-    hostname, username = get_account(required=False)
-    if hostname and username:
-        click.echo(f'Active account: {username}@{hostname}')
     click_repl.repl(ctx, prompt_kwargs={'history': FileHistory(os.path.expanduser('~/.ae5/history'))})
 
 

@@ -149,7 +149,8 @@ def print_output(result):
         result = result.applymap(lambda x: json.dumps(x) if isinstance(x, (list, dict)) else str(x))
     if obj.get('filter') or obj.get('columns'):
         result = filter_df(result, obj.get('filter'), obj.get('columns'))
-    result = sort_df(result, obj.get('sort'))
+    if not is_single and 'sort' in obj:
+        result = sort_df(result, obj.get('sort'))
     if obj.get('format') == 'csv':
         print(result.to_csv(index=False, header=obj.get('header', True)))
     elif obj.get('format') == 'json':

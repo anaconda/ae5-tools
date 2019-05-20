@@ -54,10 +54,13 @@ def info(session):
 
 @session.command(short_help='Start a session for a project.')
 @click.argument('project')
-@click.option('--wait/--no-wait', default=True, help='Wait for the session to complete initialization before exiting.')
+@click.option('--no-wait', is_flag=True, help='Do not wait for the session to complete initialization before exiting.')
+@click.option('--open', is_flag=True, help='Open the session in a browser upon initialization.')
+@click.option('--frameless', is_flag=True, help='Omit the surrounding AE session management frame.')
 @format_options()
 @login_options()
-def start(project, wait):
+@click.pass_context
+def start(ctx, project, no_wait, open, frameless):
     '''Start a session for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -66,11 +69,15 @@ def start(project, wait):
        By default, this command will wait for the completion of the session
        creation before returning. To return more quickly, use the --no-wait option.
     '''
+    if no_wait and open:
+        raise click.UsageError('Options --no-wait and --open confict')
     result = cluster_call('project_info', project, format='json')
-    ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
-    click.echo(f'Starting a session for {ident}...')
-    response = cluster_call('session_start', result['id'], wait=wait, format='dataframe')
-    print_output(response)
+    response = cluster_call('session_start', result['id'], wait=not no_wait, format='dataframe')
+    if open:
+        from .session import open as session_open
+        ctx.invoke(session_open, session=response['id'], frameless=frameless)
+    else:
+        print_output(response)
 
 
 @session.command(short_help='Stop a session.')
@@ -84,17 +91,16 @@ def stop(session, yes):
        wildcards. But it must match exactly one session.
     '''
     result = single_session(session)
-    ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
     if not yes:
+        ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
         yes = click.confirm(f'Stop session {ident}')
     if yes:
-        click.echo(f'Stopping {ident}...')
         cluster_call('session_stop', result.id)
 
 
 @session.command(short_help='Open a session in a browser.')
 @click.argument('session')
-@click.option('--frameless', is_flag=True, default=False, help='Omit the surrounding AE session management frame.')
+@click.option('--frameless', is_flag=True, help='Omit the surrounding AE session management frame.')
 @login_options()
 def open(session, frameless):
     '''Opens a session in the default browser.

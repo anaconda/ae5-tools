@@ -69,22 +69,20 @@ def get_account(admin=False):
     username = obj.get(key)
     if hostname and username:
         return hostname, username
-    if not obj.get('is_interactive'):
-        raise click.UsageError('Username and hostname must both be supplied in non-interactive sessions')
     matches = config.resolve(hostname, username, admin)
-    if len(matches) == 1:
+    if len(matches) >= 1:
         hostname, username = matches[0]
     else:
         if not hostname:
-            d_hostname = matches[0][0] if matches else None
-            hostname = click.prompt('Hostname', default=d_hostname, type=str)
+            hostname = click.prompt('Hostname', type=str)
             matches = config.resolve(hostname, username, admin)
         if not username:
-            d_username = matches[0][1] if matches else None
             prompt = 'Admin username' if admin else 'Username'
-            username = click.prompt(prompt, default=d_username, type=str)
+            username = click.prompt(prompt, type=str)
     obj['hostname'] = hostname
     obj[key] = username
+    if obj.get('is_console'):
+        click.echo(f'Connecting as {username}@{hostname}...')
     return hostname, username
 
 
@@ -124,5 +122,4 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=kwargs.pop('admin', False))
         return getattr(c, method)(*args, **kwargs)
     except Exception as e:
-        raise
         raise click.ClickException(str(e))
