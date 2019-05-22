@@ -84,8 +84,10 @@ class AESessionBase(object):
         if isinstance(password, requests.Session):
             self.session = password
             self.connected = True
+            self._save()
         else:
             self.session = requests.Session()
+            self.session.cookies = LWPCookieJar()
             self.session.verify = False
             self.connect(password, retry)
 
@@ -203,6 +205,7 @@ class AESessionBase(object):
 
 class AEUserSession(AESessionBase):
     def __init__(self, hostname, username, password=None, dataframe=False, retry=True, password_prompt=None):
+        self._filename = os.path.join(config._path, 'cookies', f'{username}@{hostname}')
         super(AEUserSession, self).__init__(hostname, username, password, 'api/v2', dataframe, retry, password_prompt)
 
     def _set_header(self):
@@ -213,11 +216,9 @@ class AEUserSession(AESessionBase):
                 break
 
     def _load(self):
-        self._filename = os.path.join(config._path, 'cookies', f'{self.username}@{self.hostname}')
         s = self.session
-        s.cookies = LWPCookieJar(self._filename)
         if os.path.exists(self._filename):
-            s.cookies.load()
+            s.cookies.load(self._filename)
             os.utime(self._filename)
             try:
                 self._get('runs', format='response')
@@ -241,21 +242,15 @@ class AEUserSession(AESessionBase):
 
     def _save(self):
         os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)
-        self.session.cookies.save()
+        self.session.cookies.save(self._filename)
         os.chmod(self._filename, 0o600)
 
     def _id(self, type, ident, record=False, quiet=False):
         if isinstance(ident, str):
             ident = Identifier.from_string(ident)
-        idkey = 'id'
-        if ident.id:
-            idtype = Identifier.id_type(ident.id)
-            if idtype not in (type, 'projects'):
-                raise ValueError(f'Unexpected ID type: {ident.id} ({idtype})')
-            if type != 'idtype':
-                idkey = 'project_id'
-            if type == idtype and not record:
-                return ident.id
+        idtype = ident.id_type(ident.id) if ident.id else type
+        if idtype not in ('projects', type):
+            raise ValueError(f'Expected a {type} ID type, found a {idtype} ID: {ident}')
         matches = []
         # NOTE: we are retrieving all project records here, even if we have the unique
         # id and could potentially retrieve the individual record, because the full
@@ -263,9 +258,12 @@ class AEUserSession(AESessionBase):
         # Also, we're using our wrapper around the list API calls instead of the direct
         # call so we get the benefit of our record cleanup.
         records = getattr(self, type.rstrip('s') + '_list')(format='json')
-        owner, name, id = ident.owner or '*', ident.name or '*', ident.id or '*'
+        owner, name, id, pid = (ident.owner or '*', ident.name or '*',
+                                ident.id if ident.id and type == idtype else '*',
+                                ident.pid if ident.pid and type != 'projects' else '*')
         for rec in records:
-            if fnmatch(rec['name'], name) and fnmatch(rec['owner'], owner) and fnmatch(rec[idkey], id):
+            if (fnmatch(rec['owner'], owner) and fnmatch(rec['name'], name) and
+                fnmatch(rec['id'], id) and fnmatch(rec.get('project_id', ''), pid)):
                 matches.append(rec)
         if len(matches) == 1:
             rec = matches[0]
@@ -314,15 +312,17 @@ class AEUserSession(AESessionBase):
         else:
             return id, rev
 
-    def project_list(self, format=None):
-        return self._get('projects', format=format, columns=_P_COLUMNS)
+    def project_list(self, collaborators=False, format=None):
+        records = self._get('projects', format='json')
+        if collaborators:
+            self._join_collaborators(records)
+        return self._format_response(records, format=format, columns=_P_COLUMNS)
 
-    def project_info(self, ident, format=None, quiet=False):
+    def project_info(self, ident, collaborators=False, format=None, quiet=False):
         id, record = self._id('projects', ident, record=True, quiet=quiet)
-        if id:
-            collab = self.project_collaborators(id, format='json')
-            record['collaborators'] = ' '.join(c['id'] for c in collab)
-            return self._format_response(record, format=format, columns=_P_COLUMNS)
+        if collaborators:
+            self._join_collaborators(record)
+        return self._format_response(record, format=format, columns=_P_COLUMNS)
 
     def project_collaborators(self, ident, format=None):
         id = self._id('projects', ident, record=False)
@@ -358,7 +358,7 @@ class AEUserSession(AESessionBase):
 
     def revision_info(self, ident, format=None, quiet=False):
         id, rev, prec, rrec = self._revision(ident, record=True, quiet=quiet)
-        if quiet:
+        if id:
             rrec['project_id'] = prec['id']
             return self._format_response(rrec, format=format, columns=_R_COLUMNS)
 
@@ -386,8 +386,8 @@ class AEUserSession(AESessionBase):
                 index = index + 1
         return status
 
-    def project_upload(self, project_archive, name, tag, cleanup, wait=True, format=None):
-        if name is None:
+    def project_upload(self, project_archive, name, tag, wait=True, format=None):
+        if not name:
             if type(project_archive) == bytes:
                 raise RuntimeError('Project name must be supplied for binary input')
             name = basename(project_archive).split('.', 1)[0]
@@ -396,10 +396,9 @@ class AEUserSession(AESessionBase):
                 f = io.BytesIO(project_archive)
             else:
                 f = open(project_archive, 'rb')
-            data = {'name': name, 'cleanup': cleanup}
+            data = {'name': name}
             if tag:
                 data['tag'] = tag
-            print(data)
             response = self._post('projects/upload', files={'project_file': f}, data=data, format='json')
         finally:
             f.close()
@@ -430,6 +429,14 @@ class AEUserSession(AESessionBase):
                         rec[f'{nameprefix}_name'] = rec['name']
                     rec['name'] = pnames.get(pid, '')
                 rec['project_id'] = pid
+
+    def _join_collaborators(self, response):
+        if isinstance(response, dict):
+            collabs = self._get(f'projects/{response["id"]}/collaborators', format='json')
+            response['collaborators'] = ', '.join(c['id'] for c in collabs)
+        elif response:
+            for rec in response:
+                self._join_collaborators(rec)
 
     def session_list(self, format=None):
         response = self._get('sessions', format='json')
@@ -589,6 +596,7 @@ class AEAdminSession(AESessionBase):
 
     def impersonate(self, user_or_id):
         record = self.user_info(user_or_id, format='json')
+        old_headers = self.session.headers.copy()
         try:
             self._post(f'users/{record["id"]}/impersonation', format='response')
             params = {'client_id': 'anaconda-platform',
@@ -597,9 +605,10 @@ class AEAdminSession(AESessionBase):
                       'redirect_uri': f'https://{self.hostname}/login'}
             self._get('/auth/realms/AnacondaPlatform/protocol/openid-connect/auth', params=params, format='response')
             nsession = requests.Session()
-            nsession.cookies, self.session.cookies = self.session.cookies, nsession.cookies
+            nsession.cookies, self.session.cookies = self.session.cookies, LWPCookieJar()
             nsession.headers = self.session.headers.copy()
             del nsession.headers['Authorization']
             return AEUserSession(self.hostname, record["username"], nsession)
         finally:
             self.session.cookies.clear()
+            self.session.headers = old_headers

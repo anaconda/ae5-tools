@@ -74,20 +74,18 @@ def get_account(admin=False):
         hostname, username = matches[0]
     else:
         if not hostname:
-            hostname = click.prompt('Hostname', type=str)
+            hostname = click.prompt('Hostname', type=str, err=True)
             matches = config.resolve(hostname, username, admin)
         if not username:
             prompt = 'Admin username' if admin else 'Username'
-            username = click.prompt(prompt, type=str)
+            username = click.prompt(prompt, type=str, err=True)
     obj['hostname'] = hostname
     obj[key] = username
-    if obj.get('is_console'):
-        click.echo(f'Connecting as {username}@{hostname}...')
     return hostname, username
 
 
 def click_password(key):
-    return click.prompt(f'Password for {key}', type=str, hide_input=True)
+    return click.prompt(f'Password for {key}', type=str, hide_input=True, err=True)
 
 
 def cluster(reconnect=False, admin=False):
@@ -103,17 +101,15 @@ def cluster(reconnect=False, admin=False):
                 conn = AEAdminSession(hostname, username, obj.get('admin_password'),
                                       password_prompt=click_password)
             else:
-                try:
-                    conn = AEUserSession(hostname, username, obj.get('password'),
-                                         retry=not impersonate, password_prompt=click_password)
-                except AEAuthenticationError as e:
-                    if not impersonate:
-                        raise click.ClickException(str(e))
-                    click.echo(f'Impersonating {username}@{hostname}...')
+                conn = AEUserSession(hostname, username, obj.get('password'),
+                                     retry=not impersonate, password_prompt=click_password)
+                if not conn.connected:
+                    click.echo(f'Impersonating {username}@{hostname}...', err=True)
                     conn = cluster(reconnect, True).impersonate(username)
             obj[label] = conn
         except ValueError as e:
             raise click.ClickException(str(e))
+        conn = click.echo(f'Connected as {username}@{hostname}...', err=True)
     return obj[label]
 
 
@@ -122,4 +118,5 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=kwargs.pop('admin', False))
         return getattr(c, method)(*args, **kwargs)
     except Exception as e:
+        raise
         raise click.ClickException(str(e))

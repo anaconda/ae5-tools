@@ -16,9 +16,10 @@ def project():
 
 @project.command()
 @click.argument('project', required=False)
+@click.option('--collaborators', is_flag=True, help='Include the list of collaborators. This adds a separate API call for each project, so for performance reasons it is off by default.')
 @format_options()
 @login_options()
-def list(project):
+def list(project, collaborators):
     '''List available projects.
 
        By default, lists all projects visible to the authenticated user.
@@ -26,7 +27,7 @@ def list(project):
        supplying an optional PROJECT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    result = cluster_call('project_list', format='dataframe')
+    result = cluster_call('project_list', collaborators=collaborators, format='dataframe')
     if project:
         add_param('filter', Identifier.from_string(project).project_filter())
     print_output(result)
@@ -42,7 +43,7 @@ def info(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_info', project, format='dataframe')
+    result = cluster_call('project_info', project, collaborators=True, format='dataframe')
     print_output(result)
 
 
@@ -177,7 +178,8 @@ def upload(filename, name, tag, no_wait):
 @click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
 @format_options()
 @login_options()
-def deploy(project, endpoint, wait):
+@click.pass_context
+def deploy(ctx, project, endpoint, wait):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
