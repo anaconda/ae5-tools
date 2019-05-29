@@ -2,17 +2,19 @@ import re
 from collections import namedtuple
 
 # from anaconda_platform/ui/base.py
-RE_ID = r'a[0-3]-[a-f0-9]{32}'
+RE_ID = r'[a-f0-9]{2}-[a-f0-9]{32}'
 SLUG_MAP = {'a0': 'projects', 'a1': 'sessions', 'a2': 'deployments', 'a3': 'channels'}
 REVERSE_SLUG_MAP = {v: k for k, v in SLUG_MAP.items()}
 
 
 class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revision'])):
     @classmethod
-    def id_type(cls, idstr):
-        if re.match(RE_ID, idstr):
-            return SLUG_MAP[idstr.split('-', 1)[0]]
-        else:
+    def id_type(cls, idstr, quiet=False):
+        if idstr in SLUG_MAP:
+            return SLUG_MAP[idstr]
+        elif re.match(RE_ID, idstr) and idstr[:2] in SLUG_MAP:
+            return SLUG_MAP[idstr[:2]]
+        elif not quiet:
             raise ValueError(f'Invalid identifier: {idstr}')
 
     @classmethod
@@ -33,8 +35,10 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
         name, owner, id, pid = '', '', '', ''
         if id_parts and re.match(RE_ID, id_parts[-1]):
             pid = id_parts.pop()
+            self.id_type(pid)
         if id_parts and re.match(RE_ID, id_parts[-1]):
             id = id_parts.pop()
+            self.id_type(id)
         if id and pid:
             if self.id_type(id) == 'projects' and self.id_type(pid) != 'projects':
                 id, pid = pid, id
@@ -87,7 +91,7 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
                 parts.append(self.id)
             else:
                 parts.append(f'{self.pid}/{self.id}')
-        if self.owner or self.name:
+        if self.owner or self.name or not self.id:
             parts.append(self.name or "*")
         if self.owner:
             parts.append(self.owner)

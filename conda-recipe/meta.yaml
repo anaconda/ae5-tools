@@ -10,7 +10,8 @@ source:
 build:
   number: 0
   noarch: python
-  script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv "
+  script:
+    - {{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv
 
 requirements:
   host:
@@ -23,6 +24,20 @@ requirements:
     - click>=7
     - click-repl
     - lxml
+
+test:
+  source_files:
+    - tests
+  requires:
+    - pytest
+  commands:
+    - py.test -xv tests
+    - ae5 --help
+    - ae5 --help-login
+    - ae5 --help-format
+    - ae5 project --help
+    - ae5 session --help
+    - ae5 deployment --help
 
 about:
   home: https://github.com/Anaconda-Platform/ae5-tools
