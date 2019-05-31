@@ -72,7 +72,7 @@ def filter_df(df, filter_string, columns=None):
             mask = [fnmatch(str(row), value) for row in df[field.rstrip('!')]]
             if field.endswith('!'):
                 mask = [not m for m in mask]
-            df = df[mask]
+            df = df.loc[mask, :]
     if columns:
         df = df[columns]
     return df
