@@ -14,6 +14,8 @@ install:
   - bash miniconda.sh -b -p $HOME/miniconda
   - $HOME/miniconda/bin/conda install conda conda-build conda-verify anaconda-client --yes
   - source $HOME/miniconda/bin/activate
+  # Needed for click-repl at the moment
+  - conda config --append channels conda-forge
   - conda info -a
 
 script:
