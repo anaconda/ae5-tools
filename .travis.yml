@@ -1,22 +1,36 @@
 language: generic
 sudo: false
-
 branches:
   only:
-    - master
-    - /^\d+\.\d+.*$/
-
+  - master
+  - "/^\\d+\\.\\d+.*$/"
 os:
   - linux
-
 install:
-  - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - $HOME/miniconda/bin/conda install conda conda-build conda-verify anaconda-client --yes
+  - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $HOME/miniconda.sh
+  - bash $HOME/miniconda.sh -b -p $HOME/miniconda
   - source $HOME/miniconda/bin/activate
-  # Needed for click-repl at the moment
   - conda config --append channels conda-forge
+  - conda install conda conda-build conda-verify anaconda-client --yes
   - conda info -a
-
 script:
   - conda build conda-recipe
+deploy:
+  # Upload to main label for tagged master builds
+  - provider: script
+    skip_cleanup: true
+    on:
+      branch: master
+      tags: true
+    script: anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
+  # Upload to dev label for untagged master builds
+  - provider: script
+    skip_cleanup: true
+    on:
+      branch: master
+      tags: false
+    script: anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
+env:
+  global:
+    - secure: HeodogZVpwEjzfsS/XJpR5eoB98UqWiec68wbl3AEoC3EAycbERywgEnGq4Gcu31vpZIzqahYobXxA2zqsBc34MxO4c8SoPU2nCmcXfJdO/BuR13ieFym+Tndb4QQvNjdTJo1WSEhYF2iximDTVfF/WinGnyl6aWK6ZpSqU7E0AKfaGginkROcQ7lQ3FTyyUFlcoyjOhhpwj0piloXunP+aN8qDjuXQ6Q2U+nwZico3UbA/iVeMrMsa92oeLvaC9X4cXWym/oMRJgBnACHlGlcI4OiM0DlCIKcc0Urq8mqNwHXqfsaQ39gXnXnIttkAlyfhYBJjxkMMf2i0g0WvwqjGaeVAGGnLw6szbdMKcvq1znpASZXeVlqqL61eKd74wRYpBu0FGoTLW7W8Or2oU4VEH/VylikjTHlkNwYQwQAdBPzy3YJZ6C+s47+r27DI/F/nQLQRQtbHQNdtR7atwePgT+6HKGcy9fbS8uxPIRqn89ULoLeTToykfvrk5MHHrw8XCRrTyRiUJgsshluSMY/5ia9dZp+HBuKWkYI033z54TwntQUzl1cKZ/NPWj3E9SvP5q0c6w3k9luKkBSObqa9KeduKhNyb/BExK3Dgw4rTL70CrLj1EmJrVS34d/FqzpwxIqPD+ntwPYPvN83TEIhxaHad9/uxeX1uf8Awmu4=
+    - secure: dIijfaVfSNfA1sNYe+F2Ysc8OoJjKaL1byxma8/clEH73z7X6PmRM5QQsa1n7lOtCl3kgfootvk0n9D+XdUYS2K/LyCI8X65J/G5H3InKuNvoHfKfzYGJ4cXse08LJ543jTZD4n0fUcEB2SQR+K3ySpsx78pWys4BrSPat8AgyENqMPBqd08MaDjm9a33EMz7SfJ3BYQ7TcukaTyxBK8hxqGBVJfmnSNjuTuicmqBRDKfHk3OP0brpxw96PVG/Oj89JZuDXSu3T1tvKQNoWSRNo3SdNaF9VsginTyqbRT9kmMMEvToxiDs2PfxpScwTol0AQduO/nbaUv5QXBlIqx4TS79pjt4odNmDE/usQSpumfQoTL89TzdofbyTMQ/qMc9K9B4pJteeZSvjL22ld/S1MaPJS9xcoaI47ewqP63h7804ZZx/DZJQ2YPXiatikW3yToQ76mtTsEOQeMJ7y8NCaPc2qLQZ0fKnVrZPCnITAFlN9Bl4iTUwAleSRs7KivEl9P7bgQAgBlxu2ZA+pNpQ6W2SR20hTx3v2wKb/PMnSIRf0pP4dEr02y4RgQO1j3AdJo7IbvJfWooU2m9lf89Ilu86iTodqfQzS6kLF5D6oyt1W11JpskAyPXf6cVzWJoeoij+DOn1zYe3i1bEsE8BTJd7j1be1SGf1B5B1kfY=
