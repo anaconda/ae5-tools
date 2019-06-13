@@ -5,18 +5,21 @@ import pandas as pd
 
 from fnmatch import fnmatch
 
-from .utils import param_callback
+from .utils import param_callback, click_text
 
 
 def print_format_help(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
-    click.echo('Formatting the tabular output: options\n')
-    click.echo(click.wrap_text((
-'Most of the CLI commands provide output in tabular form. By default, the tables '
-'are rendered in text suitable for viewing in a terminal. The output can be modified '
-'in a variety of ways with the following options.'), initial_indent='  ', subsequent_indent='  '))
-    click.echo('\nOptions:')
+    click_text('''
+@Formatting the tabular output: options
+
+Most of the CLI commands provide output in tabular form. By default, the tables
+are rendered in text suitable for viewing in a terminal. The output can be modified
+in a variety of ways with the following options.
+
+@Options:
+''')
     for option, help in _format_help.items():
         text = f'--{option}'
         spacer = ' ' * (13 - len(text))
@@ -81,8 +84,8 @@ def filter_df(df, filter_string, columns=None):
 def sort_df(df, columns):
     if not columns:
         for ndx in range(len(df.columns)):
-            if len(df.iloc[:,:ndx+1].drop_duplicates()) == len(df):
-                columns = list(df.columns[:ndx+1])
+            if len(df.iloc[:, :ndx + 1].drop_duplicates()) == len(df):
+                columns = list(df.columns[:ndx + 1])
                 break
         else:
             return df

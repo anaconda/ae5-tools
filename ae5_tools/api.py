@@ -19,12 +19,12 @@ from http.cookiejar import LWPCookieJar
 requests.packages.urllib3.disable_warnings()
 
 
-_P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                                    'id',               'created', 'updated', 'url']  # noqa: E241
-_R_COLUMNS = [            'name', 'owner', 'commands',                                                        'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
-_S_COLUMNS = [            'name', 'owner',             'resource_profile',                           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
-_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
-_J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241
-_C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']
+_P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                                    'id',               'created', 'updated', 'url']  # noqa: E241, E201
+_R_COLUMNS = [            'name', 'owner', 'commands',                                                        'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
+_S_COLUMNS = [            'name', 'owner',             'resource_profile',                           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
+_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
+_J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
+_C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
 _U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_id', 'project_url']
@@ -258,7 +258,7 @@ class AEUserSession(AESessionBase):
                                 ident.pid if ident.pid and type != 'projects' else '*')
         for rec in records:
             if (fnmatch(rec['owner'], owner) and fnmatch(rec['name'], name) and
-                fnmatch(rec['id'], id) and fnmatch(rec.get('project_id', ''), pid)):
+                fnmatch(rec['id'], id) and fnmatch(rec.get('project_id', ''), pid)): # noqa
                 matches.append(rec)
         if len(matches) == 1:
             rec = matches[0]
@@ -530,7 +530,7 @@ class AEUserSession(AESessionBase):
         if id:
             return self._format_response(record, format=format, columns=_J_COLUMNS)
 
-    def job_stop(self, ident):
+    def run_stop(self, ident):
         id = self._id('runs', ident)
         self._delete(f'runs/{id}', format='response')
 

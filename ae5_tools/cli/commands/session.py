@@ -20,7 +20,7 @@ def session():
 @format_options()
 @login_options()
 def list(session):
-    '''List sessions. 
+    '''List sessions.
 
        By default, lists all sessions visible to the authenticated user.
        Simple filters on owner, project name, session id, or project id

@@ -101,7 +101,6 @@ def test_project_download_upload_delete(user_session, project_set, user_project_
         fname = os.path.join(tempd, 'blob')
         user_session.project_download(project_set[0]['id'], filename=fname)
         user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
-        data = user_session.project_list()
         for r in user_session.project_list():
             if r['name'] == 'test_upload':
                 user_session.project_delete(r['id'])
