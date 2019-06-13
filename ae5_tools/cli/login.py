@@ -1,25 +1,27 @@
 import click
 
 from ..config import config
-from ..api import AESessionBase, AEUserSession, AEAdminSession, AEAuthenticationError
-from .utils import param_callback
+from ..api import AESessionBase, AEUserSession, AEAdminSession
+from .utils import param_callback, click_text
 
 
 def print_login_help(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
-    click.echo('Logging into the AE5 cluster: options\n')
-    click.echo(click.wrap_text((
-'The CLI provides a number of options that can be used with most commands '
-'to control the authenticatio to the cluster. These options can be supplied '
-'using standard command-line options, or by setting environment variables '
-'whose names are given in parentheses below.'), initial_indent='  ', subsequent_indent='  '))
-    click.echo('')
-    click.echo(click.wrap_text((
-'For convenience, the CLI tool will re-use the last hostname and username '
-'provided, unless overridden by these options. It will not request a password '
-'if the previous session has not yet expired.'), initial_indent='  ', subsequent_indent='  '))
-    click.echo('\nOptions:')
+    click_text('''
+@Logging into the AE5 cluster: options
+
+The CLI provides a number of options that can be used with most commands
+to control the authenticatio to the cluster. These options can be supplied
+using standard command-line options, or by setting environment variables
+whose names are given in parentheses below.
+
+For convenience, the CLI tool will re-use the last hostname and username
+provided, unless overridden by these options. It will not request a password
+if the previous session has not yet expired.
+
+@Options:
+''')
     for option, help in _login_help.items():
         text = f'--{option}'
         spacer = ' ' * (18 - len(text))

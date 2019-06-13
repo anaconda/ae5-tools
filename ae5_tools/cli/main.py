@@ -22,7 +22,7 @@ from .commands.job import job
 from .commands.run import run
 from .commands.user import user
 
-from .login import login_options, get_account
+from .login import login_options
 from .format import format_options
 
 
@@ -34,7 +34,7 @@ from .format import format_options
 def cli(ctx):
     obj = ctx.ensure_object(dict)
     obj['is_interactive'] = sys.__stdin__.isatty()
-    obj['is_console']= sys.__stdout__.isatty()
+    obj['is_console'] = sys.__stdout__.isatty()
     if ctx.invoked_subcommand is None:
         ctx.invoke(repl)
 
@@ -59,6 +59,7 @@ cli.add_command(job)
 cli.add_command(run)
 cli.add_command(account)
 cli.add_command(user)
+
 
 def main():
     cli(obj={})

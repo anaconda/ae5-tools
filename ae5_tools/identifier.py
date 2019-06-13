@@ -25,39 +25,44 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
             return ValueError(f'Invalid identifier type: {type}')
 
     @classmethod
-    def from_string(self, idstr):
-        rev_parts = idstr.rsplit(':', 1)
-        if len(rev_parts) == 1 or rev_parts[1] == '*':
-            revision = ''
-        else:
-            revision = rev_parts[1]
-        id_parts = rev_parts[0].split('/')
-        name, owner, id, pid = '', '', '', ''
-        if id_parts and re.match(RE_ID, id_parts[-1]):
-            pid = id_parts.pop()
-            self.id_type(pid)
-        if id_parts and re.match(RE_ID, id_parts[-1]):
-            id = id_parts.pop()
-            self.id_type(id)
-        if id and pid:
-            if self.id_type(id) == 'projects' and self.id_type(pid) != 'projects':
-                id, pid = pid, id
-            if self.id_type(pid) != 'projects' or self.id_type(id) == 'projects' and id != pid:
+    def from_string(self, idstr, quiet=False):
+        try:
+            rev_parts = idstr.rsplit(':', 1)
+            if len(rev_parts) == 1 or rev_parts[1] == '*':
+                revision = ''
+            else:
+                revision = rev_parts[1]
+            id_parts = rev_parts[0].split('/')
+            name, owner, id, pid = '', '', '', ''
+            if id_parts and re.match(RE_ID, id_parts[-1]):
+                pid = id_parts.pop()
+                self.id_type(pid)
+            if id_parts and re.match(RE_ID, id_parts[-1]):
+                id = id_parts.pop()
+                self.id_type(id)
+            if id and pid:
+                if self.id_type(id) == 'projects' and self.id_type(pid) != 'projects':
+                    id, pid = pid, id
+                if self.id_type(pid) != 'projects' or self.id_type(id) == 'projects' and id != pid:
+                    raise ValueError(f'Invalid identifier: {idstr}')
+            elif pid and self.id_type(pid) == 'projects':
+                id = pid
+            else:
+                id, pid = pid, ''
+            if id_parts:
+                name = id_parts.pop()
+                if name == '*':
+                    name = ''
+            if id_parts:
+                owner = id_parts.pop()
+                if owner == '*':
+                    owner = ''
+            if id_parts:
                 raise ValueError(f'Invalid identifier: {idstr}')
-        elif pid and self.id_type(pid) == 'projects':
-            id = pid
-        else:
-            id, pid = pid, ''
-        if id_parts:
-            name = id_parts.pop()
-            if name == '*':
-                name = ''
-        if id_parts:
-            owner = id_parts.pop()
-            if owner == '*':
-                owner = ''
-        if id_parts:
-            raise ValueError(f'Invalid identifier: {idstr}')
+        except ValueError:
+            if quiet:
+                return None
+            raise
         return Identifier(owner, name, id, pid, revision)
 
     @classmethod
