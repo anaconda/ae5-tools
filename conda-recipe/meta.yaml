@@ -2,7 +2,7 @@
 
 package:
   name: ae5-tools
-  version: {{ data.get('version') }}
+  version: {{ data.get('version').lstrip('v') }}
 
 source:
   path: ../
