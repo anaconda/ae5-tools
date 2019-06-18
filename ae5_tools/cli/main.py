@@ -22,7 +22,7 @@ from .commands.job import job
 from .commands.run import run
 from .commands.user import user
 
-from .login import login_options
+from .login import login_options, cluster
 from .format import format_options
 
 
@@ -49,6 +49,34 @@ def repl(ctx):
     click.echo('Type "--help" for a list of commands.')
     click.echo('Type "<command> --help" for help on a specific command.')
     click_repl.repl(ctx, prompt_kwargs={'history': FileHistory(os.path.expanduser('~/.ae5/history'))})
+
+
+@cli.command()
+@click.option('--admin', is_flag=True, help='Perform a KeyCloak admin login instead of a user login.')
+@login_options()
+def login(admin):
+    '''Log into the cluster.
+
+       Strictly speaking, this is not necessary, because any other command will
+       initiate a login if necessary. Furthermore, if an active session already
+       exists for the given hostname/username/password, this will do nothing.
+    '''
+    cluster(admin=admin)
+
+
+@cli.command()
+@click.option('--admin', is_flag=True, help='Perform a KeyCloak admin login instead of a user login.')
+@login_options()
+def logout(admin):
+    '''Log out of the cluster.
+
+       Sessions automatically time out, but this allows an existing session to
+       be closed out to prevent accidental further use.
+    '''
+    c = cluster(admin=admin, retry=False)
+    if c is not None and c.connected:
+        c.disconnect()
+        click.echo('Logged out.', err=True)
 
 
 cli.add_command(project)

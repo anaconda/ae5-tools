@@ -113,6 +113,13 @@ class AESessionBase(object):
         self._set_header()
         self._save()
 
+    def disconnect(self):
+        self._disconnect()
+        self.session.headers.clear()
+        self.session.cookies.clear()
+        self._save()
+        self.connected = False
+
     def _format_kwargs(self, kwargs):
         dataframe = kwargs.pop('dataframe', None)
         format = kwargs.pop('format', None)
@@ -234,6 +241,11 @@ class AEUserSession(AESessionBase):
         elems = html.fromstring(resp).find_class('kc-feedback-text')
         if elems:
             raise AEAuthenticationError(elems[0].text)
+
+    def _disconnect(self):
+        # This will actually close out the session, so even if the cookie had
+        # been captured for use elsewhere, it would no longer be useful.
+        self._get('/logout', format='response')
 
     def _save(self):
         os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)
@@ -549,12 +561,14 @@ class AEAdminSession(AESessionBase):
             with open(self._filename, 'r') as fp:
                 sdata = json.load(fp)
             os.utime(self._filename)
-            self._sdata = self._post(self._login_url,
-                                     data={'refresh_token': sdata['refresh_token'],
-                                           'grant_type': 'refresh_token',
-                                           'client_id': 'admin-cli'},
-                                     format='json', pass_errors=True)
-            self._set_header()
+            if isinstance(sdata, dict) and 'refresh_token' in sdata:
+                self._sdata = self._post(self._login_url,
+                                         data={'refresh_token': sdata['refresh_token'],
+                                               'grant_type': 'refresh_token',
+                                               'client_id': 'admin-cli'},
+                                         format='json', pass_errors=True)
+            else:
+                self._sdata = {}
 
     def _connected(self):
         return isinstance(self._sdata, dict) and 'access_token' in self._sdata
@@ -571,6 +585,11 @@ class AEAdminSession(AESessionBase):
                                        'client_id': 'admin-cli'},
                                  format='json', pass_errors=True)
         self._set_header()
+
+    def _disconnect(self):
+        # There is currently no way to truly end an active admin session, but we
+        # can clear all knowledge of it to force reauthentication.
+        self._sdata.clear()
 
     def _save(self):
         os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)

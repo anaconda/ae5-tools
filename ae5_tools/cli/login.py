@@ -90,7 +90,7 @@ def click_password(key):
     return click.prompt(f'Password for {key}', type=str, hide_input=True, err=True)
 
 
-def cluster(reconnect=False, admin=False):
+def cluster(reconnect=False, admin=False, retry=True):
     ctx = click.get_current_context()
     obj = ctx.ensure_object(dict)
     label = 'acluster' if admin else 'cluster'
@@ -101,17 +101,21 @@ def cluster(reconnect=False, admin=False):
         try:
             if admin:
                 conn = AEAdminSession(hostname, username, obj.get('admin_password'),
-                                      password_prompt=click_password)
+                                      password_prompt=click_password, retry=retry)
             else:
                 conn = AEUserSession(hostname, username, obj.get('password'),
-                                     retry=not impersonate, password_prompt=click_password)
-                if not conn.connected:
+                                     retry=retry and not impersonate,
+                                     password_prompt=click_password)
+                if retry and impersonate and not conn.connected:
                     click.echo(f'Impersonating {username}@{hostname}...', err=True)
-                    conn = cluster(reconnect, True).impersonate(username)
-            obj[label] = conn
+                    conn = cluster(reconnect, True).impersonate(username, retry=False)
+            obj[label] = conn if conn.connected else None
         except ValueError as e:
             raise click.ClickException(str(e))
-        conn = click.echo(f'Connected as {username}@{hostname}...', err=True)
+        if conn is not None and conn.connected:
+            click.echo(f'Connected as {username}@{hostname}.', err=True)
+        else:
+            click.echo(f'No active connection for {username}@{hostname}.', err=True)
     return obj[label]
 
 
