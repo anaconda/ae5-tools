@@ -26,6 +26,7 @@ _D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'proj
 _J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
 _U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id']
+_T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_id', 'project_url']
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
@@ -252,7 +253,7 @@ class AEUserSession(AESessionBase):
         self.session.cookies.save(self._filename)
         os.chmod(self._filename, 0o600)
 
-    def _id(self, type, ident, record=False, quiet=False):
+    def _id(self, type, ident, quiet=False):
         if isinstance(ident, str):
             ident = Identifier.from_string(ident)
         idtype = ident.id_type(ident.id) if ident.id else type
@@ -284,17 +285,12 @@ class AEUserSession(AESessionBase):
                 matches = [str(Identifier.from_record(r, True)) for r in matches]
                 msg += ':\n  - ' + '\n  - '.join(matches)
             raise ValueError(msg)
-        if record:
-            return rec['id'], rec
-        else:
-            return rec['id']
+        return rec['id'], rec
 
-    def _revision(self, ident, record=False, quiet=False):
+    def _revision(self, ident, quiet=False):
         if isinstance(ident, str):
             ident = Identifier.from_string(ident)
-        id = self._id('projects', ident, record=record, quiet=quiet)
-        if record:
-            id, prec = id
+        id, prec = self._id('projects', ident, quiet=quiet)
         rrec, rev = None, None
         if id:
             revisions = self._get(f'projects/{id}/revisions', format='json')
@@ -314,10 +310,31 @@ class AEUserSession(AESessionBase):
                 if matches:
                     msg += ':\n  - ' + '\n  - '.join(matches)
                 raise ValueError(msg)
-        if record:
-            return id, rev, prec, rrec
+        return id, rev, prec, rrec
+
+    def _id_or_name(self, type, ident, quiet=False):
+        matches = []
+        records = getattr(self, f'project_{type}s')(format='json')
+        for rec in records:
+            if (fnmatch(rec['id'], ident) or fnmatch(rec['name'], ident)):
+                matches.append(rec)
+        if len(matches) > 1:
+            attempt = [rec for rec in matches if fnmatch(rec['id'], ident)]
+            if len(attempt) == 1:
+                matches = attempt
+        if len(matches) == 1:
+            rec = matches[0]
+            id = rec['id']
+        elif quiet:
+            id, rec = None, None
         else:
-            return id, rev
+            pfx = 'Multiple' if len(matches) else 'No'
+            msg = f'{pfx} {type} projects found matching "{ident}"'
+            if matches:
+                matches = [f'{r["id"]}: {r["name"]}' for r in matches]
+                msg += ':\n  - ' + '\n  - '.join(matches)
+            raise ValueError(msg)
+        return id, rec
 
     def project_list(self, collaborators=False, format=None):
         records = self._get('projects', format='json')
@@ -325,30 +342,44 @@ class AEUserSession(AESessionBase):
             self._join_collaborators(records)
         return self._format_response(records, format=format, columns=_P_COLUMNS)
 
+    def project_samples(self, format=None):
+        result = []
+        for sample in self._get('template_projects', format='json'):
+            sample['is_template'] = True
+            result.append(sample)
+        for sample in self._get('sample_projects', format='json'):
+            sample['is_template'] = sample['is_default'] = False
+            result.append(sample)
+        return self._format_response(result, format=format, columns=_T_COLUMNS)
+
     def project_info(self, ident, collaborators=False, format=None, quiet=False):
-        id, record = self._id('projects', ident, record=True, quiet=quiet)
+        id, record = self._id('projects', ident, quiet=quiet)
         if collaborators:
             self._join_collaborators(record)
         return self._format_response(record, format=format, columns=_P_COLUMNS)
 
+    def project_sample_info(self, ident, format=None, quiet=False):
+        id, record = self._id_or_name('sample', ident, quiet=quiet)
+        return self._format_response(record, format=format, columns=_T_COLUMNS)
+
     def project_collaborators(self, ident, format=None):
-        id = self._id('projects', ident, record=False)
+        id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
     def project_deployments(self, ident, format=None):
-        id = self._id('projects', ident, record=False)
+        id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/deployments', format=format, columns=_D_COLUMNS)
 
     def project_jobs(self, ident, format=None):
-        id = self._id('projects', ident, record=False)
+        id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/jobs', format=format, columns=_J_COLUMNS)
 
     def project_runs(self, ident, format=None):
-        id = self._id('projects', ident, record=False)
+        id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/runs', format=format, columns=_R_COLUMNS)
 
     def project_activity(self, ident, limit=0, latest=False, format=None):
-        id = self._id('projects', ident)
+        id, _ = self._id('projects', ident)
         limit = 1 if latest else (999999 if limit <= 0 else limit)
         params = {'sort': '-updated', 'page[size]': limit}
         response = self._get(f'projects/{id}/activity', params=params, format='json')['data']
@@ -357,20 +388,20 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format, columns=_A_COLUMNS)
 
     def revision_list(self, ident, format=None):
-        id = self._id('projects', ident)
+        id, _ = self._id('projects', ident)
         response = self._get(f'projects/{id}/revisions', format='json')
         for rec in response:
             rec['project_id'] = 'a0-' + rec['url'].rsplit('/', 3)[-3]
         return self._format_response(response, format=format, columns=_R_COLUMNS)
 
     def revision_info(self, ident, format=None, quiet=False):
-        id, rev, prec, rrec = self._revision(ident, record=True, quiet=quiet)
+        id, rev, prec, rrec = self._revision(ident, quiet=quiet)
         if id:
             rrec['project_id'] = prec['id']
             return self._format_response(rrec, format=format, columns=_R_COLUMNS)
 
     def project_download(self, ident, filename=None):
-        id, rev = self._revision(ident)
+        id, rev, _, _ = self._revision(ident)
         response = self._get(f'projects/{id}/revisions/{rev}/archive', format='blob')
         if filename is None:
             return response
@@ -378,7 +409,7 @@ class AEUserSession(AESessionBase):
             fp.write(response)
 
     def project_delete(self, ident):
-        id = self._id('projects', ident)
+        id, _ = self._id('projects', ident)
         self._delete(f'projects/{id}', format='response')
 
     def _wait(self, id, status):
@@ -451,13 +482,13 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format, _S_COLUMNS)
 
     def session_info(self, ident, format=None, quiet=False):
-        id, record = self._id('sessions', ident, record=True, quiet=quiet)
+        id, record = self._id('sessions', ident, quiet=quiet)
         if id:
             self._join_projects(record, 'session')
             return self._format_response(record, format, columns=_S_COLUMNS)
 
     def session_start(self, ident, wait=True, format=None):
-        id = self._id('projects', ident)
+        id, _ = self._id('projects', ident)
         response = self._post(f'projects/{id}/sessions', format='json')
         if response.get('error'):
             raise RuntimeError('Error starting project: {}'.format(response['error']['message']))
@@ -468,7 +499,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format, columns=_S_COLUMNS)
 
     def session_stop(self, ident):
-        id = self._id('sessions', ident)
+        id, _ = self._id('sessions', ident)
         self._delete(f'sessions/{id}', format='response')
 
     def deployment_list(self, format=None):
@@ -493,7 +524,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format, columns=_E_COLUMNS)
 
     def deployment_collaborators(self, ident, format=None):
-        id = self._id('deployments', ident)
+        id, _ = self._id('deployments', ident)
         return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
     def deployment_start(self, ident, endpoint=None, wait=True, format=None):
@@ -519,7 +550,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format, columns=_S_COLUMNS)
 
     def deployment_stop(self, ident):
-        id = self._id('deployments', ident)
+        id, _ = self._id('deployments', ident)
         self._delete(f'deployments/{id}', format='response')
 
     def job_list(self, format=None):
@@ -531,7 +562,7 @@ class AEUserSession(AESessionBase):
             return self._format_response(record, format=format, columns=_J_COLUMNS)
 
     def job_stop(self, ident):
-        id = self._id('jobs', ident)
+        id, _ = self._id('jobs', ident)
         self._delete(f'jobs/{id}', format='response')
 
     def run_list(self, format=None):
@@ -543,7 +574,7 @@ class AEUserSession(AESessionBase):
             return self._format_response(record, format=format, columns=_J_COLUMNS)
 
     def run_stop(self, ident):
-        id = self._id('runs', ident)
+        id, _ = self._id('runs', ident)
         self._delete(f'runs/{id}', format='response')
 
 
