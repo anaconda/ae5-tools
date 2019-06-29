@@ -54,13 +54,15 @@ def info(session):
 
 @session.command(short_help='Start a session for a project.')
 @click.argument('project')
-@click.option('--no-wait', is_flag=True, help='Do not wait for the session to complete initialization before exiting.')
-@click.option('--open', is_flag=True, help='Open the session in a browser upon initialization.')
-@click.option('--frameless', is_flag=True, help='Omit the surrounding AE session management frame.')
+@click.option('--editor', help='The editor to use. If supplied, future sessions will use this editor as well. If not supplied, uses the editor currently selected for the project.')
+@click.option('--resource-profile', help='The resource profile to use. If supplied, future sessions will use this resource profile as well. If not supplied, uses the resource profile currently selected for the project.')
+@click.option('--wait/--no-wait', default=True, help='Wait for the initialization of the session to complete before returning. For --no-wait, the command will exit as soon as AE acknowledges the session is scheduled.')
+@click.option('--open/--no-open', default=True, help='Open a browser upon initialization.')
+@click.option('--frame/--no-frame', default=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
-def start(ctx, project, no_wait, open, frameless):
+def start(ctx, project, editor, resource_profile, wait, open, frame):
     '''Start a session for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -69,15 +71,20 @@ def start(ctx, project, no_wait, open, frameless):
        By default, this command will wait for the completion of the session
        creation before returning. To return more quickly, use the --no-wait option.
     '''
-    if no_wait and open:
+    if not wait and open:
         raise click.UsageError('Options --no-wait and --open confict')
     result = cluster_call('project_info', project, format='json')
-    response = cluster_call('session_start', result['id'], wait=not no_wait, format='dataframe')
+    patches = {}
+    for key, value in (('editor', editor), ('resource_profile', resource_profile)):
+        if value and result.get(key) != value:
+            patches[key] = value
+    if patches:
+        cluster_call('project_patch', result['id'], **patches)
+    response = cluster_call('session_start', result['id'], wait=wait, format='dataframe')
     if open:
         from .session import open as session_open
-        ctx.invoke(session_open, session=response['id'], frameless=frameless)
-    else:
-        print_output(response)
+        ctx.invoke(session_open, session=response['id'], frame=frame)
+    print_output(response)
 
 
 @session.command(short_help='Stop a session.')
@@ -98,11 +105,11 @@ def stop(session, yes):
         cluster_call('session_stop', result.id)
 
 
-@session.command(short_help='Open a session in a browser.')
+@session.command(short_help='Open an existing session in a browser.')
 @click.argument('session')
-@click.option('--frameless', is_flag=True, help='Omit the surrounding AE session management frame.')
+@click.option('--frame/--no-frame', default=True, help='Include the AE banner.')
 @login_options()
-def open(session, frameless):
+def open(session, frame):
     '''Opens a session in the default browser.
 
        The SESSION identifier need not be fully specified, and may even include
@@ -114,9 +121,9 @@ def open(session, frameless):
     '''
     result = single_session(session)
     scheme, _, hostname, _ = result.url.split('/', 3)
-    if frameless:
-        url = f'{scheme}//{result.session_name}.{hostname}/'
-    else:
+    if frame:
         _, project_id = result.project_url.rsplit('/', 1)
         url = f'{scheme}//{hostname}/projects/detail/a0-{project_id}/view'
+    else:
+        url = f'{scheme}//{result.session_name}.{hostname}/'
     webbrowser.open(url, 1, True)

@@ -1,4 +1,5 @@
 import click
+import webbrowser
 import re
 
 from ..login import cluster_call, login_options
@@ -61,6 +62,26 @@ def info(deployment):
     print_output(result)
 
 
+@deployment.command()
+@click.argument('deployment')
+@click.option('--public', is_flag=True, help='Set the deployment to public.')
+@click.option('--private', is_flag=True, help='Set the deployment to private.')
+@format_options()
+@login_options()
+def patch(deployment, public, private):
+    '''Change the deployment's public/private status.
+
+       The DEPLOYMENT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one deployment.
+    '''
+    if public and private:
+        click.ClickException('Cannot specify both --public and --private')
+    if not public and not private:
+        public = None
+    result = cluster_call('deployment_patch', deployment, public=public, format='dataframe')
+    print_output(result)
+
+
 @deployment.command(short_help='Obtain information about a deployment\'s collaborators.')
 @click.argument('deployment')
 @format_options()
@@ -78,10 +99,16 @@ def collaborators(deployment):
 @deployment.command(short_help='Start a deployment for a project.')
 @click.argument('project')
 @click.option('--endpoint', type=str, required=False, help='Endpoint name.')
+@click.option('--resource-profile', help='The resource profile to use for this deployment.')
+@click.option('--public', is_flag=True, help='Make the deployment public.')
+@click.option('--private', is_flag=True, help='Make the deployment private (the default).')
 @click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--open/--no-open', default=True, help='Open a browser upon initialization. Implies --wait.')
+@click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
-def start(project, endpoint, wait):
+@click.pass_context
+def start(ctx, project, endpoint, resource_profile, public, private, wait, open, frame):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -96,6 +123,8 @@ def start(project, endpoint, wait):
        By default, this command will wait for the completion of the deployment
        creation before returning. To return more quickly, use the --no-wait option.
     '''
+    if public and private:
+        click.ClickException('Cannot specify both --public and --private')
     prec = cluster_call('project_info', project, format='json')
     endpoints = cluster_call('deployment_endpoints', format='json')
     e_supplied = bool(endpoint)
@@ -135,7 +164,12 @@ def start(project, endpoint, wait):
                     click.ClickException(f'Endpoint {endpoint} is claimed by another project')
     ident = Identifier.from_record(prec)
     click.echo(f'Starting deployment {endpoint} for {ident}...')
-    response = cluster_call('deployment_start', ident, endpoint=endpoint, wait=wait, format='dataframe')
+    response = cluster_call('deployment_start', ident, endpoint=endpoint,
+                            resource_profile=resource_profile, public=public,
+                            wait=wait or open, format='dataframe')
+    if open:
+        from .deployment import open as deployment_open
+        ctx.invoke(deployment_open, deployment=response['id'], frame=frame)
     print_output(response)
 
 
@@ -156,3 +190,26 @@ def stop(deployment, yes):
     if yes:
         click.echo(f'Stopping {ident}...', nl=False)
         cluster_call('deployment_stop', result.id)
+
+
+@deployment.command(short_help='Open a deployment in a browser.')
+@click.argument('deployment')
+@click.option('--frame/--no-frame', default=False, help='Include the AE banner.')
+@login_options()
+def open(deployment, frame):
+    '''Opens a deployment in the default browser.
+
+       The DEPLOYMENT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one session.
+
+       For deployments, the frameless version of the deployment will be opened by
+       default. If you wish to the Anaconda Enterprise banner at the top
+       of the window, use the --frame option.
+    '''
+    result = single_deployment(deployment)
+    scheme, _, hostname, _ = result.project_url.split('/', 3)
+    if frame:
+        url = f'{scheme}//{hostname}/deployments/detail/{result.id}/view'
+    else:
+        url = result.url
+    webbrowser.open(url, 1, True)

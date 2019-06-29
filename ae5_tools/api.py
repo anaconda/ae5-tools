@@ -366,6 +366,14 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
+    def project_patch(self, ident, **kwargs):
+        format = kwargs.pop('format', None)
+        id, _ = self._id('projects', ident)
+        data = {k: v for k, v in kwargs.items() if v is not None}
+        if data:
+            self._patch(f'projects/{id}', json=data, format='response')
+        return self.project_info(id, format=format)
+
     def project_deployments(self, ident, format=None):
         id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/deployments', format=format, columns=_D_COLUMNS)
@@ -527,13 +535,16 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('deployments', ident)
         return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
-    def deployment_start(self, ident, endpoint=None, wait=True, format=None):
+    def deployment_start(self, ident, endpoint=None, command=None,
+                         resource_profile=None, public=False,
+                         wait=True, format=None):
         id, rev, prec, rrec = self._revision(ident)
         data = {'name': prec['name'],
                 'source': rrec['url'],
                 'revision': rrec['id'],
-                'resource_profile': prec['resource_profile'],
-                'command': rrec['commands'][0]['id'],
+                'resource_profile': resource_profile or prec['resource_profile'],
+                'command': command or rrec['commands'][0]['id'],
+                'public': bool(public),
                 'target': 'deploy'}
         if endpoint:
             data['static_endpoint'] = endpoint
@@ -548,6 +559,14 @@ class AEUserSession(AESessionBase):
             raise RuntimeError(f'Error completing deployment start: {response["status_text"]}')
         response['project_id'] = id
         return self._format_response(response, format=format, columns=_S_COLUMNS)
+
+    def deployment_patch(self, ident, **kwargs):
+        format = kwargs.pop('format', None)
+        id, _ = self._id('deployments', ident)
+        data = {k: v for k, v in kwargs.items() if v is not None}
+        if data:
+            self._patch(f'deployments/{id}', json=data, format='response')
+        return self.deployment_info(id, format=format)
 
     def deployment_stop(self, ident):
         id, _ = self._id('deployments', ident)
