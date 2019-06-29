@@ -22,8 +22,8 @@ from .commands.job import job
 from .commands.run import run
 from .commands.user import user
 
-from .login import login_options, cluster
-from .format import format_options
+from .login import login_options, cluster, cluster_call
+from .format import format_options, print_output
 
 
 @click.group(invoke_without_command=True,
@@ -77,6 +77,19 @@ def logout(admin):
     if c is not None and c.connected:
         c.disconnect()
         click.echo('Logged out.', err=True)
+
+
+@cli.command()
+@click.argument('endpoint')
+@login_options()
+@format_options()
+def call(endpoint):
+    '''Make a generic API call. Useful for experimentation. There is no input validation
+       nor is there a guarantee that the output will be compatible with the generic
+       formatting logic. Currently support GET calls only.
+    '''
+    result = cluster_call('_api', 'get', endpoint, format='dataframe')
+    print_output(result)
 
 
 cli.add_command(project)

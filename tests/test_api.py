@@ -34,12 +34,20 @@ def impersonate_session(admin_session):
 
 @pytest.fixture()
 def user_project_list(user_session):
-    return user_session.project_list(collaborators=True)
+    project_list = user_session.project_list(collaborators=True)
+    for r in project_list:
+        if r['name'] == 'test_upload':
+            user_session.project_delete(r['id'])    
+    return [r for r in project_list if r['name'] != 'test_upload']
 
 
 @pytest.fixture()
 def user_project_list_imp(impersonate_session):
-    return impersonate_session.project_list(collaborators=True)
+    project_list = impersonate_session.project_list(collaborators=True)
+    for r in project_list:
+        if r['name'] == 'test_upload':
+            impersonate_session.project_delete(r['id'])    
+    return [r for r in project_list if r['name'] != 'test_upload']
 
 
 @pytest.fixture()
