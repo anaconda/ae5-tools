@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import click
 import pandas as pd
@@ -6,6 +7,8 @@ import pandas as pd
 from fnmatch import fnmatch
 
 from .utils import param_callback, click_text
+
+IS_WIN = sys.platform.startswith('win')
 
 
 def print_format_help(ctx, param, value):
@@ -103,7 +106,7 @@ def print_df(df, header=True, width=0):
         # http://granitosaurus.rocks/getting-terminal-size.html
         for i in range(3):
             try:
-                width = int(os.get_terminal_size(i)[0])
+                width = int(os.get_terminal_size(i)[0]) - IS_WIN
                 break
             except OSError:
                 pass
