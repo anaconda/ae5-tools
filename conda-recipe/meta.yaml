@@ -12,6 +12,8 @@ build:
   noarch: python
   script:
     - {{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv
+  entry_points:
+    - ae5 = ae5_tools.cli.main:main
 
 requirements:
   host:
