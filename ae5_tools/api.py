@@ -510,7 +510,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format, _D_COLUMNS)
 
     def deployment_info(self, ident, format=None, quiet=False):
-        id, record = self._id('deployments', ident, record=True, quiet=quiet)
+        id, record = self._id('deployments', ident, quiet=quiet)
         if id:
             self._join_projects(record)
             record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
@@ -528,7 +528,7 @@ class AEUserSession(AESessionBase):
         return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
     def deployment_start(self, ident, endpoint=None, wait=True, format=None):
-        id, rev, prec, rrec = self._revision(ident, record=True)
+        id, rev, prec, rrec = self._revision(ident)
         data = {'name': prec['name'],
                 'source': rrec['url'],
                 'revision': rrec['id'],
@@ -557,7 +557,7 @@ class AEUserSession(AESessionBase):
         return self._get('jobs', format=format, columns=_J_COLUMNS)
 
     def job_info(self, ident, format=None, quiet=False):
-        id, record = self._id('jobs', ident, record=True, quiet=quiet)
+        id, record = self._id('jobs', ident, quiet=quiet)
         if id:
             return self._format_response(record, format=format, columns=_J_COLUMNS)
 
@@ -569,7 +569,7 @@ class AEUserSession(AESessionBase):
         return self._get('runs', format=format, columns=_J_COLUMNS)
 
     def run_info(self, ident, format=None, quiet=False):
-        id, record = self._id('runs', ident, record=True, quiet=quiet)
+        id, record = self._id('runs', ident, quiet=quiet)
         if id:
             return self._format_response(record, format=format, columns=_J_COLUMNS)
 
