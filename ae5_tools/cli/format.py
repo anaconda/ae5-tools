@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import click
@@ -31,9 +32,45 @@ in a variety of ways with the following options.
     ctx.exit()
 
 
+def print_filter_help(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click_text('''
+@Filtering the rows of tabular output
+
+The argument of the --filter argument accepts a set of simple filter expressions
+combined using AND or OR relationships.
+
+Single filters may take the form <field> <op> <value>,
+where <op> is a binary comparison operator:
+    - =, ==, !=, <, <=, >, >=, =
+The field name must exactly match a column of the table.
+Whitespace on either side of the operator is ignored. The single
+equals sign accepts wildcard values, matched using fnmatch.
+All other operators perform standard string comparison.
+
+AND combinations can be separated by either ampersands or commas:
+    - <filter1>&<filter2>&...&<filterN>
+    - <filter1>,<filter2>,...,<filterN>
+OR combinations can be separated by pipes:
+    - <filter1>|<filter2>|...|<filterN>
+Because of the interpretation many shells place on ampersands and vertical bars,
+the use of quotes to surround the composite expression is strongly encouraged.
+
+As with standard logical operations in most programming languages, the ampersand
+has higher precedence than the pipe; for instance,
+    --filter <filter1>&<filter2>|<filter3>
+is interpreted as (<filter1> AND <filter2>) OR <filter3>. However, the comma has
+lower precedence than the pipe; for instance,
+    --filter <filter1>,<filter2>|<filter3>
+is interpreted as <filter1> AND (<filter2> OR <filter3>).
+''')
+    ctx.exit()
+
+
 _format_help = {
     'format': 'Output format: "text" (default), "csv", and "json".',
-    'filter': 'Filter the rows with a comma-separated list of <field>=<value> pairs. Wildcards may be used in the values.',
+    'filter': 'Filter the rows with a comma-separated list of <field>=<value> pairs. Use the --help-filter option for more information on how to construct filter operations.',
     'columns': 'Limit the output to a comma-separated list of columns.',
     'sort': 'Sort the rows by a comma-separated list of fields.',
     'width': 'Output width, in characters. The default behavior is to determine the width of the surrounding window and truncate the table to that width. Only applies to the "text" format.',
@@ -51,7 +88,9 @@ _format_options = [
     click.option('--wide', is_flag=True, expose_value=False, callback=param_callback, hidden=True),
     click.option('--header/--no-header', default=True, expose_value=False, callback=param_callback, hidden=True),
     click.option('--help-format', is_flag=True, callback=print_format_help, expose_value=False, is_eager=True,
-                 help='Get help on the output formatting options.')
+                 help='Get help on the output formatting options.'),
+    click.option('--help-filter', is_flag=True, callback=print_filter_help, expose_value=False, is_eager=True,
+                 help='Get help on the row filtering options.')
 ]
 
 
@@ -63,24 +102,43 @@ def format_options():
     return apply
 
 
+OPS = {'<': lambda x, y: x < y,
+       '<=': lambda x, y: x <= y,
+       '>': lambda x, y: x > y,
+       '>=': lambda x, y: x >= y,
+       '=': lambda x, y: fnmatch(x, y),
+       '==': lambda x, y: x == y,
+       '!=': lambda x, y: not fnmatch(x, y)}
+
+
 def filter_df(df, filter_string, columns=None):
     if columns:
         columns = columns.split(',')
         missing = '\n  - '.join(set(columns) - set(df.columns))
         if missing:
-            raise click.UsageError(f'One or more of the selected columns were not found:\n  - {missing}')
-    if filter_string not in (None, ''):
-        filters = filter_string.split(',')
-        for filter in filters:
-            if '=' not in filter:
-                raise click.UsageError(f'Invalid filter string: {filter}\n   Required format: <fieldname>=<value> or <fieldname>!=<value>')
-            field, value = filter.split('=', 1)
-            mask = [fnmatch(str(row), value) for row in df[field.rstrip('!')]]
-            if field.endswith('!'):
-                mask = [not m for m in mask]
-            df = df.loc[mask, :]
+            raise click.UsageError(f'One or more of the requested columns were not found:\n  - {missing}')
+    mask = None
+    if filter_string:
+        for filt1 in filter_string.split(','):
+            mask1 = None
+            for filt2 in filt1.split('|'):
+                mask2 = None
+                for filt3 in filt2.split('&'):
+                    parts = re.split(r'(==?|!=|>=?|<=?)', filt3.strip())
+                    if len(parts) != 3:
+                        raise click.UsageError(f'Invalid filter string: {filter_and}\n   Required format: <fieldname><op><value>')
+                    field, op, value = list(map(str.strip, parts))
+                    if field not in df.columns:
+                        raise click.UsageError(f'Invalid filter field: {field}')
+                    op = OPS[op]
+                    mask3 = [op(str(row), value) for row in df[field]]
+                    mask2 = mask3 if mask2 is None else [m1 and m2 for m1, m2 in zip(mask2, mask3)]
+                mask1 = mask2 if mask1 is None else [m1 or m2 for m1, m2 in zip(mask1, mask2)]
+            mask = mask1 if mask is None else [m1 and m2 for m1, m2 in zip(mask, mask1)]
     if columns:
         df = df[columns]
+    if mask:
+        df = df.loc[mask, :]
     return df
 
 
