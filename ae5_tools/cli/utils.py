@@ -6,9 +6,6 @@ def add_param(param, value):
         return
     ctx = click.get_current_context()
     obj = ctx.ensure_object(dict)
-    if param == 'filter':
-        ovalue = obj.get('filter') or ''
-        value = f'{ovalue},{value}' if ovalue and value else (value or ovalue)
     obj[param] = value
 
 
@@ -26,12 +23,14 @@ def click_text(text):
         click.echo(click.wrap_text(text, initial_indent=initial_indent, subsequent_indent='  '))
     paragraph = ''
     for line in text.splitlines():
-        if not line:
+        if not line or line.lstrip().startswith('-'):
             if paragraph:
                 _emit(paragraph)
                 paragraph = ''
             click.echo(line)
+        elif paragraph:
+            paragraph += ' ' + line
         else:
-            paragraph += line
+            paragraph = line
     if paragraph:
         _emit(paragraph)
