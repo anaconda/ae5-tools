@@ -150,6 +150,24 @@ def activity(project, limit, all):
 
 @project.command()
 @click.argument('project')
+@click.option('--name', help='A new name for the project.')
+@click.option('--editor', help='The editor to use for future sessions.')
+@click.option('--resource-profile', help='The resource profile to use for future sessions.')
+@format_options()
+@login_options()
+def patch(project, **kwargs):
+    '''Change the project's name, editor, or resource profile.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    kwargs['format'] = 'dataframe'
+    result = cluster_call('project_patch', project, **kwargs)
+    print_output(result)
+
+
+@project.command()
+@click.argument('project')
 @format_options()
 @login_options()
 def status(project):
@@ -201,11 +219,14 @@ def upload(filename, name, tag, no_wait):
 @project.command()
 @click.argument('project')
 @click.option('--endpoint', type=str, required=False, help='Endpoint name.')
+@click.option('--resource-profile', help='The resource profile to use for this deployment.')
 @click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--open/--no-open', default=True, help='Open a browser upon initialization. Implies --wait.')
+@click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
-def deploy(ctx, project, endpoint, wait):
+def deploy(ctx, project, endpoint, resource_profile, wait, open, frame):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -221,7 +242,8 @@ def deploy(ctx, project, endpoint, wait):
        creation before returning. To return more quickly, use the --no-wait option.
     '''
     from .deployment import start as deployment_start
-    ctx.invoke(deployment_start, project=project, endpoint=endpoint, wait=wait)
+    ctx.invoke(deployment_start, project=project, endpoint=endpoint,
+               resource_profile=resource_profile, wait=wait, open=open, frame=frame)
 
 
 @project.command()
