@@ -41,6 +41,7 @@ def cli(ctx):
 
 @cli.command(hidden=True)
 @login_options()
+@format_options()
 @click.pass_context
 def repl(ctx):
     obj = ctx.ensure_object(dict)
