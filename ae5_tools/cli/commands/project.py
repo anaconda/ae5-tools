@@ -260,9 +260,9 @@ def delete(project, yes):
     '''
     result = cluster_call('project_info', project, format='json')
     ident = Identifier.from_record(result)
+    if not yes:
+        yes = click.confirm(f'Delete project {ident}', err=True)
     if yes:
-        click.echo(f'Deleting project {ident}...')
-    else:
-        yes = click.confirm(f'Delete project {ident}')
-    if yes:
+        click.echo(f'Deleting project {ident}...', nl=False, err=True)
         result = cluster_call('project_delete', result['id'])
+        click.echo('deleted.', err=True)

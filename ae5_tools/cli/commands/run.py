@@ -47,5 +47,6 @@ def stop(run, yes):
     if not yes:
         yes = click.confirm(f'Stop run {ident}')
     if yes:
-        click.echo(f'Stopping {ident}...', nl=False)
-        cluster_call('run_stop', result['id'])
+        click.echo(f'Stopping {ident}...', nl=False, err=True)
+        cluster_call('run_stop', result.id)
+        click.echo('stopped.', err=True)

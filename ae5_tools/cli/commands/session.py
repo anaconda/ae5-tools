@@ -57,7 +57,7 @@ def info(session):
 @click.option('--editor', help='The editor to use. If supplied, future sessions will use this editor as well. If not supplied, uses the editor currently selected for the project.')
 @click.option('--resource-profile', help='The resource profile to use. If supplied, future sessions will use this resource profile as well. If not supplied, uses the resource profile currently selected for the project.')
 @click.option('--wait/--no-wait', default=True, help='Wait for the initialization of the session to complete before returning. For --no-wait, the command will exit as soon as AE acknowledges the session is scheduled.')
-@click.option('--open/--no-open', default=True, help='Open a browser upon initialization.')
+@click.option('--open/--no-open', default=False, help='Open a browser upon initialization.')
 @click.option('--frame/--no-frame', default=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
@@ -80,10 +80,13 @@ def start(ctx, project, editor, resource_profile, wait, open, frame):
             patches[key] = value
     if patches:
         cluster_call('project_patch', result['id'], **patches)
+    ident = Identifier.from_record(result)
+    click.echo(f'Starting session for {ident}...', nl=False, err=True)
     response = cluster_call('session_start', result['id'], wait=wait, format='dataframe')
     if open:
         from .session import open as session_open
         ctx.invoke(session_open, session=response['id'], frame=frame)
+    click.echo('started.', err=True)
     print_output(response)
 
 
@@ -98,11 +101,13 @@ def stop(session, yes):
        wildcards. But it must match exactly one session.
     '''
     result = single_session(session)
+    ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
     if not yes:
-        ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
-        yes = click.confirm(f'Stop session {ident}')
+        yes = click.confirm(f'Stop session {ident}', err=True)
     if yes:
+        click.echo(f'Stopping {ident}...', nl=False, err=True)
         cluster_call('session_stop', result.id)
+        click.echo('stopped.', err=True)
 
 
 @session.command(short_help='Open an existing session in a browser.')
