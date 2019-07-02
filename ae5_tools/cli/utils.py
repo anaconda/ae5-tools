@@ -6,6 +6,15 @@ def add_param(param, value):
         return
     ctx = click.get_current_context()
     obj = ctx.ensure_object(dict)
+    if param == 'filter' and not isinstance(value, tuple):
+        value = tuple(value.split(','))
+    if param in obj:
+        ovalue = obj[param]
+        if param == 'filter':
+            value = ovalue + value
+        elif not isinstance(ovalue, bool) and ovalue != value:
+            param = param.replace('_', '-')
+            raise click.UsageError(f'Conflicting values for --{param}: {ovalue}, {value}')
     obj[param] = value
 
 

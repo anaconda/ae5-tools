@@ -80,7 +80,7 @@ _format_help = {
 
 
 _format_options = [
-    click.option('--filter', type=str, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--filter', type=str, expose_value=False, callback=param_callback, hidden=True, multiple=True),
     click.option('--columns', type=str, expose_value=False, callback=param_callback, hidden=True),
     click.option('--sort', type=str, expose_value=False, callback=param_callback, hidden=True),
     click.option('--format', type=click.Choice(['text', 'csv', 'json']), expose_value=False, callback=param_callback, hidden=True),
@@ -111,15 +111,17 @@ OPS = {'<': lambda x, y: x < y,
        '!=': lambda x, y: not fnmatch(x, y)}
 
 
-def filter_df(df, filter_string, columns=None):
+def filter_df(df, filter, columns=None):
     if columns:
         columns = columns.split(',')
         missing = '\n  - '.join(set(columns) - set(df.columns))
         if missing:
             raise click.UsageError(f'One or more of the requested columns were not found:\n  - {missing}')
     mask = None
-    if filter_string:
-        for filt1 in filter_string.split(','):
+    if filter:
+        if not isinstance(filter, tuple):
+            filter = filter.split(',')
+        for filt1 in filter:
             mask1 = None
             for filt2 in filt1.split('|'):
                 mask2 = None
