@@ -108,7 +108,7 @@ def cluster(reconnect=False, admin=False, retry=True):
                                      password_prompt=click_password)
                 if retry and impersonate and not conn.connected:
                     click.echo(f'Impersonating {username}@{hostname}...', err=True)
-                    conn = cluster(reconnect, True).impersonate(username, retry=False)
+                    conn = cluster(reconnect, True).impersonate(username)
             obj[label] = conn if conn.connected else None
         except ValueError as e:
             raise click.ClickException(str(e))
