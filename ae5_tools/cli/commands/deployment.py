@@ -103,7 +103,7 @@ def collaborators(deployment):
 @click.option('--public', is_flag=True, help='Make the deployment public.')
 @click.option('--private', is_flag=True, help='Make the deployment private (the default).')
 @click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
-@click.option('--open/--no-open', default=True, help='Open a browser upon initialization. Implies --wait.')
+@click.option('--open/--no-open', default=False, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
@@ -163,13 +163,14 @@ def start(ctx, project, endpoint, resource_profile, public, private, wait, open,
                 else:
                     click.ClickException(f'Endpoint {endpoint} is claimed by another project')
     ident = Identifier.from_record(prec)
-    click.echo(f'Starting deployment {endpoint} for {ident}...')
+    click.echo(f'Starting deployment {endpoint} for {ident}...', nl=False, err=True)
     response = cluster_call('deployment_start', ident, endpoint=endpoint,
                             resource_profile=resource_profile, public=public,
                             wait=wait or open, format='dataframe')
     if open:
         from .deployment import open as deployment_open
         ctx.invoke(deployment_open, deployment=response['id'], frame=frame)
+    click.echo('started.', err=True)
     print_output(response)
 
 
@@ -186,10 +187,11 @@ def stop(deployment, yes):
     result = single_deployment(deployment)
     ident = Identifier.from_record(result)
     if not yes:
-        yes = click.confirm(f'Stop deployment {ident}')
+        yes = click.confirm(f'Stop deployment {ident}', err=True)
     if yes:
-        click.echo(f'Stopping {ident}...', nl=False)
+        click.echo(f'Stopping {ident}...', nl=False, err=True)
         cluster_call('deployment_stop', result.id)
+        click.echo('stopped.', err=True)
 
 
 @deployment.command(short_help='Open a deployment in a browser.')
