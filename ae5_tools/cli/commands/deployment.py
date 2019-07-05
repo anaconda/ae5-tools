@@ -18,6 +18,7 @@ def deployment():
 
 @deployment.command()
 @click.argument('deployment', required=False)
+@click.option('--collaborators', is_flag=True, help='Include the list of collaborators. This adds a separate API call for each project, so for performance reasons it is off by default.')
 @format_options()
 @login_options()
 def list(deployment):
@@ -28,15 +29,15 @@ def list(deployment):
        supplying an optional DEPLOYMENT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    result = cluster_call('deployment_list', format='dataframe')
+    result = cluster_call('deployment_list', collaborators=collaborators, format='dataframe')
     if deployment:
         add_param('filter', Identifier.from_string(deployment).project_filter())
     print_output(result)
 
 
-def single_deployment(deployment):
+def single_deployment(deployment, collaborators=False):
     ident = Identifier.from_string(deployment)
-    return cluster_call('deployment_info', ident, format='dataframe')
+    return cluster_call('deployment_info', ident, collaborators=collaborators, format='dataframe')
 
 
 @deployment.command()
@@ -50,15 +51,16 @@ def endpoints():
 
 @deployment.command()
 @click.argument('deployment')
+@click.option('--collaborators', is_flag=True, help='Include the list of collaborators. This adds a separate API call for each project, so for performance reasons it is off by default.')
 @format_options()
 @login_options()
-def info(deployment):
+def info(deployment, collaborators):
     '''Obtain information about a single deployment.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = single_deployment(deployment)
+    result = single_deployment(deployment, collaborators)
     print_output(result)
 
 
@@ -96,9 +98,19 @@ def collaborators(deployment):
     print_output(result)
 
 
+def _open(record, frame):
+    scheme, _, hostname, _ = record.project_url.split('/', 3)
+    if frame:
+        url = f'{scheme}//{hostname}/deployments/detail/{record.id}/view'
+    else:
+        url = record.url
+    webbrowser.open(url, 1, True)
+
+
 @deployment.command(short_help='Start a deployment for a project.')
 @click.argument('project')
 @click.option('--endpoint', type=str, required=False, help='Endpoint name.')
+@click.option('--command', help='The command to use for this deployment.')
 @click.option('--resource-profile', help='The resource profile to use for this deployment.')
 @click.option('--public', is_flag=True, help='Make the deployment public.')
 @click.option('--private', is_flag=True, help='Make the deployment private (the default).')
@@ -108,7 +120,7 @@ def collaborators(deployment):
 @format_options()
 @login_options()
 @click.pass_context
-def start(ctx, project, endpoint, resource_profile, public, private, wait, open, frame):
+def start(ctx, project, endpoint, command, resource_profile, public, private, wait, open, frame):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -164,13 +176,40 @@ def start(ctx, project, endpoint, resource_profile, public, private, wait, open,
                     click.ClickException(f'Endpoint {endpoint} is claimed by another project')
     ident = Identifier.from_record(prec)
     click.echo(f'Starting deployment {endpoint} for {ident}...', nl=False, err=True)
-    response = cluster_call('deployment_start', ident, endpoint=endpoint,
+    response = cluster_call('deployment_start', ident, endpoint=endpoint, command=command,
                             resource_profile=resource_profile, public=public,
                             wait=wait or open, format='dataframe')
+    click.echo('restarted.', err=True)
     if open:
-        from .deployment import open as deployment_open
-        ctx.invoke(deployment_open, deployment=response['id'], frame=frame)
-    click.echo('started.', err=True)
+        _open(response, frame)
+    print_output(response)
+
+
+@deployment.command(short_help='Start a deployment for a project.')
+@click.argument('deployment')
+@click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--open/--no-open', default=False, help='Open a browser upon initialization. Implies --wait.')
+@click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
+@format_options()
+@login_options()
+@click.pass_context
+def restart(ctx, deployment, wait, open, frame):
+    '''Restart a deployment for a project.
+
+       The DEPLOYMENT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    drec = cluster_call('deployment_info', deployment, format='json')
+    obj = ctx.ensure_object(dict)
+    if drec['owner'] != obj['username']:
+        ident = Identifier.from_record(drec)
+        msg = f'user {obj["username"]} cannot restart deployment {ident}'
+        raise click.ClickException(msg)
+    click.echo(f'Restarting deployment {ident}...', nl=False, err=True)
+    response = cluster_call('deployment_restart', drec['id'], wait=wait or open, format='dataframe')
+    click.echo('restarted.', err=True)
+    if open:
+        _open(response, frame)
     print_output(response)
 
 
@@ -209,9 +248,4 @@ def open(deployment, frame):
        of the window, use the --frame option.
     '''
     result = single_deployment(deployment)
-    scheme, _, hostname, _ = result.project_url.split('/', 3)
-    if frame:
-        url = f'{scheme}//{hostname}/deployments/detail/{result.id}/view'
-    else:
-        url = result.url
-    webbrowser.open(url, 1, True)
+    _open(result, frame)

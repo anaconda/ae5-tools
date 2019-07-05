@@ -339,7 +339,7 @@ class AEUserSession(AESessionBase):
     def project_list(self, collaborators=False, format=None):
         records = self._get('projects', format='json')
         if collaborators:
-            self._join_collaborators(records)
+            self._join_collaborators('projects', records)
         return self._format_response(records, format=format, columns=_P_COLUMNS)
 
     def project_samples(self, format=None):
@@ -355,7 +355,7 @@ class AEUserSession(AESessionBase):
     def project_info(self, ident, collaborators=False, format=None, quiet=False):
         id, record = self._id('projects', ident, quiet=quiet)
         if collaborators:
-            self._join_collaborators(record)
+            self._join_collaborators('projects', record)
         return self._format_response(record, format=format, columns=_P_COLUMNS)
 
     def project_sample_info(self, ident, format=None, quiet=False):
@@ -476,13 +476,13 @@ class AEUserSession(AESessionBase):
                     rec['name'] = pnames.get(pid, '')
                 rec['project_id'] = pid
 
-    def _join_collaborators(self, response):
+    def _join_collaborators(self, what, response):
         if isinstance(response, dict):
-            collabs = self._get(f'projects/{response["id"]}/collaborators', format='json')
+            collabs = self._get(f'{what}/{response["id"]}/collaborators', format='json')
             response['collaborators'] = ', '.join(c['id'] for c in collabs)
         elif response:
             for rec in response:
-                self._join_collaborators(rec)
+                self._join_collaborators(what, rec)
 
     def session_list(self, format=None):
         response = self._get('sessions', format='json')
@@ -510,19 +510,22 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('sessions', ident)
         self._delete(f'sessions/{id}', format='response')
 
-    def deployment_list(self, format=None):
+    def deployment_list(self, collaborators=False, format=None):
         response = self._get('deployments', format='json')
         self._join_projects(response)
+        if collaborators:
+            self._join_collaborators('deployments', response)
         for record in response:
             record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(response, format, _D_COLUMNS)
 
-    def deployment_info(self, ident, format=None, quiet=False):
+    def deployment_info(self, ident, collaborators=False, format=None, quiet=False):
         id, record = self._id('deployments', ident, quiet=quiet)
-        if id:
-            self._join_projects(record)
-            record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
-            return self._format_response(record, format, _D_COLUMNS)
+        self._join_projects(record)
+        if collaborators:
+            self._join_collaborators('deployments', record)
+        record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
+        return self._format_response(record, format, _D_COLUMNS)
 
     def deployment_endpoints(self, format=None):
         response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')['data']
@@ -559,6 +562,14 @@ class AEUserSession(AESessionBase):
             raise RuntimeError(f'Error completing deployment start: {response["status_text"]}')
         response['project_id'] = id
         return self._format_response(response, format=format, columns=_S_COLUMNS)
+
+    def deployment_restart(self, ident, wait=True, format=None):
+        id, record = self._id('deployments', ident)
+        self._delete(f'deployments/{id}', format='response')
+        return self.deployment_start(record['project_id'],
+                                     endpoint=record['endpoint'], command=record['command'],
+                                     resource_profile=record['resource_profile'], public=record['public'],
+                                     wait=wait, format=format)
 
     def deployment_patch(self, ident, **kwargs):
         format = kwargs.pop('format', None)

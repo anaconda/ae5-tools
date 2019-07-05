@@ -219,14 +219,17 @@ def upload(filename, name, tag, no_wait):
 @project.command()
 @click.argument('project')
 @click.option('--endpoint', type=str, required=False, help='Endpoint name.')
+@click.option('--command', help='The command to use for this deployment.')
 @click.option('--resource-profile', help='The resource profile to use for this deployment.')
+@click.option('--public', is_flag=True, help='Make the deployment public.')
+@click.option('--private', is_flag=True, help='Make the deployment private (the default).')
 @click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
 @click.option('--open/--no-open', default=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
-def deploy(ctx, project, endpoint, resource_profile, wait, open, frame):
+def deploy(ctx, project, endpoint, command, resource_profile, public, private, wait, open, frame):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -243,7 +246,8 @@ def deploy(ctx, project, endpoint, resource_profile, wait, open, frame):
     '''
     from .deployment import start as deployment_start
     ctx.invoke(deployment_start, project=project, endpoint=endpoint,
-               resource_profile=resource_profile, wait=wait, open=open, frame=frame)
+               resource_profile=resource_profile, command=command,
+               public=public, private=private, wait=wait, open=open, frame=frame)
 
 
 @project.command()
