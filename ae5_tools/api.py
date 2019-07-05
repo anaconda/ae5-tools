@@ -45,6 +45,8 @@ class AEUnexpectedResponseError(RuntimeError):
             msg.append(f'  params: {kwargs["params"]}')
         if 'data' in kwargs:
             msg.append(f'  data: {kwargs["data"]}')
+        if 'json' in kwargs:
+            msg.append(f'  json: {kwargs["json"]}')
         super(AEUnexpectedResponseError, self).__init__('\n'.join(msg))
     pass
 
@@ -540,7 +542,7 @@ class AEUserSession(AESessionBase):
 
     def deployment_start(self, ident, endpoint=None, command=None,
                          resource_profile=None, public=False,
-                         wait=True, format=None):
+                         collaborators=None, wait=True, format=None):
         id, rev, prec, rrec = self._revision(ident)
         data = {'name': prec['name'],
                 'source': rrec['url'],
@@ -554,6 +556,8 @@ class AEUserSession(AESessionBase):
         response = self._post(f'projects/{id}/deployments', json=data, format='json')
         if response.get('error'):
             raise RuntimeError('Error starting deployment: {}'.format(response['error']['message']))
+        if collaborators:
+             self._post(f'deployments/{response["id"]}/collaborators', json=collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
         while wait and response['state'] in ('initial', 'starting'):
             time.sleep(5)
@@ -565,11 +569,12 @@ class AEUserSession(AESessionBase):
 
     def deployment_restart(self, ident, wait=True, format=None):
         id, record = self._id('deployments', ident)
+        collab = self.deployment_collaborators(id, format='json')
         self._delete(f'deployments/{id}', format='response')
         return self.deployment_start(record['project_id'],
                                      endpoint=record['endpoint'], command=record['command'],
                                      resource_profile=record['resource_profile'], public=record['public'],
-                                     wait=wait, format=format)
+                                     collaborators=collab, wait=wait, format=format)
 
     def deployment_patch(self, ident, **kwargs):
         format = kwargs.pop('format', None)

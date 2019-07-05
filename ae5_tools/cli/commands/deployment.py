@@ -21,7 +21,7 @@ def deployment():
 @click.option('--collaborators', is_flag=True, help='Include the list of collaborators. This adds a separate API call for each project, so for performance reasons it is off by default.')
 @format_options()
 @login_options()
-def list(deployment):
+def list(deployment, collaborators):
     '''List available projects.
 
        By default, lists all projects visible to the authenticated user.
@@ -200,9 +200,9 @@ def restart(ctx, deployment, wait, open, frame):
        wildcards. But it must match exactly one project.
     '''
     drec = cluster_call('deployment_info', deployment, format='json')
+    ident = Identifier.from_record(drec)
     obj = ctx.ensure_object(dict)
     if drec['owner'] != obj['username']:
-        ident = Identifier.from_record(drec)
         msg = f'user {obj["username"]} cannot restart deployment {ident}'
         raise click.ClickException(msg)
     click.echo(f'Restarting deployment {ident}...', nl=False, err=True)
