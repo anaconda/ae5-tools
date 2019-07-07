@@ -1,0 +1,41 @@
+# The base image is flexible; it simply needs to be able
+# to support Anaconda-built glibc binaries.
+FROM centos
+
+# Miniconda is a minimal Python environment, consisting only of Python
+# and the conda package manager. Instead of hosting it in the same directory
+# as this Dockerfile, it could be downloaded directly from repo.anaconda.com
+# using a curl command in the RUN statement below. The only additional package
+# we install in the environment is anaconda-project.
+ADD https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh miniconda.sh
+
+# Optional configuration of on-premises repository
+ARG CHANNEL_ALIAS=https://conda.anaconda.org/
+
+RUN yum install -y bzip2 && \
+    bash miniconda.sh -b -p /opt/conda && \
+    /opt/conda/bin/conda config --system --set channel_alias ${CHANNEL_ALIAS} && \
+    /opt/conda/bin/conda config --system --append default_channels ${CHANNEL_ALIAS}/anaconda && \
+    /opt/conda/bin/conda config --system --append default_channels ${CHANNEL_ALIAS}/r && \
+    /opt/conda/bin/conda config --set auto_update_conda False --system && \
+    /opt/conda/bin/conda install anaconda-project --yes && \
+    /opt/conda/bin/conda clean --all --yes && \
+    rm -f miniconda.sh && \
+    useradd anaconda
+
+
+USER anaconda
+WORKDIR /home/anaconda
+ENV PATH="/opt/conda/bin:${PATH}"
+RUN conda info
+COPY --chown=anaconda project.tar.gz .
+# The --strip-components option puts the project files directly
+# into the /home/anaconda directory. anaconda-project prepare
+# creates the conda environment for the project
+RUN tar xfz project.tar.gz --strip-components=1 && \
+    rm -f project.tar.gz && \
+    anaconda-project --verbose prepare
+
+# This runs the specified deployment command, which could (for
+# instance launch a REST API or web app.
+CMD ["anaconda-project", "run"]
