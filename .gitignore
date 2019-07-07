@@ -69,3 +69,5 @@ package-lock.json
 .idea/
 test_vars.sh
 
+# ides
+.vscode
