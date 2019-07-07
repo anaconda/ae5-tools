@@ -38,4 +38,4 @@ RUN tar xfz project.tar.gz --strip-components=1 && \
 
 # This runs the specified deployment command, which could (for
 # instance launch a REST API or web app.
-CMD ["anaconda-project", "run"]
+CMD anaconda-project run
