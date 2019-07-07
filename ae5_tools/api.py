@@ -617,7 +617,7 @@ class AEUserSession(AESessionBase):
         with open(filename, 'wb') as fp:
             fp.write(response)
 
-    def project_image(self, ident, use_anaconda_cloud=False, dockerfile_path=None, debug=False, format=None):
+    def project_image(self, ident, command=None, use_anaconda_cloud=False, dockerfile_path=None, debug=False, format=None):
         '''Build docker image'''
         id, rev, _, _ = self._revision(ident)
         info = self.project_info(ident, format='response')
@@ -634,6 +634,9 @@ class AEUserSession(AESessionBase):
                     dockerfile = f.read()
         else:
             dockerfile = get_dockerfile()
+        
+        if command:
+            dockerfile = re.sub('(CMD anaconda-project run)(.*?)$', f'\g<1> {command}', dockerfile)
 
         with TemporaryDirectory() as tempdir:
             with open(os.path.join(tempdir, 'Dockerfile'), 'w') as f:

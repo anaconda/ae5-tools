@@ -169,13 +169,14 @@ def download(ctx, project, filename):
 
 @project.command()
 @click.argument('project')
+@click.option('--command', default='', help='Command name to execute.')
 @click.option('--use_anaconda_cloud', is_flag=True, help='Configure Docker image to pull packages from Anaconda Cloud rather than on-premises repository.')
 @click.option('--dockerfile', default='', help='Path to custom Dockerfile.')
 @click.option('--debug', is_flag=True, help='Show docker image build logs.')
 @login_options()
 @format_options()
 @click.pass_context
-def image(ctx, project, use_anaconda_cloud, dockerfile, debug):
+def image(ctx, project, command, use_anaconda_cloud, dockerfile, debug):
     '''Build a Docker Image of a project.
 
        Using the template Dockerfile the project archive is downloaded and a runable
@@ -188,7 +189,7 @@ def image(ctx, project, use_anaconda_cloud, dockerfile, debug):
        If not supplied, the latest revision will be selected.
     '''
     from .revision import image as revision_image
-    ctx.invoke(revision_image, revision=project, use_anaconda_cloud=use_anaconda_cloud, dockerfile=dockerfile, debug=debug)
+    ctx.invoke(revision_image, revision=project, command=command, use_anaconda_cloud=use_anaconda_cloud, dockerfile=dockerfile, debug=debug)
     
 
 @project.command()
