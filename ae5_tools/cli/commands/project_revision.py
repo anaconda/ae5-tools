@@ -76,5 +76,5 @@ def image(revision, use_anaconda_cloud, debug):
     _, pid, _, rev = record['url'].rsplit('/', 3)
     pid = 'a0-' + pid
 
-    image = cluster_call('project_image', f'{pid}:{rev}', use_anaconda_cloud, debug)
-    print(f'Docker Image {image} created.')
+    cluster_call('project_image', f'{pid}:{rev}', use_anaconda_cloud, debug)
+
