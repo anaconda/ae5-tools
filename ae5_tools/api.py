@@ -435,7 +435,7 @@ class AEUserSession(AESessionBase):
                 self.project_download(ident, filename=os.path.join(tempdir, 'project.tar.gz'))
             
             ae5_hostname = self.hostname if not use_anaconda_cloud else None
-            print('Starting image build. This may take several minutes...')
+            print('Starting image build. This may take several minutes.')
             image = build_image(tempdir, tag=tag, ae5_hostname=ae5_hostname, debug=debug)
             return image
 

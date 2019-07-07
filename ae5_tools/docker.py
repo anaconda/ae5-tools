@@ -19,6 +19,7 @@ def get_logger(name, stdout=False):
     
     return logger
 
+
 def get_dockerfile():
     '''return path to dockerfile
 
@@ -54,28 +55,25 @@ def build_image(path, tag, ae5_hostname=None, debug=False):
     except ModuleNotFoundError as e:
         print('You must install docker-py to build an image')
         raise(e)
-    
-    client = docker.from_env()
 
-    buildargs={'CHANNEL_ALIAS':f'https://{ae5_hostname}/repository/conda/'} if ae5_hostname else None
     logger = get_logger(tag, stdout=debug)
     print(f'Build logs written to {logger.handlers[0].baseFilename}')
-    try:
-        logger.debug(f'*** {tag} image build starting')
-        for line in client.api.build(path=path, tag=tag, buildargs=buildargs):
-            text = line.decode().strip()
-            logger.info(text)
-            try:
-                d = json.loads(text)
-                error = d.get('error', False)
-                if error:
-                    raise docker.errors.BuildError(d['error'], line)
-            except json.decoder.JSONDecodeError:
-                pass
+    logger.debug(f'*** {tag} image build starting')
 
+## the client.images.build() function will not keep logs on error
+## the logs returned by this process are not easily readable, but OK.
+    client = docker.from_env()
+    buildargs={'CHANNEL_ALIAS':f'https://{ae5_hostname}/repository/conda/'} if ae5_hostname else None
+    for line in client.api.build(path=path, tag=tag, buildargs=buildargs):
+        text = line.decode().strip()
+        logger.info(text)
+        try:
+            d = json.loads(text)
+            error = d.get('error', False)
+            if error:
+                print('Error encountered during image build. See build log for more details.')
+                return
+        except json.decoder.JSONDecodeError:
+            pass
 
-    except docker.errors.BuildError as e:
-        print('An error was encountered while building the image.')
-        print(e)
-    
-    return tag
+    print(f'Docker Image {tag} created.')
