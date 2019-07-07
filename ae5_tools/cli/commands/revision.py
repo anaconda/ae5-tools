@@ -54,12 +54,13 @@ def download(revision, filename):
 @revision.command()
 @click.argument('revision')
 @click.option('--use_anaconda_cloud', is_flag=True, help='public repo')
+@click.option('--dockerfile', default='', help='dockerfile path')
 @click.option('--debug', is_flag=True, help='debug logs')
-def image(revision, use_anaconda_cloud, debug):
+def image(revision, use_anaconda_cloud, dockerfile, debug):
     ident = Identifier.from_string(revision)
     record = cluster_call('revision_info', ident, format='json')
     _, pid, _, rev = record['url'].rsplit('/', 3)
     pid = 'a0-' + pid
 
-    cluster_call('project_image', f'{pid}:{rev}', use_anaconda_cloud, debug)
+    cluster_call('project_image', f'{pid}:{rev}', use_anaconda_cloud, dockerfile_path=dockerfile, debug=debug)
 

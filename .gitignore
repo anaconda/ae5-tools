@@ -67,3 +67,6 @@ package-lock.json
 *.ipynb
 *.tar.gz
 .idea/
+
+# ides
+.vscode
