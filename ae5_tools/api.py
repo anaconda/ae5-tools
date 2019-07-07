@@ -10,9 +10,12 @@ from fnmatch import fnmatch
 from datetime import datetime
 from dateutil import parser
 import getpass
+from tempfile import TemporaryDirectory
 
 from .config import config
 from .identifier import Identifier
+from .docker import get_dockerfile
+from .docker import build_image
 
 from http.cookiejar import LWPCookieJar
 from requests.packages import urllib3
@@ -613,6 +616,26 @@ class AEUserSession(AESessionBase):
             return response
         with open(filename, 'wb') as fp:
             fp.write(response)
+
+    def project_image(self, ident, use_anaconda_cloud=False, debug=False, format=None):
+        '''Build docker image'''
+        id, rev, _, _ = self._revision(ident)
+        info = self.project_info(ident, format='response')
+        name = info['name'].replace(' ','').lower()
+        owner = info['owner']
+        tag = f'{owner}/{name}:{rev}'
+
+        dockerfile = get_dockerfile()
+
+        with TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, 'Dockerfile'), 'w') as f:
+                f.write(dockerfile)
+                self.project_download(ident, filename=os.path.join(tempdir, 'project.tar.gz'))
+            
+            ae5_hostname = self.hostname if not use_anaconda_cloud else None
+            print('Starting image build. This may take several minutes...')
+            image = build_image(tempdir, tag=tag, ae5_hostname=ae5_hostname, debug=debug)
+            return image
 
     def project_delete(self, ident, format=None):
         id, _ = self._id('projects', ident)

@@ -1,2 +1,3 @@
 include versioneer.py
 include ae5_tools/_version.py
+include ae5_tools/Dockerfile.dist
