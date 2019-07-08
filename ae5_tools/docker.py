@@ -16,7 +16,7 @@ def get_logger(name, stdout=False):
     if stdout:
         stdout_handler = logging.StreamHandler(sys.stdout)
         logger.addHandler(stdout_handler)
-    
+
     return logger
 
 
@@ -52,9 +52,13 @@ Otherwise, please file a bug report.'''
 def build_image(path, tag, ae5_hostname=None, debug=False):
     try:
         import docker
-    except ModuleNotFoundError as e:
+    except ModuleNotFoundError:
+        print()
         print('You must install docker-py to build an image')
-        raise(e)
+        print()
+        print('  conda install -c conda-forge docker-py')
+        print()
+        return
 
     logger = get_logger(tag, stdout=debug)
     print(f'Build logs written to {logger.handlers[0].baseFilename}')
