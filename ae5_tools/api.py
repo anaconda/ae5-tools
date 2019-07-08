@@ -619,10 +619,10 @@ class AEUserSession(AESessionBase):
 
     def project_image(self, ident, command=None, use_anaconda_cloud=False, dockerfile_path=None, debug=False, format=None):
         '''Build docker image'''
-        id, rev, _, _ = self._revision(ident)
+        id, rev, _, rrec = self._revision(ident)
         info = self.project_info(ident, format='response')
         name = info['name'].replace(' ','').lower()
-        owner = info['owner']
+        owner = info['owner'].replace('@','_at_')
         tag = f'{owner}/{name}:{rev}'
 
         if dockerfile_path:
@@ -636,7 +636,23 @@ class AEUserSession(AESessionBase):
             dockerfile = get_dockerfile()
         
         if command:
-            dockerfile = re.sub('(CMD anaconda-project run)(.*?)$', f'\g<1> {command}', dockerfile)
+            commands = [c['id'] for c in rrec['commands']]
+            if not commands:
+                print('There are now configured commands in this project.')
+                print('Remove the --command option to build the container anyway.')
+                return
+            if command in commands:
+                dockerfile = re.sub('(CMD anaconda-project run)(.*?)$', f'\g<1> {command}', dockerfile)
+            else:
+                print(f'The command {command} is not one of the configured commands.')
+                print('Available commands are:')
+                for c in rrec['commands']:
+                    default = c.get('default', False)
+                    if default:
+                        print(f'  {c["id"]:15s} (default)')
+                    else:
+                        print(f'  {c["id"]:15s}')
+                return
 
         with TemporaryDirectory() as tempdir:
             with open(os.path.join(tempdir, 'Dockerfile'), 'w') as f:
