@@ -5,8 +5,8 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group(short_help='list, info, download',
-             epilog='Type "ae5 revision <command> --help" for help on a specific command.')
+@click.group(short_help='List, get information about, or download revisions.',
+             epilog='Type "ae5 project revision <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
 def revision():

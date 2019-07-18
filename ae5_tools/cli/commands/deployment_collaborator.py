@@ -6,7 +6,7 @@ from ..format import print_output, format_options
 
 
 @click.group(short_help='List, add, or remove collaborators.',
-             epilog='Type "ae5 project collaborator <command> --help" for help on a specific command.')
+             epilog='Type "ae5 deployment collaborator <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
 def collaborator():

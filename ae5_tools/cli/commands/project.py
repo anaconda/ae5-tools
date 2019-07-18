@@ -5,6 +5,7 @@ from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 from ...identifier import Identifier
 from .project_collaborator import collaborator
+from .project_revision import revision
 
 
 @click.group(short_help='list, info, download, upload, deploy, deployments, jobs, runs, activity, status, delete',
@@ -16,6 +17,7 @@ def project():
 
 
 project.add_command(collaborator)
+project.add_command(revision)
 
 
 @project.command()
@@ -38,19 +40,6 @@ def list(project, collaborators):
 
 
 @project.command()
-@click.argument('project', required=False)
-@format_options()
-@login_options()
-def samples(project):
-    '''List sample projects.
-    '''
-    result = cluster_call('project_samples', format='dataframe')
-    if project:
-        add_param('filter', Identifier.from_string(project).project_filter())
-    print_output(result)
-
-
-@project.command()
 @click.argument('project')
 @format_options()
 @login_options()
@@ -61,19 +50,6 @@ def info(project):
        wildcards. But it must match exactly one project.
     '''
     result = cluster_call('project_info', project, collaborators=True, format='dataframe')
-    print_output(result)
-
-
-@project.command()
-@click.argument('name_or_id')
-@format_options()
-@login_options()
-def sample_info(name_or_id):
-    '''Obtain information about a single sample project.
-
-       The NAME_OR_ID identifier may include wildcards but it must match exactly one sample.
-    '''
-    result = cluster_call('project_sample_info', name_or_id, format='dataframe')
     print_output(result)
 
 
@@ -184,7 +160,7 @@ def download(ctx, project, filename):
        A revision value may optionally be supplied in the PROJECT identifier.
        If not supplied, the latest revision will be selected.
     '''
-    from .revision import download as revision_download
+    from .project_revision import download as revision_download
     ctx.invoke(revision_download, revision=project, filename=filename)
 
 

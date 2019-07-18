@@ -14,9 +14,9 @@ import click_repl
 from prompt_toolkit.history import FileHistory
 
 from .commands.project import project
-from .commands.revision import revision
 from .commands.account import account
 from .commands.session import session
+from .commands.sample import sample
 from .commands.deployment import deployment
 from .commands.job import job
 from .commands.run import run
@@ -95,7 +95,7 @@ def call(endpoint):
 
 
 cli.add_command(project)
-cli.add_command(revision)
+cli.add_command(sample)
 cli.add_command(session)
 cli.add_command(deployment)
 cli.add_command(job)

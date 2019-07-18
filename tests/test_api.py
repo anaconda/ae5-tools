@@ -91,7 +91,7 @@ def test_project_collaborators(user_session, project_set):
     for rec0 in project_set:
         collabs = rec0['collaborators']
         collabs = set(collabs.split(', ')) if collabs else set()
-        collab2 = user_session.project_collaborators(rec0['id'])
+        collab2 = user_session.project_collaborator_list(rec0['id'])
         collab3 = set(c['id'] for c in collab2)
         assert collabs == collab3, collab2
 
