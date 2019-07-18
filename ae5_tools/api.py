@@ -37,6 +37,10 @@ class AEAuthenticationError(RuntimeError):
     pass
 
 
+class AEUsageError(RuntimeError):
+    pass
+
+
 class AEUnexpectedResponseError(RuntimeError):
     def __init__(self, response, method, url, **kwargs):
         msg = [f'Unexpected response: {response.status_code} {response.reason}',
@@ -267,7 +271,7 @@ class AEUserSession(AESessionBase):
         # listing includes a field the individual query does not (project_create_status)
         # Also, we're using our wrapper around the list API calls instead of the direct
         # call so we get the benefit of our record cleanup.
-        records = getattr(self, type.rstrip('s') + '_list')(format='json')
+        records = getattr(self, type.rstrip('s') + '_list')(internal=True, format='json')
         owner, name, id, pid = (ident.owner or '*', ident.name or '*',
                                 ident.id if ident.id and type == idtype else '*',
                                 ident.pid if ident.pid and type != 'projects' else '*')
@@ -338,7 +342,7 @@ class AEUserSession(AESessionBase):
             raise ValueError(msg)
         return id, rec
 
-    def project_list(self, collaborators=False, format=None):
+    def project_list(self, collaborators=False, internal=False, format=None):
         records = self._get('projects', format='json')
         if collaborators:
             self._join_collaborators('projects', records)
@@ -367,6 +371,26 @@ class AEUserSession(AESessionBase):
     def project_collaborators(self, ident, format=None):
         id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/collaborators', format=format, columns=_C_COLUMNS)
+
+    def project_set_collaborators(self, ident, collabs, format=None):
+        id, _ = self._id('projects', ident)
+        result = self._put(f'projects/{id}/collaborators', json=collabs, format='json')
+        return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS)
+
+    def project_add_collaborator(self, ident, userid, readwrite=True, isgroup=False, format='json'):
+        id, _ = self._id('projects', ident)
+        collabs = self.project_collaborators(id, format='json')
+        collabs = [c for c in collabs if c['id'] != userid]
+        collabs.append({'id': userid, 'type': 'group' if isgroup else 'user', 'permisssion': 'rw' if readwrite else 'r'})
+        return self.project_set_collaborators(id, collabs, format=format)
+
+    def project_remove_collaborator(self, ident, userid, format='json'):
+        id, _ = self._id('projects', ident)
+        collabs = self.project_collaborators(id, format='json')
+        if not any(c['id'] == userid for c in collabs):
+            raise AEUsageError(f'Collaborator "{userid}" was not found.')
+        collabs = [c for c in collabs if c['id'] != userid]
+        return self.project_set_collaborators(id, collabs, format=format)
 
     def project_patch(self, ident, **kwargs):
         format = kwargs.pop('format', None)
@@ -486,9 +510,10 @@ class AEUserSession(AESessionBase):
             for rec in response:
                 self._join_collaborators(what, rec)
 
-    def session_list(self, format=None):
+    def session_list(self, internal=False, format=None):
         response = self._get('sessions', format='json')
-        self._join_projects(response, 'session')
+        if not internal:
+            self._join_projects(response, 'session')
         return self._format_response(response, format, _S_COLUMNS)
 
     def session_info(self, ident, format=None, quiet=False):
@@ -512,13 +537,15 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('sessions', ident)
         self._delete(f'sessions/{id}', format='response')
 
-    def deployment_list(self, collaborators=False, format=None):
+    def deployment_list(self, collaborators=False, endpoints=True, internal=False, format=None):
         response = self._get('deployments', format='json')
         self._join_projects(response)
         if collaborators:
             self._join_collaborators('deployments', response)
-        for record in response:
-            record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
+        if endpoints and not internal:
+            for record in response:
+                if record['url']:
+                    record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(response, format, _D_COLUMNS)
 
     def deployment_info(self, ident, collaborators=False, format=None, quiet=False):
@@ -540,6 +567,26 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('deployments', ident)
         return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
+    def deployment_set_collaborators(self, ident, collabs, format=None):
+        id, _ = self._id('deployments', ident)
+        result = self._put(f'deployments/{id}/collaborators', json=collabs, format='json')
+        return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS)
+
+    def deployment_add_collaborator(self, ident, userid, isgroup=False, format='json'):
+        id, _ = self._id('deployments', ident)
+        collabs = self.project_collaborators(id, format='json')
+        collabs = [c for c in collabs if c['id'] != userid]
+        collabs.append({'id': userid, 'type': 'group' if isgroup else 'user', 'permisssion': 'r'})
+        return self.deployment_set_collaborators(id, collabs, format=format)
+
+    def deployment_remove_collaborator(self, ident, userid, format='json'):
+        id, _ = self._id('projects', ident)
+        collabs = self.project_collaborators(id, format='json')
+        if not any(c['id'] == userid for c in collabs):
+            raise AEUsageError(f'Collaborator "{userid}" was not found.')
+        collabs = [c for c in collabs if c['id'] != userid]
+        return self.deployment_set_collaborators(id, collabs, format=format)
+
     def deployment_start(self, ident, endpoint=None, command=None,
                          resource_profile=None, public=False,
                          collaborators=None, wait=True, format=None):
@@ -557,7 +604,7 @@ class AEUserSession(AESessionBase):
         if response.get('error'):
             raise RuntimeError('Error starting deployment: {}'.format(response['error']['message']))
         if collaborators:
-             self._post(f'deployments/{response["id"]}/collaborators', json=collaborators)
+             self.deployment_set_collaborators(response['id'], collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
         while wait and response['state'] in ('initial', 'starting'):
             time.sleep(5)
@@ -588,7 +635,7 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('deployments', ident)
         self._delete(f'deployments/{id}', format='response')
 
-    def job_list(self, format=None):
+    def job_list(self, internal=False, format=None):
         return self._get('jobs', format=format, columns=_J_COLUMNS)
 
     def job_info(self, ident, format=None, quiet=False):
@@ -600,7 +647,7 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('jobs', ident)
         self._delete(f'jobs/{id}', format='response')
 
-    def run_list(self, format=None):
+    def run_list(self, internal=False, format=None):
         return self._get('runs', format=format, columns=_J_COLUMNS)
 
     def run_info(self, ident, format=None, quiet=False):
@@ -662,7 +709,7 @@ class AEAdminSession(AESessionBase):
         with open(self._filename, 'w') as fp:
             json.dump(self._sdata, fp)
 
-    def user_list(self, format=None):
+    def user_list(self, internal=False, format=None):
         return self._get(f'users', format=format, columns=_U_COLUMNS)
 
     def user_info(self, user_or_id, format=None):
