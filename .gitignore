@@ -67,3 +67,5 @@ package-lock.json
 *.ipynb
 *.tar.gz
 .idea/
+test_vars.sh
+
