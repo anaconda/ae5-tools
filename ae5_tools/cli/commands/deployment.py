@@ -6,14 +6,18 @@ from ..login import cluster_call, login_options
 from ..utils import add_param
 from ..format import print_output, format_options
 from ...identifier import Identifier
+from .deployment_collaborator import collaborator
 
 
-@click.group(short_help='list, info, endpoints, collaborators, start, stop',
+@click.group(short_help='list, info, endpoints, start, stop',
              epilog='Type "ae5 deployment <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
 def deployment():
     pass
+
+
+deployment.add_command(collaborator)
 
 
 @deployment.command()
@@ -77,24 +81,10 @@ def patch(deployment, public, private):
        wildcards. But it must match exactly one deployment.
     '''
     if public and private:
-        click.ClickException('Cannot specify both --public and --private')
+        raise click.ClickException('Cannot specify both --public and --private')
     if not public and not private:
         public = None
     result = cluster_call('deployment_patch', deployment, public=public, format='dataframe')
-    print_output(result)
-
-
-@deployment.command(short_help='Obtain information about a deployment\'s collaborators.')
-@click.argument('deployment')
-@format_options()
-@login_options()
-def collaborators(deployment):
-    '''Obtain information about a deployment's collaborators.
-
-       The DEPLOYMENT identifier need not be fully specified, and may even include
-       wildcards. But it must match exactly one project.
-    '''
-    result = cluster_call('deployment_collaborators', deployment, format='dataframe')
     print_output(result)
 
 
@@ -203,8 +193,7 @@ def restart(ctx, deployment, wait, open, frame):
     ident = Identifier.from_record(drec)
     obj = ctx.ensure_object(dict)
     if drec['owner'] != obj['username']:
-        msg = f'user {obj["username"]} cannot restart deployment {ident}'
-        raise click.ClickException(msg)
+        raise click.ClickException(f'user {obj["username"]} cannot restart deployment {ident}')
     click.echo(f'Restarting deployment {ident}...', nl=False, err=True)
     response = cluster_call('deployment_restart', drec['id'], wait=wait or open, format='dataframe')
     click.echo('restarted.', err=True)

@@ -368,29 +368,48 @@ class AEUserSession(AESessionBase):
         id, record = self._id_or_name('sample', ident, quiet=quiet)
         return self._format_response(record, format=format, columns=_T_COLUMNS)
 
-    def project_collaborators(self, ident, format=None):
+    def project_collaborator_list(self, ident, format=None):
         id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
-    def project_set_collaborators(self, ident, collabs, format=None):
+    def project_collaborator_info(self, ident, userid, format=None):
+        collabs = self.project_collaborator_list(ident, format='json')
+        for c in collabs:
+            if userid == c['id']:
+                return self._format_response(c, format=format, columns=_C_COLUMNS)
+        else:
+            raise AEUsageError(f'Collaborator not found: {userid}')
+
+    def project_collaborator_list_set(self, ident, collabs, format=None):
         id, _ = self._id('projects', ident)
         result = self._put(f'projects/{id}/collaborators', json=collabs, format='json')
         return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS)
 
-    def project_add_collaborator(self, ident, userid, readwrite=True, isgroup=False, format='json'):
+    def project_collaborator_add(self, ident, userid, group=False, read_only=False, format='json'):
         id, _ = self._id('projects', ident)
-        collabs = self.project_collaborators(id, format='json')
-        collabs = [c for c in collabs if c['id'] != userid]
-        collabs.append({'id': userid, 'type': 'group' if isgroup else 'user', 'permisssion': 'rw' if readwrite else 'r'})
-        return self.project_set_collaborators(id, collabs, format=format)
+        collabs = self.project_collaborator_list(id, format='json')
+        ncollabs = len(collabs)
+        if not isinstance(userid, tuple):
+            userid = userid,
+        collabs = [c for c in collabs if c['id'] not in userid]
+        if len(collabs) != ncollabs:
+            self.project_collaborator_list_set(id, collabs)
+        type = 'group' if group else 'user'
+        perm = 'r' if read_only else 'rw'
+        collabs.extend({'id': u, 'type': type, 'permission': perm} for u in userid)
+        return self.project_collaborator_list_set(id, collabs, format=format)
 
-    def project_remove_collaborator(self, ident, userid, format='json'):
+    def project_collaborator_remove(self, ident, userid, format='json'):
         id, _ = self._id('projects', ident)
-        collabs = self.project_collaborators(id, format='json')
-        if not any(c['id'] == userid for c in collabs):
-            raise AEUsageError(f'Collaborator "{userid}" was not found.')
-        collabs = [c for c in collabs if c['id'] != userid]
-        return self.project_set_collaborators(id, collabs, format=format)
+        collabs = self.project_collaborator_list(id, format='json')
+        if not isinstance(userid, tuple):
+            userid = userid,
+        missing = set(userid) - set(c['id'] for c in collabs)
+        if missing:
+            missing = ', '.join(missing)
+            raise AEUsageError(f'Collaborator(s) not found: {missing}')
+        collabs = [c for c in collabs if c['id'] not in userid]
+        return self.project_collaborator_list_set(id, collabs, format=format)
 
     def project_patch(self, ident, **kwargs):
         format = kwargs.pop('format', None)
@@ -567,25 +586,47 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('deployments', ident)
         return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
-    def deployment_set_collaborators(self, ident, collabs, format=None):
+    def deployment_collaborator_list(self, ident, format=None):
+        id, _ = self._id('deployments', ident)
+        return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
+
+    def deployment_collaborator_info(self, ident, userid, format=None):
+        collabs = self.deployment_collaborator_list(ident, format='json')
+        for c in collabs:
+            if userid == c['id']:
+                return self._format_response(c, format=format, columns=_C_COLUMNS)
+        else:
+            raise AEUsageError(f'Collaborator not found: {userid}')
+
+    def deployment_collaborator_list_set(self, ident, collabs, format=None):
         id, _ = self._id('deployments', ident)
         result = self._put(f'deployments/{id}/collaborators', json=collabs, format='json')
         return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS)
 
-    def deployment_add_collaborator(self, ident, userid, isgroup=False, format='json'):
+    def deployment_collaborator_add(self, ident, userid, group=False, format='json'):
         id, _ = self._id('deployments', ident)
-        collabs = self.project_collaborators(id, format='json')
-        collabs = [c for c in collabs if c['id'] != userid]
-        collabs.append({'id': userid, 'type': 'group' if isgroup else 'user', 'permisssion': 'r'})
-        return self.deployment_set_collaborators(id, collabs, format=format)
+        collabs = self.deployment_collaborator_list(id, format='json')
+        ncollabs = len(collabs)
+        if not isinstance(userid, tuple):
+            userid = userid,
+        collabs = [c for c in collabs if c['id'] not in userid]
+        if len(collabs) != ncollabs:
+            self.deployment_collaborator_list_set(id, collabs)
+        perm = 'r' if read_only else 'rw'
+        collabs.extend({'id': u, 'type': 'r', 'permission': perm} for u in userid)
+        return self.deployment_collaborator_list_set(id, collabs, format=format)
 
-    def deployment_remove_collaborator(self, ident, userid, format='json'):
-        id, _ = self._id('projects', ident)
-        collabs = self.project_collaborators(id, format='json')
-        if not any(c['id'] == userid for c in collabs):
-            raise AEUsageError(f'Collaborator "{userid}" was not found.')
-        collabs = [c for c in collabs if c['id'] != userid]
-        return self.deployment_set_collaborators(id, collabs, format=format)
+    def deployment_collaborator_remove(self, ident, userid, format='json'):
+        id, _ = self._id('deployments', ident)
+        collabs = self.deployment_collaborator_list(id, format='json')
+        if not isinstance(userid, tuple):
+            userid = userid,
+        missing = set(userid) - set(c['id'] for c in collabs)
+        if missing:
+            missing = ', '.join(missing)
+            raise AEUsageError(f'Collaborator(s) not found: {missing}')
+        collabs = [c for c in collabs if c['id'] not in userid]
+        return self.deployment_collaborator_list_set(id, collabs, format=format)
 
     def deployment_start(self, ident, endpoint=None, command=None,
                          resource_profile=None, public=False,

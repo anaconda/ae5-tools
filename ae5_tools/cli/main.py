@@ -24,6 +24,7 @@ from .commands.user import user
 
 from .login import login_options, cluster, cluster_call
 from .format import format_options, print_output
+from ..api import AEUsageError
 
 
 @click.group(invoke_without_command=True,

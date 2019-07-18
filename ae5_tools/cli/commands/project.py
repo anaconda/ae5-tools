@@ -4,6 +4,7 @@ from ..utils import add_param
 from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 from ...identifier import Identifier
+from .project_collaborator import collaborator
 
 
 @click.group(short_help='list, info, download, upload, deploy, deployments, jobs, runs, activity, status, delete',
@@ -12,6 +13,9 @@ from ...identifier import Identifier
 @login_options()
 def project():
     pass
+
+
+project.add_command(collaborator)
 
 
 @project.command()
@@ -70,20 +74,6 @@ def sample_info(name_or_id):
        The NAME_OR_ID identifier may include wildcards but it must match exactly one sample.
     '''
     result = cluster_call('project_sample_info', name_or_id, format='dataframe')
-    print_output(result)
-
-
-@project.command()
-@click.argument('project')
-@format_options()
-@login_options()
-def collaborators(project):
-    '''Obtain information about a project's collaborators.
-
-       The PROJECT identifier need not be fully specified, and may even include
-       wildcards. But it must match exactly one project.
-    '''
-    result = cluster_call('project_collaborators', project, format='dataframe')
     print_output(result)
 
 
