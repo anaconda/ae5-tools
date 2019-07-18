@@ -1,4 +1,4 @@
-### AE5 Command Line Tool
+## AE5 Command Line Tool
 
 [![Travis Status](https://travis-ci.com/Anaconda-Platform/ae5-tools.svg?branch=master)](https://travis-ci.com/Anaconda-Platform/ae5-tools) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/latest_release_date.svg)](https://anaconda.org/ae5-admin/ae5-tools) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/version.svg)](https://anaconda.org/ae5-admin/ae5-tools)
 
@@ -12,7 +12,7 @@ More to come. The intent is also to make it possible to allow packages to plug i
 
 There is already a fair amount of inline help, so type `ae5 --help` to get started.
 
-#### Installation
+### Installation
 
 The prefferred and supported way to install `ae5-tools` is with `conda`. The latest version of the tool
 is always available on the [`ae5-admin` channel on anaconda.org](https://anaconda.org/ae5-admin/ae5-tools).
@@ -25,7 +25,7 @@ If you want the _unsupported, bleeding-edge, development_ version, use this comm
 conda install -c https://conda.anaconda.org/ae5-admin/label/dev ae5-tools
 ```
 
-#### General capabilities
+### General capabilities
 
 - Adoption of a standard project identifier format `<owner>/<name>/<id>:<revision>`, with convenient defaults:
     - `<id>` can usually be omitted, leaving `<owner>/<name>:<revision>`
@@ -38,7 +38,7 @@ conda install -c https://conda.anaconda.org/ae5-admin/label/dev ae5-tools
 - Keycloak impersonation allows administrators to run commands on behalf of them.
 - A REPL mode provided by [click-repl](https://github.com/click-contrib/click-repl) be entered by typing `ae5` with no positional arguments, enabling multiple commands to be entered in a single session, with autocompletion, inline help, and persistent history.
 
-#### Command Tree
+### Command Tree
 
 - Composite commands:
     - `account`: `list`
@@ -54,7 +54,7 @@ conda install -c https://conda.anaconda.org/ae5-admin/label/dev ae5-tools
 - Output format options: `--format`, `--filter`, `--columns`, `--sort`, `--width`, `--wide`, `--no-header`
 - Help options: `--help-format`, `--help-filter`, `--help-login`, `--help`
 
-#### Support
+### Support
 
 We use this tool internally, so we're grateful for your feedback and look forward to continuously
 improving it! To submit a bug report or feature request, please use our GitHub
