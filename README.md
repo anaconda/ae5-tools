@@ -12,6 +12,19 @@ More to come. The intent is also to make it possible to allow packages to plug i
 
 There is already a fair amount of inline help, so type `ae5 --help` to get started.
 
+#### Installation
+
+The prefferred and supported way to install `ae5-tools` is with `conda`. The latest version of the tool
+is always available on the [`ae5-admin` channel on anaconda.org](https://anaconda.org/ae5-admin/ae5-tools).
+To install this package, you can use this command:
+```
+conda install -c https://conda.anaconda.org/ae5-admin ae5-tools
+```
+If you want the _unsupported, bleeding-edge, development_ version, use this command:
+```
+conda install -c https://conda.anaconda.org/ae5-admin/label/dev ae5-tools
+```
+
 #### General capabilities
 
 - Adoption of a standard project identifier format `<owner>/<name>/<id>:<revision>`, with convenient defaults:
@@ -41,3 +54,10 @@ There is already a fair amount of inline help, so type `ae5 --help` to get start
 - Output format options: `--format`, `--filter`, `--columns`, `--sort`, `--width`, `--wide`, `--no-header`
 - Help options: `--help-format`, `--help-filter`, `--help-login`, `--help`
 
+#### Support
+
+We use this tool internally, so we're grateful for your feedback and look forward to continuously
+improving it! To submit a bug report or feature request, please use our GitHub
+[issue tracker](https://github.com/Anaconda-Platform/ae5-tools/issues). We will address these issues
+as time permits. Rapid response support and prioritized feature development can be provided as part
+of a paid engagement with our Services team. Please contact your Customer Success Manager for details.
