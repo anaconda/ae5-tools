@@ -5,7 +5,7 @@ from ..utils import add_param
 from ..format import print_output, format_options
 
 
-@click.group(short_help='list, info',
+@click.group(short_help='info, list',
              epilog='Type "ae5 user <command> --help" for help on a specific command.')
 @format_options()
 @login_options()

@@ -4,14 +4,20 @@ from ..utils import add_param
 from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 from ...identifier import Identifier
+from .project_collaborator import collaborator
+from .project_revision import revision
 
 
-@click.group(short_help='list, info, download, image, upload, deploy, deployments, jobs, runs, activity, status, delete',
+@click.group(short_help='activity, collaborator, delete, deploy, deployments, image, info, jobs, list, patch, revision, runs, sessions, status, upload',
              epilog='Type "ae5 project <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
 def project():
     pass
+
+
+project.add_command(collaborator)
+project.add_command(revision)
 
 
 @project.command()
@@ -34,19 +40,6 @@ def list(project, collaborators):
 
 
 @project.command()
-@click.argument('project', required=False)
-@format_options()
-@login_options()
-def samples(project):
-    '''List sample projects.
-    '''
-    result = cluster_call('project_samples', format='dataframe')
-    if project:
-        add_param('filter', Identifier.from_string(project).project_filter())
-    print_output(result)
-
-
-@project.command()
 @click.argument('project')
 @format_options()
 @login_options()
@@ -57,33 +50,6 @@ def info(project):
        wildcards. But it must match exactly one project.
     '''
     result = cluster_call('project_info', project, collaborators=True, format='dataframe')
-    print_output(result)
-
-
-@project.command()
-@click.argument('name_or_id')
-@format_options()
-@login_options()
-def sample_info(name_or_id):
-    '''Obtain information about a single sample project.
-
-       The NAME_OR_ID identifier may include wildcards but it must match exactly one sample.
-    '''
-    result = cluster_call('project_sample_info', name_or_id, format='dataframe')
-    print_output(result)
-
-
-@project.command()
-@click.argument('project')
-@format_options()
-@login_options()
-def collaborators(project):
-    '''Obtain information about a project's collaborators.
-
-       The PROJECT identifier need not be fully specified, and may even include
-       wildcards. But it must match exactly one project.
-    '''
-    result = cluster_call('project_collaborators', project, format='dataframe')
     print_output(result)
 
 
@@ -112,6 +78,20 @@ def runs(project):
        wildcards. But it must match exactly one project.
     '''
     result = cluster_call('project_collaborators', project, format='dataframe')
+    print_output(result)
+
+
+@project.command()
+@click.argument('project')
+@format_options()
+@login_options()
+def sessions(project):
+    '''Obtain information about a project's sessions.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    result = cluster_call('project_sessions', project, format='dataframe')
     print_output(result)
 
 
@@ -194,7 +174,7 @@ def download(ctx, project, filename):
        A revision value may optionally be supplied in the PROJECT identifier.
        If not supplied, the latest revision will be selected.
     '''
-    from .revision import download as revision_download
+    from .project_revision import download as revision_download
     ctx.invoke(revision_download, revision=project, filename=filename)
 
 
@@ -220,7 +200,7 @@ def image(ctx, project, command, use_anaconda_cloud, dockerfile, debug):
     '''
     from .revision import image as revision_image
     ctx.invoke(revision_image, revision=project, command=command, use_anaconda_cloud=use_anaconda_cloud, dockerfile=dockerfile, debug=debug)
-    
+
 
 @project.command()
 @click.argument('filename', type=click.Path(exists=True))
@@ -243,14 +223,17 @@ def upload(filename, name, tag, no_wait):
 @project.command()
 @click.argument('project')
 @click.option('--endpoint', type=str, required=False, help='Endpoint name.')
+@click.option('--command', help='The command to use for this deployment.')
 @click.option('--resource-profile', help='The resource profile to use for this deployment.')
+@click.option('--public', is_flag=True, help='Make the deployment public.')
+@click.option('--private', is_flag=True, help='Make the deployment private (the default).')
 @click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
 @click.option('--open/--no-open', default=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
-def deploy(ctx, project, endpoint, resource_profile, wait, open, frame):
+def deploy(ctx, project, endpoint, command, resource_profile, public, private, wait, open, frame):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -267,7 +250,8 @@ def deploy(ctx, project, endpoint, resource_profile, wait, open, frame):
     '''
     from .deployment import start as deployment_start
     ctx.invoke(deployment_start, project=project, endpoint=endpoint,
-               resource_profile=resource_profile, wait=wait, open=open, frame=frame)
+               resource_profile=resource_profile, command=command,
+               public=public, private=private, wait=wait, open=open, frame=frame)
 
 
 @project.command()

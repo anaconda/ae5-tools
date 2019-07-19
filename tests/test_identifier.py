@@ -15,8 +15,8 @@ INVALID_SLUG = 'ff'
 def _assert_invalid_id(idstr):
     with pytest.raises(ValueError) as excinfo:
         Identifier.id_type(idstr)
-    assert 'Invalid identifier' in str(excinfo)
-    assert idstr in str(excinfo)
+    assert 'Invalid identifier' in str(excinfo.value)
+    assert idstr in str(excinfo.value)
 
 
 def _assert_valid_id(idstr, type=None):

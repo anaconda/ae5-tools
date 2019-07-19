@@ -1,4 +1,4 @@
-### AE5 Command Line Tool
+## AE5 Command Line Tool
 
 [![Travis Status](https://travis-ci.com/Anaconda-Platform/ae5-tools.svg?branch=master)](https://travis-ci.com/Anaconda-Platform/ae5-tools) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/latest_release_date.svg)](https://anaconda.org/ae5-admin/ae5-tools) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/version.svg)](https://anaconda.org/ae5-admin/ae5-tools)
 
@@ -12,7 +12,25 @@ More to come. The intent is also to make it possible to allow packages to plug i
 
 There is already a fair amount of inline help, so type `ae5 --help` to get started.
 
-#### General capabilities
+### Installation
+
+The prefferred and supported way to install `ae5-tools` is with `conda`. The latest version of the tool
+is always available on the [`ae5-admin` channel on anaconda.org](https://anaconda.org/ae5-admin/ae5-tools).
+To install this package, you can use this command:
+```
+conda install -c https://conda.anaconda.org/ae5-admin ae5-tools
+```
+If you want the _unsupported, bleeding-edge, development_ version, use this command:
+```
+conda install -c https://conda.anaconda.org/ae5-admin/label/dev ae5-tools
+```
+The package has the following particular dependencies:
+- Python 3.6 or later.
+- [Click](https://click.palletsprojects.com/en/7.x/) 7.0 or later
+- [click-repl](https://github.com/click-contrib/click-repl), which is in conda-forge, but also provided
+  in the `ae5-admin` channel for convenience.
+
+### General capabilities
 
 - Adoption of a standard project identifier format `<owner>/<name>/<id>:<revision>`, with convenient defaults:
     - `<id>` can usually be omitted, leaving `<owner>/<name>:<revision>`
@@ -25,14 +43,19 @@ There is already a fair amount of inline help, so type `ae5 --help` to get start
 - Keycloak impersonation allows administrators to run commands on behalf of them.
 - A REPL mode provided by [click-repl](https://github.com/click-contrib/click-repl) be entered by typing `ae5` with no positional arguments, enabling multiple commands to be entered in a single session, with autocompletion, inline help, and persistent history.
 
-#### Command Tree
+### Command Tree
 
 - Composite commands:
     - `account`: `list`
-    - `deployment`: `collaborators`, `endpoints`, `info`, `list`, `open`, `patch`, `start`, `stop`
+    - `deployment`: `list`, `info`, `open`, `patch`, `start`, `stop`
+      - `collaborator`: `list`, `info`, `add`, `remove`
+    - `endpoint`: `list`, `info`
     - `job`: `info`, `list`, `stop`
-    - `project`: `activity`, `collaborators`, `delete`, `deploy`, `deployments`, `download`, `info`, `jobs`, `list`, `patch`, `runs`, `sample-info`, `samples`, `status`, `upload`
-    - `revision`: `download`, `info`, `list`
+    - `project`: `activity`, `delete`, `deploy`, `deployments`, `info`, `jobs`,
+      `list`, `patch`, `runs`, `sessions`, `status`, `upload`
+      - `collaborator`: `list`, `info`, `add`, `remove`
+      - `revision`: `list`, `info`, `download`
+    - `sample`: `list`, `info`
     - `run`: `info`, `list`, `stop`
     - `session`: `info`, `list`, `open`, `start`, `stop`
     - `user`: `info`, `list`
@@ -41,3 +64,10 @@ There is already a fair amount of inline help, so type `ae5 --help` to get start
 - Output format options: `--format`, `--filter`, `--columns`, `--sort`, `--width`, `--wide`, `--no-header`
 - Help options: `--help-format`, `--help-filter`, `--help-login`, `--help`
 
+### Support
+
+We use this tool internally, so we're grateful for your feedback and look forward to continuously
+improving it! To submit a bug report or feature request, please use our GitHub
+[issue tracker](https://github.com/Anaconda-Platform/ae5-tools/issues). We will address these issues
+as time permits. Rapid response support and prioritized feature development can be provided as part
+of a paid engagement with our Services team. Please contact your Customer Success Manager for details.
