@@ -52,6 +52,16 @@ def info(session):
     print_output(result)
 
 
+def _open(record, frame):
+    if frame:
+        scheme, _, hostname, *_, project_id = record.project_url.split('/')
+        url = f'{scheme}//{hostname}/projects/detail/a0-{project_id}/view'
+    else:
+        scheme, _, hostname, *_, session_id = record.url.split('/')
+        url = f'{scheme}//{session_id}.{hostname}/'
+    webbrowser.open(url, 1, True)
+
+
 @session.command(short_help='Start a session for a project.')
 @click.argument('project')
 @click.option('--editor', help='The editor to use. If supplied, future sessions will use this editor as well. If not supplied, uses the editor currently selected for the project.')
@@ -83,11 +93,10 @@ def start(ctx, project, editor, resource_profile, wait, open, frame):
     ident = Identifier.from_record(result)
     click.echo(f'Starting session for {ident}...', nl=False, err=True)
     response = cluster_call('session_start', result['id'], wait=wait, format='dataframe')
-    if open:
-        from .session import open as session_open
-        ctx.invoke(session_open, session=response['id'], frame=frame)
     click.echo('started.', err=True)
     print_output(response)
+    if open:
+        _open(response, frame)
 
 
 @session.command(short_help='Stop a session.')
@@ -125,10 +134,4 @@ def open(session, frame):
        session UI, use the --frameless option.
     '''
     result = single_session(session)
-    scheme, _, hostname, _ = result.url.split('/', 3)
-    if frame:
-        _, project_id = result.project_url.rsplit('/', 1)
-        url = f'{scheme}//{hostname}/projects/detail/a0-{project_id}/view'
-    else:
-        url = f'{scheme}//{result.session_name}.{hostname}/'
-    webbrowser.open(url, 1, True)
+    _open(result, frame)

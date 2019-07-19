@@ -124,5 +124,4 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=kwargs.pop('admin', False))
         return getattr(c, method)(*args, **kwargs)
     except Exception as e:
-        raise
         raise click.ClickException(str(e))
