@@ -5,7 +5,7 @@ from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 
 
-@click.group(short_help='List or get info on sample projects.',
+@click.group(short_help='info, list',
              epilog='Type "ae5 project sample <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
@@ -19,7 +19,7 @@ def sample():
 def list():
     '''List the sample projects.
     '''
-    result = cluster_call('project_samples', format='dataframe')
+    result = cluster_call('sample_list', format='dataframe')
     print_output(result)
 
 
@@ -36,5 +36,5 @@ def info(project):
        USERID must be an exact match of the user ID of an individual, or the name
        of a group (e.g., 'everyone').
     '''
-    result = cluster_call('project_sample_info', project, format='dataframe')
+    result = cluster_call('sample_info', project, format='dataframe')
     print_output(result)

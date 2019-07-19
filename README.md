@@ -47,10 +47,15 @@ The package has the following particular dependencies:
 
 - Composite commands:
     - `account`: `list`
-    - `deployment`: `collaborators`, `endpoints`, `info`, `list`, `open`, `patch`, `start`, `stop`
+    - `deployment`: `list`, `info`, `open`, `patch`, `start`, `stop`
+      - `collaborator`: `list`, `info`, `add`, `remove`
+    - `endpoint`: `list`, `info`
     - `job`: `info`, `list`, `stop`
-    - `project`: `activity`, `collaborators`, `delete`, `deploy`, `deployments`, `download`, `info`, `jobs`, `list`, `patch`, `runs`, `sample-info`, `samples`, `status`, `upload`
-    - `revision`: `download`, `info`, `list`
+    - `project`: `activity`, `delete`, `deploy`, `deployments`, `info`, `jobs`,
+      `list`, `patch`, `runs`, `sessions`, `status`, `upload`
+      - `collaborator`: `list`, `info`, `add`, `remove`
+      - `revision`: `list`, `info`, `download`
+    - `sample`: `list`, `info`
     - `run`: `info`, `list`, `stop`
     - `session`: `info`, `list`, `open`, `start`, `stop`
     - `user`: `info`, `list`

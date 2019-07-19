@@ -8,7 +8,7 @@ from .project_collaborator import collaborator
 from .project_revision import revision
 
 
-@click.group(short_help='list, info, download, upload, deploy, deployments, jobs, runs, activity, status, delete',
+@click.group(short_help='activity, collaborator, delete, deploy, deployments, info, jobs, list, patch, revision, runs, sessions, status, upload',
              epilog='Type "ae5 project <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
@@ -78,6 +78,20 @@ def runs(project):
        wildcards. But it must match exactly one project.
     '''
     result = cluster_call('project_collaborators', project, format='dataframe')
+    print_output(result)
+
+
+@project.command()
+@click.argument('project')
+@format_options()
+@login_options()
+def sessions(project):
+    '''Obtain information about a project's sessions.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    result = cluster_call('project_sessions', project, format='dataframe')
     print_output(result)
 
 

@@ -5,7 +5,7 @@ from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 
 
-@click.group(short_help='List, add, or remove collaborators.',
+@click.group(short_help='Subcommands: add, info, list, remove',
              epilog='Type "ae5 deployment collaborator <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
