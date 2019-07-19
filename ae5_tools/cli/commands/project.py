@@ -198,7 +198,7 @@ def image(ctx, project, command, use_anaconda_cloud, dockerfile, debug):
        A revision value may optionally be supplied in the PROJECT identifier.
        If not supplied, the latest revision will be selected.
     '''
-    from .revision import image as revision_image
+    from .project_revision import image as revision_image
     ctx.invoke(revision_image, revision=project, command=command, use_anaconda_cloud=use_anaconda_cloud, dockerfile=dockerfile, debug=debug)
 
 
