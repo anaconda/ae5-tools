@@ -9,7 +9,7 @@ from ...identifier import Identifier
 from .deployment_collaborator import collaborator
 
 
-@click.group(short_help='list, info, endpoints, start, stop',
+@click.group(short_help='collaborator, info, list, open, patch, restart, start, stop',
              epilog='Type "ae5 deployment <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
@@ -42,15 +42,6 @@ def list(deployment, collaborators):
 def single_deployment(deployment, collaborators=False):
     ident = Identifier.from_string(deployment)
     return cluster_call('deployment_info', ident, collaborators=collaborators, format='dataframe')
-
-
-@deployment.command()
-@format_options()
-@login_options()
-def endpoints():
-    '''List all static endpoints.'''
-    result = cluster_call('deployment_endpoints', format='dataframe')
-    print_output(result)
 
 
 @deployment.command()
@@ -128,7 +119,7 @@ def start(ctx, project, endpoint, command, resource_profile, public, private, wa
     if public and private:
         click.ClickException('Cannot specify both --public and --private')
     prec = cluster_call('project_info', project, format='json')
-    endpoints = cluster_call('deployment_endpoints', format='json')
+    endpoints = cluster_call('endpoint_list', format='json')
     e_supplied = bool(endpoint)
     if not e_supplied:
         dedupe = True

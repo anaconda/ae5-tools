@@ -7,7 +7,7 @@ from ..format import print_output, format_options
 from ...identifier import Identifier
 
 
-@click.group(short_help='list, info, start, stop, open',
+@click.group(short_help='info, list, open, start, stop',
              epilog='Type "ae5 session <command> --help" for help on a specific command.')
 @format_options()
 @login_options()

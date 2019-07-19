@@ -320,7 +320,7 @@ class AEUserSession(AESessionBase):
 
     def _id_or_name(self, type, ident, quiet=False):
         matches = []
-        records = getattr(self, f'project_{type}s')(format='json')
+        records = getattr(self, type.rstrip('s') + '_list')(format='json')
         for rec in records:
             if (fnmatch(rec['id'], ident) or fnmatch(rec['name'], ident)):
                 matches.append(rec)
@@ -335,7 +335,7 @@ class AEUserSession(AESessionBase):
             id, rec = None, None
         else:
             pfx = 'Multiple' if len(matches) else 'No'
-            msg = f'{pfx} {type} projects found matching "{ident}"'
+            msg = f'{pfx} {type}s found matching "{ident}"'
             if matches:
                 matches = [f'{r["id"]}: {r["name"]}' for r in matches]
                 msg += ':\n  - ' + '\n  - '.join(matches)
@@ -348,7 +348,13 @@ class AEUserSession(AESessionBase):
             self._join_collaborators('projects', records)
         return self._format_response(records, format=format, columns=_P_COLUMNS)
 
-    def project_samples(self, format=None):
+    def project_info(self, ident, collaborators=False, format=None, quiet=False):
+        id, record = self._id('projects', ident, quiet=quiet)
+        if collaborators:
+            self._join_collaborators('projects', record)
+        return self._format_response(record, format=format, columns=_P_COLUMNS)
+
+    def sample_list(self, format=None):
         result = []
         for sample in self._get('template_projects', format='json'):
             sample['is_template'] = True
@@ -358,13 +364,7 @@ class AEUserSession(AESessionBase):
             result.append(sample)
         return self._format_response(result, format=format, columns=_T_COLUMNS)
 
-    def project_info(self, ident, collaborators=False, format=None, quiet=False):
-        id, record = self._id('projects', ident, quiet=quiet)
-        if collaborators:
-            self._join_collaborators('projects', record)
-        return self._format_response(record, format=format, columns=_P_COLUMNS)
-
-    def project_sample_info(self, ident, format=None, quiet=False):
+    def sample_info(self, ident, format=None, quiet=False):
         id, record = self._id_or_name('sample', ident, quiet=quiet)
         return self._format_response(record, format=format, columns=_T_COLUMNS)
 
@@ -418,6 +418,10 @@ class AEUserSession(AESessionBase):
         if data:
             self._patch(f'projects/{id}', json=data, format='response')
         return self.project_info(id, format=format)
+
+    def project_sessions(self, ident, format=None):
+        id, _ = self._id('projects', ident)
+        return self._get(f'projects/{id}/sessions', format=format, columns=_S_COLUMNS)
 
     def project_deployments(self, ident, format=None):
         id, _ = self._id('projects', ident)
@@ -575,12 +579,17 @@ class AEUserSession(AESessionBase):
         record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(record, format, _D_COLUMNS)
 
-    def deployment_endpoints(self, format=None):
+    def endpoint_list(self, format=None):
         response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')['data']
         self._join_projects(response, None)
         for rec in response:
             rec['deployment_id'] = 'a2-' + rec['deployment_id'] if rec['deployment_id'] else ''
         return self._format_response(response, format=format, columns=_E_COLUMNS)
+
+    def endpoint_info(self, ident, quiet=False, format=None):
+        id, rec = self._id_or_name('endpoint', ident, quiet=quiet)
+        rec['deployment_id'] = 'a2-' + rec['deployment_id'] if rec['deployment_id'] else ''
+        return self._format_response(rec, format=format, columns=_E_COLUMNS)
 
     def deployment_collaborators(self, ident, format=None):
         id, _ = self._id('deployments', ident)
