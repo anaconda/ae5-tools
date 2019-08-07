@@ -9,11 +9,6 @@ from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
 import getpass
-<<<<<<< Updated upstream
-=======
-
-from tempfile import TemporaryDirectory
->>>>>>> Stashed changes
 
 from .config import config
 from .identifier import Identifier
