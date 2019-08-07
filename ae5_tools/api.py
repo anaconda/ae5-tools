@@ -227,7 +227,7 @@ class AEUserSession(AESessionBase):
     def _load(self):
         s = self.session
         if os.path.exists(self._filename):
-            s.cookies.load(self._filename)
+            s.cookies.load(self._filename, ignore_discard=True)
             os.utime(self._filename)
             try:
                 self._get('runs', format='response')
@@ -256,7 +256,7 @@ class AEUserSession(AESessionBase):
 
     def _save(self):
         os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)
-        self.session.cookies.save(self._filename)
+        self.session.cookies.save(self._filename, ignore_discard=True)
         os.chmod(self._filename, 0o600)
 
     def _id(self, type, ident, quiet=False):
