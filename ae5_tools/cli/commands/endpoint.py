@@ -5,7 +5,7 @@ from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 
 
-@click.group(short_help='Subcommands: info, list',
+@click.group(short_help='info, list',
              epilog='Type "ae5 endpoint <command> --help" for help on a specific command.')
 @format_options()
 @login_options()

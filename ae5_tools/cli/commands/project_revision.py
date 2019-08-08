@@ -16,6 +16,7 @@ def revision():
 @revision.command()
 @click.argument('project')
 @format_options()
+@login_options()
 def list(project):
     '''List available revisions for a given project.
 
@@ -29,6 +30,7 @@ def list(project):
 @revision.command()
 @click.argument('revision')
 @format_options()
+@login_options()
 def info(revision):
     '''Get information about a single project revision.
 
@@ -43,6 +45,7 @@ def info(revision):
 @revision.command()
 @click.argument('revision')
 @click.option('--filename', default='', help='Filename')
+@login_options()
 def download(revision, filename):
     '''Download a project revision.
 
