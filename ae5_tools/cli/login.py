@@ -24,9 +24,9 @@ if the previous session has not yet expired.
 ''')
     for option, help in _login_help.items():
         text = f'--{option}'
-        spacer = ' ' * (18 - len(text))
+        spacer = ' ' * (20 - len(text))
         text = f'{text}{spacer}{help}'
-        click.echo(click.wrap_text(text, initial_indent='  ', subsequent_indent=' ' * 20))
+        click.echo(click.wrap_text(text, initial_indent='  ', subsequent_indent=' ' * 22))
     ctx.exit()
 
 
@@ -39,7 +39,12 @@ _login_help = {
     'impersonate': ('If selected, uses impersonation to log in as the given user. '
                     'This relies on the Keycloack admin credentials instead of '
                     'requiring a user password. By default, standard user '
-                    'authentication is employed. (AE5_IMPERSONATE)')
+                    'authentication is employed. (AE5_IMPERSONATE)'),
+    'no-saved-logins': ('By default, login sessions are saved to disk so they '
+                        'can be used across separate calls. If this flag is set, the '
+                        'sessions are neither loaded from disk or saved to disk, and '
+                        'must be supplied separately to each call of the tool. '
+                        '(AE5_NO_SAVED_LOGINS)')
 }
 
 
@@ -50,6 +55,7 @@ _login_options = [
     click.option('--admin-username', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_USERNAME', hidden=True),
     click.option('--admin-password', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_PASSWORD', hidden=True),
     click.option('--impersonate', is_flag=True, expose_value=False, callback=param_callback, envvar='AE5_IMPERSONATE', hidden=True),
+    click.option('--no-saved-logins', is_flag=True, expose_value=False, callback=param_callback, envvar='AE5_NO_SAVED_LOGINS', hidden=True),
     click.option('--help-login', is_flag=True, callback=print_login_help, expose_value=False, is_eager=True,
                  help='Get help on the global authentication options.')
 ]
@@ -90,33 +96,61 @@ def click_password(key):
     return click.prompt(f'Password for {key}', type=str, hide_input=True, err=True)
 
 
-def cluster(reconnect=False, admin=False, retry=True):
+def cluster_connect(hostname, username, admin, reconnect, retry):
     ctx = click.get_current_context()
     obj = ctx.ensure_object(dict)
-    label = 'acluster' if admin else 'cluster'
-    hostname, username = get_account(admin=admin)
-    impersonate = obj['impersonate']
-    if not obj.get(label) or reconnect:
+    key = (hostname, username, admin)
+    sessions = obj.setdefault('sessions', {})
+    conn = sessions.get(key)
+    if conn is None or reconnect:
+        if conn is not None:
+            conn.disconnect()
+            del sessions[key]
+            conn = None
         AESessionBase._password_prompt = click_password
         try:
+            session_save = not obj['no_saved_logins']
             if admin:
                 conn = AEAdminSession(hostname, username, obj.get('admin_password'),
-                                      password_prompt=click_password, retry=retry)
+                                      password_prompt=click_password, retry=retry,
+                                      persist=session_save)
             else:
+                impersonate = obj['impersonate']
                 conn = AEUserSession(hostname, username, obj.get('password'),
                                      retry=retry and not impersonate,
-                                     password_prompt=click_password)
+                                     password_prompt=click_password,
+                                     persist=session_save)
                 if retry and impersonate and not conn.connected:
                     click.echo(f'Impersonating {username}@{hostname}...', err=True)
                     conn = cluster(reconnect, True).impersonate(username)
-            obj[label] = conn if conn.connected else None
+            if conn is not None:
+                if conn.connected:
+                    sessions[key] = conn
+                else:
+                    conn = None
         except ValueError as e:
             raise click.ClickException(str(e))
         if conn is not None and conn.connected:
             click.echo(f'Connected as {username}@{hostname}.', err=True)
         else:
             click.echo(f'No active connection for {username}@{hostname}.', err=True)
-    return obj[label]
+    return sessions.get(key)
+
+
+def cluster_disconnect(admin=False):
+    hostname, username = get_account(admin=admin)
+    conn = cluster_connect(hostname, username, admin, False, False)
+    if conn is not None:
+        conn.disconnect()
+        click.echo(f'Logged out as {username}@{hostname}.', err=True)
+        ctx = click.get_current_context()
+        obj = ctx.ensure_object(dict)
+        del obj['sessions'][(hostname, username, admin)]
+
+
+def cluster(reconnect=False, admin=False, retry=True):
+    hostname, username = get_account(admin=admin)
+    return cluster_connect(hostname, username, admin, reconnect, retry)
 
 
 def cluster_call(method, *args, **kwargs):
@@ -124,4 +158,5 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=kwargs.pop('admin', False))
         return getattr(c, method)(*args, **kwargs)
     except Exception as e:
+        raise
         raise click.ClickException(str(e))

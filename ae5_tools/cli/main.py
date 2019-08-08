@@ -23,7 +23,7 @@ from .commands.job import job
 from .commands.run import run
 from .commands.user import user
 
-from .login import login_options, cluster, cluster_call
+from .login import login_options, cluster, cluster_call, cluster_disconnect
 from .format import format_options, print_output
 from ..api import AEUsageError
 
@@ -64,8 +64,7 @@ def login(admin):
        initiate a login if necessary. Furthermore, if an active session already
        exists for the given hostname/username/password, this will do nothing.
     '''
-    cluster(admin=admin)
-
+    cluster_disconnect(admin=admin)
 
 @cli.command()
 @click.option('--admin', is_flag=True, help='Perform a KeyCloak admin login instead of a user login.')
@@ -76,10 +75,7 @@ def logout(admin):
        Sessions automatically time out, but this allows an existing session to
        be closed out to prevent accidental further use.
     '''
-    c = cluster(admin=admin, retry=False)
-    if c is not None and c.connected:
-        c.disconnect()
-        click.echo('Logged out.', err=True)
+    cluster_disconnect(admin)
 
 
 @cli.command()

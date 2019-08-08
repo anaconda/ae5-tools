@@ -58,7 +58,8 @@ class AEUnexpectedResponseError(RuntimeError):
 class AESessionBase(object):
     '''Base class for AE5 API interactions.'''
 
-    def __init__(self, hostname, username, password, prefix, dataframe, retry, password_prompt):
+    def __init__(self, hostname, username, password, prefix,
+                 dataframe, retry, password_prompt, persist):
         '''Base class constructor.
 
         Args:
@@ -79,16 +80,24 @@ class AESessionBase(object):
                 session, or if the saved session has expired.
             password_prompt (function, optional): if not None, this will be used
                 instead of the _password_prompt static method to request a password.
+            persist: if True, ann attempt will be made to load the session from disk;
+                and if a new login is required, it will save the session to disk. If
+                false, session information will neither be loaded nor saved.
         '''
         if not hostname or not username:
             raise ValueError('Must supply hostname and username')
         self.hostname = hostname
         self.username = username
+        self.persist = persist
         self.prefix = prefix.lstrip('/')
         self.dataframe = dataframe
         if password_prompt:
             self._password_prompt = password_prompt
         self.connect(password, retry)
+
+    def __del__(self):
+        if not self.persist and self.connected:
+            self.disconnect()
 
     @staticmethod
     def _password_prompt(key):
@@ -98,7 +107,7 @@ class AESessionBase(object):
                 return password
             print('Must supply a password.')
 
-    def connect(self, password=None, retry=True):
+    def connect(self, password=None, retry=True, persist=True):
         self.connected = False
         self.session = requests.Session()
         self.session.verify = False
@@ -106,7 +115,8 @@ class AESessionBase(object):
             self.session.cookies = password
         else:
             self.session.cookies = LWPCookieJar()
-            self._load()
+            if self.persist:
+                self._load()
         if not self._connected():
             if not retry:
                 return None
@@ -118,13 +128,15 @@ class AESessionBase(object):
                 raise RuntimeError(f'Failed to create session for {key}')
         self.connected = True
         self._set_header()
-        self._save()
+        if self.persist:
+            self._save()
 
     def disconnect(self):
         self._disconnect()
         self.session.headers.clear()
         self.session.cookies.clear()
-        self._save()
+        if self.persist:
+            self._save()
         self.connected = False
 
     def _format_kwargs(self, kwargs):
@@ -213,9 +225,9 @@ class AESessionBase(object):
 
 
 class AEUserSession(AESessionBase):
-    def __init__(self, hostname, username, password=None, dataframe=False, retry=True, password_prompt=None):
+    def __init__(self, hostname, username, password=None, dataframe=False, retry=True, password_prompt=None, persist=True):
         self._filename = os.path.join(config._path, 'cookies', f'{username}@{hostname}')
-        super(AEUserSession, self).__init__(hostname, username, password, 'api/v2', dataframe, retry, password_prompt)
+        super(AEUserSession, self).__init__(hostname, username, password, 'api/v2', dataframe, retry, password_prompt, persist)
 
     def _set_header(self):
         s = self.session
@@ -711,12 +723,12 @@ class AEUserSession(AESessionBase):
 
 
 class AEAdminSession(AESessionBase):
-    def __init__(self, hostname, username, password=None, dataframe=False, retry=True, password_prompt=None):
+    def __init__(self, hostname, username, password=None, dataframe=False, retry=True, password_prompt=None, persist=True):
         self._sdata = None
         self._login_url = f'/auth/realms/master/protocol/openid-connect/token'
         super(AEAdminSession, self).__init__(hostname, username, password,
                                              'auth/admin/realms/AnacondaPlatform',
-                                             dataframe, retry, password_prompt)
+                                             dataframe, retry, password_prompt, persist)
 
     def _load(self):
         self._filename = os.path.join(config._path, 'tokens', f'{self.username}@{self.hostname}')
