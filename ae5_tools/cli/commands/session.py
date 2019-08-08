@@ -110,7 +110,7 @@ def stop(session, yes):
        wildcards. But it must match exactly one session.
     '''
     result = single_session(session)
-    ident = f'{result["owner"]}/{result["name"]}/{result["id"]}'
+    ident = Identifier.from_record(result)
     if not yes:
         yes = click.confirm(f'Stop session {ident}', err=True)
     if yes:

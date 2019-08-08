@@ -535,8 +535,9 @@ class AEUserSession(AESessionBase):
 
     def session_list(self, internal=False, format=None):
         response = self._get('sessions', format='json')
-        if not internal:
-            self._join_projects(response, 'session')
+        # We need _join_projects even in internal mode to replace
+        # the internal session name with the project name
+        self._join_projects(response, 'session')
         return self._format_response(response, format, _S_COLUMNS)
 
     def session_info(self, ident, format=None, quiet=False):
