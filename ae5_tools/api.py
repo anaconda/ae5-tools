@@ -688,6 +688,8 @@ class AEUserSession(AESessionBase):
         collab = self.deployment_collaborators(id, format='json')
         if record.get('url'):
             endpoint = record['url'].split('/', 3)[2].split('.', 1)[0]
+            if id.endswith(endpoint):
+                endpoint = None
         else:
             endpoint = None
         self._delete(f'deployments/{id}', format='response')
