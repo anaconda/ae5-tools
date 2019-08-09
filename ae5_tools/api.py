@@ -183,8 +183,11 @@ class AESessionBase(object):
                 return response
             if format == 'blob':
                 return response.content
-            if format == 'text' or response.headers['content-type'] != 'application/json':
+            if format == 'text':
                 return response.text
+            ctype = response.headers['content-type']
+            if not ctype.endswith('json'):
+                raise AEUsageError(f'Content type {ctype} not compatible with json format')
             response = response.json()
         if format is None and columns:
             format = 'dataframe' if self.dataframe else 'json'
@@ -581,7 +584,7 @@ class AEUserSession(AESessionBase):
             self._join_collaborators('deployments', response)
         if endpoints and not internal:
             for record in response:
-                if record['url']:
+                if record.get('url'):
                     record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(response, format, _D_COLUMNS)
 
@@ -590,11 +593,13 @@ class AEUserSession(AESessionBase):
         self._join_projects(record)
         if collaborators:
             self._join_collaborators('deployments', record)
-        record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
+        if record.get('url'):
+            record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(record, format, _D_COLUMNS)
 
     def endpoint_list(self, format=None):
-        response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')['data']
+        response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')
+        response = response['data']
         self._join_projects(response, None)
         for rec in response:
             rec['deployment_id'] = 'a2-' + rec['deployment_id'] if rec['deployment_id'] else ''
@@ -681,9 +686,13 @@ class AEUserSession(AESessionBase):
     def deployment_restart(self, ident, wait=True, format=None):
         id, record = self._id('deployments', ident)
         collab = self.deployment_collaborators(id, format='json')
+        if record.get('url'):
+            endpoint = record['url'].split('/', 3)[2].split('.', 1)[0]
+        else:
+            endpoint = None
         self._delete(f'deployments/{id}', format='response')
         return self.deployment_start(record['project_id'],
-                                     endpoint=record['endpoint'], command=record['command'],
+                                     endpoint=endpoint, command=record['command'],
                                      resource_profile=record['resource_profile'], public=record['public'],
                                      collaborators=collab, wait=wait, format=format)
 
