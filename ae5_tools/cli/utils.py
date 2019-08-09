@@ -35,8 +35,9 @@ def get_options():
 def persist_option(param, value):
     ctx = click.get_current_context()
     obj = ctx.ensure_object(dict)
-    obj['defaults'][param] = obj['options'][param] = value
-
+    obj.setdefault('options', {})[param] = value
+    if 'defaults' in obj:
+        obj['defaults'][param] = value
 
 def param_callback(ctx, param, value):
     if value in (None, ()):

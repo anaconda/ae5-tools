@@ -77,15 +77,33 @@ def logout(admin):
 
 
 @cli.command()
-@click.argument('endpoint')
+@click.argument('path')
 @login_options()
 @format_options()
-def call(endpoint):
-    '''Make a generic API call. Useful for experimentation. There is no input validation
-       nor is there a guarantee that the output will be compatible with the generic
-       formatting logic. Currently support GET calls only.
+def call(path):
+    '''Make a generic API call. This is useful for experimentation with the
+       AE5 API. However, it is particularly useful for accessing REST APIs
+       delivered as private deployments, because it handles authentication.
+       
+       The PATH argument looks like a standard URL path, without hostname or
+       scheme. However, if the path does not begin with a slash '/', this
+       component is assumed to be the subdomain for the deployment.
+
+       For instance, if the hostname is anaconda.test.com,
+          /api/v2/runs -> https://anaconda.test.com/api/v2/runs
+          deployment1  -> https://deployment1.anaconda.test.com/
+          deployment2/test/me -> https://deployment2.anaconda.test.com/test/me
+       
+       There is no input validation, nor is there a guarantee that the output will
+       be compatible with the generic formatting logic.
     '''
-    result = cluster_call('_api', 'get', endpoint, format='dataframe')
+    if path.startswith('/'):
+        subdomain = None
+    elif '/' in path:
+        subdomain, path = path.split('/', 1)
+    else:
+        subdomain, path = path, ''
+    result = cluster_call('_api', 'get', '/' + path.lstrip('/'), format='dataframe', subdomain=subdomain)
     print_output(result)
 
 

@@ -18,9 +18,15 @@ def print_format_help(ctx, param, value):
     click_text('''
 @Formatting the tabular output: options
 
-Most of the CLI commands provide output in tabular form. By default, the tables
+Many AE5 commands provide output in JSON tabular form---either a single
+dictionary or a list of dictionaries with identical keys. By default, the tables
 are rendered in text suitable for viewing in a terminal. The output can be modified
-in a variety of ways with the following options.
+in a variety of ways with the following options. Non-tabular output is always
+returned in plain text form.
+
+In REPL mode, formatting options supplied on the command line serve as the default
+values for all commands executed in that session, but can be overridden on a
+per-command basis.
 
 @Options:
 ''')
@@ -206,6 +212,9 @@ def print_df(df, header=True, width=0):
 
 
 def print_output(result):
+    if isinstance(result, str):
+        print(result)
+        return
     opts = get_options()
     is_single = isinstance(result, pd.Series)
     if is_single:

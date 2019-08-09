@@ -178,13 +178,13 @@ class AESessionBase(object):
         return df
 
     def _format_response(self, response, format, columns):
-        if format == 'response':
-            return response
-        if format == 'text':
-            return response.text
-        if format == 'blob':
-            return response.content
         if isinstance(response, requests.models.Response):
+            if format == 'response':
+                return response
+            if format == 'blob':
+                return response.content
+            if format == 'text' or response.headers['content-type'] != 'application/json':
+                return response.text
             response = response.json()
         if format is None and columns:
             format = 'dataframe' if self.dataframe else 'json'
@@ -195,13 +195,14 @@ class AESessionBase(object):
     def _api(self, method, endpoint, **kwargs):
         pass_errors = kwargs.pop('pass_errors', False)
         fmt, cols = self._format_kwargs(kwargs)
-        if endpoint.startswith('/'):
-            endpoint = endpoint.lstrip('/')
-        elif endpoint:
+        subdomain = kwargs.pop('subdomain', '')
+        isabs, endpoint = endpoint.startswith('/'), endpoint.lstrip('/')
+        if subdomain:
+            subdomain += '.'
+            isabs = True
+        if not isabs:
             endpoint = f'{self.prefix}/{endpoint}'
-        else:
-            endpoint = self.prefix
-        url = f'https://{self.hostname}/{endpoint}'
+        url = f'https://{subdomain}{self.hostname}/{endpoint}'
         kwargs.update((('verify', False), ('allow_redirects', True)))
         response = getattr(self.session, method)(url, **kwargs)
         if 400 <= response.status_code and not pass_errors:

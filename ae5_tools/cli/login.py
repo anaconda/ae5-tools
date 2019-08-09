@@ -9,16 +9,25 @@ def print_login_help(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
     click_text('''
-@Logging into the AE5 cluster: options
+@Logging into the AE5 cluster
+----------------------------
 
 The CLI provides a number of options that can be used with most commands
-to control the authenticatio to the cluster. These options can be supplied
-using standard command-line options, or by setting environment variables
-whose names are given in parentheses below.
+to control authentication to the cluster. They can be supplied on the command
+line or by setting environment variables given in parentheses below.
 
-For convenience, the CLI tool will re-use the last hostname and username
-provided, unless overridden by these options. It will not request a password
-if the previous session has not yet expired.
+Login sessions are saved to disk unless --no-saved-logins
+option is supplied. This enables multiple AE5 calls to be made
+without re-entering a password. Passwords are *not* saved to disk, just
+the session and authentication cookies generated from it. The cookie
+file is saved with secure permissions, and is subject to expiration
+timeouts identical to interactive web sessions.
+
+If the hostname option is not supplied, then the hostname of the last saved
+session is used, even if its cookies are expired. If no saved session exists,
+the user will be prompted for a hostname. Similarly, default values of the
+username or admin username will be determined from the last saved sessions
+on the given hostname.
 
 @Options:
 ''')
@@ -32,18 +41,16 @@ if the previous session has not yet expired.
 
 _login_help = {
     'hostname': 'Hostname of the cluster. (AE5_HOSTNAME)',
-    'username': 'Username for user-level authentication. (AE5_USERNAME)',
-    'password': 'Password for user-level authentication. (AE5_PASSWORD)',
-    'admin-username': 'Keycloak admin username. (AE5_ADMIN_USERNAME)',
-    'admin-password': 'Keycloak admin password. (AE5_ADMIN_PASSWORD)',
-    'impersonate': ('If selected, uses impersonation to log in as the given user. '
-                    'This relies on the Keycloack admin credentials instead of '
-                    'requiring a user password. By default, standard user '
-                    'authentication is employed. (AE5_IMPERSONATE)'),
-    'no-saved-logins': ('By default, login sessions are saved to disk so they '
-                        'can be used across separate calls. If this flag is set, the '
-                        'sessions are neither loaded from disk or saved to disk, and '
-                        'must be supplied separately to each call of the tool. '
+    'username': 'Username for standard access. (AE5_USERNAME)',
+    'password': 'Password for standard access. (AE5_PASSWORD)',
+    'admin-username': 'Username for Keycloak admin access. (AE5_ADMIN_USERNAME)',
+    'admin-password': 'Password for Keycloak admin access. (AE5_ADMIN_PASSWORD)',
+    'impersonate': ('Use the Keycloak administrator account to impersonate the '
+                    'given user instead of requiring the user password. '
+                    '(AE5_IMPERSONATE)'),
+    'no-saved-logins': ('Do not load or save login sessions to/from disk. A password '
+                        'must be supplied, and its session will persist only for the '
+                        'duration of AE5 call, including multiple commands in REPL mode. '
                         '(AE5_NO_SAVED_LOGINS)')
 }
 
