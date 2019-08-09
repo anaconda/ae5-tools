@@ -2,7 +2,7 @@ import click
 
 from ..config import config
 from ..api import AESessionBase, AEUserSession, AEAdminSession
-from .utils import param_callback, click_text
+from .utils import param_callback, click_text, get_options, persist_option
 
 
 def print_login_help(ctx, param, value):
@@ -49,13 +49,13 @@ _login_help = {
 
 
 _login_options = [
-    click.option('--hostname', type=str, expose_value=False, callback=param_callback, envvar='AE5_HOSTNAME', hidden=True),
-    click.option('--username', type=str, expose_value=False, callback=param_callback, envvar='AE5_USERNAME', hidden=True),
-    click.option('--password', type=str, expose_value=False, callback=param_callback, envvar='AE5_PASSWORD', hidden=True),
-    click.option('--admin-username', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_USERNAME', hidden=True),
-    click.option('--admin-password', type=str, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_PASSWORD', hidden=True),
-    click.option('--impersonate', is_flag=True, expose_value=False, callback=param_callback, envvar='AE5_IMPERSONATE', hidden=True),
-    click.option('--no-saved-logins', is_flag=True, expose_value=False, callback=param_callback, envvar='AE5_NO_SAVED_LOGINS', hidden=True),
+    click.option('--hostname', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_HOSTNAME', hidden=True),
+    click.option('--username', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_USERNAME', hidden=True),
+    click.option('--password', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_PASSWORD', hidden=True),
+    click.option('--admin-username', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_USERNAME', hidden=True),
+    click.option('--admin-password', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_PASSWORD', hidden=True),
+    click.option('--impersonate', is_flag=True, default=None, expose_value=False, callback=param_callback, envvar='AE5_IMPERSONATE', hidden=True),
+    click.option('--no-saved-logins', is_flag=True, default=None, expose_value=False, callback=param_callback, envvar='AE5_NO_SAVED_LOGINS', hidden=True),
     click.option('--help-login', is_flag=True, callback=print_login_help, expose_value=False, is_eager=True,
                  help='Get help on the global authentication options.')
 ]
@@ -70,11 +70,10 @@ def login_options(password=True):
 
 
 def get_account(admin=False):
-    ctx = click.get_current_context()
-    obj = ctx.ensure_object(dict)
-    hostname = obj.get('hostname')
+    opts = get_options()
+    hostname = opts.get('hostname')
     key = 'admin_username' if admin else 'username'
-    username = obj.get(key)
+    username = opts.get(key)
     if hostname and username:
         return hostname, username
     matches = config.resolve(hostname, username, admin)
@@ -87,8 +86,8 @@ def get_account(admin=False):
         if not username:
             prompt = 'Admin username' if admin else 'Username'
             username = click.prompt(prompt, type=str, err=True)
-    obj['hostname'] = hostname
-    obj[key] = username
+    persist_option('hostname', hostname)
+    persist_option(key, username)
     return hostname, username
 
 
@@ -96,12 +95,13 @@ def click_password(key):
     return click.prompt(f'Password for {key}', type=str, hide_input=True, err=True)
 
 
+SESSIONS = {}
+
+
 def cluster_connect(hostname, username, admin, reconnect, retry):
-    ctx = click.get_current_context()
-    obj = ctx.ensure_object(dict)
+    opts = get_options()
     key = (hostname, username, admin)
-    sessions = obj.setdefault('sessions', {})
-    conn = sessions.get(key)
+    conn = SESSIONS.get(key)
     if conn is None or reconnect:
         if conn is not None:
             conn.disconnect()
@@ -109,14 +109,14 @@ def cluster_connect(hostname, username, admin, reconnect, retry):
             conn = None
         AESessionBase._password_prompt = click_password
         try:
-            session_save = not obj['no_saved_logins']
+            session_save = not opts.get('no_saved_logins', False)
             if admin:
-                conn = AEAdminSession(hostname, username, obj.get('admin_password'),
+                conn = AEAdminSession(hostname, username, opts.get('admin_password'),
                                       password_prompt=click_password, retry=retry,
                                       persist=session_save)
             else:
-                impersonate = obj['impersonate']
-                conn = AEUserSession(hostname, username, obj.get('password'),
+                impersonate = opts.get('impersonate', False)
+                conn = AEUserSession(hostname, username, opts.get('password'),
                                      retry=retry and not impersonate,
                                      password_prompt=click_password,
                                      persist=session_save)
@@ -125,7 +125,7 @@ def cluster_connect(hostname, username, admin, reconnect, retry):
                     conn = cluster(reconnect, True).impersonate(username)
             if conn is not None:
                 if conn.connected:
-                    sessions[key] = conn
+                    SESSIONS[key] = conn
                 else:
                     conn = None
         except ValueError as e:
@@ -134,7 +134,7 @@ def cluster_connect(hostname, username, admin, reconnect, retry):
             click.echo(f'Connected as {username}@{hostname}.', err=True)
         else:
             click.echo(f'No active connection for {username}@{hostname}.', err=True)
-    return sessions.get(key)
+    return SESSIONS.get(key)
 
 
 def cluster_disconnect(admin=False):
@@ -143,9 +143,7 @@ def cluster_disconnect(admin=False):
     if conn is not None:
         conn.disconnect()
         click.echo(f'Logged out as {username}@{hostname}.', err=True)
-        ctx = click.get_current_context()
-        obj = ctx.ensure_object(dict)
-        del obj['sessions'][(hostname, username, admin)]
+        del SESSIONS[(hostname, username, admin)]
 
 
 def cluster(reconnect=False, admin=False, retry=True):

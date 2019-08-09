@@ -25,6 +25,7 @@ from .commands.user import user
 
 from .login import login_options, cluster, cluster_call, cluster_disconnect
 from .format import format_options, print_output
+from .utils import stash_defaults
 from ..api import AEUsageError
 
 
@@ -35,8 +36,6 @@ from ..api import AEUsageError
 @click.pass_context
 def cli(ctx):
     obj = ctx.ensure_object(dict)
-    obj['is_interactive'] = sys.__stdin__.isatty()
-    obj['is_console'] = sys.__stdout__.isatty()
     if ctx.invoked_subcommand is None:
         ctx.invoke(repl)
 
@@ -46,8 +45,7 @@ def cli(ctx):
 @format_options()
 @click.pass_context
 def repl(ctx):
-    obj = ctx.ensure_object(dict)
-    obj['in_repl'] = True
+    stash_defaults()
     click.echo('Anaconda Enterprise 5 REPL')
     click.echo('Type "--help" for a list of commands.')
     click.echo('Type "<command> --help" for help on a specific command.')

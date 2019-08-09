@@ -2,23 +2,45 @@ import click
 
 
 def add_param(param, value):
-    if value is None:
-        return
     ctx = click.get_current_context()
     obj = ctx.ensure_object(dict)
     if param == 'filter' and not isinstance(value, tuple):
         value = tuple(value.split(','))
+    options = obj.setdefault('options', {})
     if param in obj:
-        ovalue = obj[param]
+        ovalue = options[param]
         if param == 'filter':
             value = ovalue + value
         elif not isinstance(ovalue, bool) and ovalue != value:
             param = param.replace('_', '-')
             raise click.UsageError(f'Conflicting values for --{param}: {ovalue}, {value}')
-    obj[param] = value
+    options[param] = value
+
+
+def stash_defaults():
+    ctx = click.get_current_context()
+    obj = ctx.ensure_object(dict)
+    obj['defaults'] = obj.get('options', {})
+    obj['options'] = {}
+
+
+def get_options():
+    ctx = click.get_current_context()
+    obj = ctx.ensure_object(dict)
+    options = obj.get('defaults', {})
+    options.update(obj.get('options', {}))
+    return options
+
+
+def persist_option(param, value):
+    ctx = click.get_current_context()
+    obj = ctx.ensure_object(dict)
+    obj['defaults'][param] = obj['options'][param] = value
 
 
 def param_callback(ctx, param, value):
+    if value in (None, ()):
+        return
     add_param(param.name.lower().replace('-', '_'), value)
 
 
