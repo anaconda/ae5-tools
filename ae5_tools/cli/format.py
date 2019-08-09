@@ -7,7 +7,7 @@ import pandas as pd
 
 from fnmatch import fnmatch
 
-from .utils import param_callback, click_text
+from .utils import param_callback, click_text, get_options
 
 IS_WIN = sys.platform.startswith('win')
 
@@ -18,9 +18,15 @@ def print_format_help(ctx, param, value):
     click_text('''
 @Formatting the tabular output: options
 
-Most of the CLI commands provide output in tabular form. By default, the tables
+Many AE5 commands provide output in JSON tabular form---either a single
+dictionary or a list of dictionaries with identical keys. By default, the tables
 are rendered in text suitable for viewing in a terminal. The output can be modified
-in a variety of ways with the following options.
+in a variety of ways with the following options. Non-tabular output is always
+returned in plain text form.
+
+In REPL mode, formatting options supplied on the command line serve as the default
+values for all commands executed in that session, but can be overridden on a
+per-command basis.
 
 @Options:
 ''')
@@ -80,16 +86,16 @@ _format_help = {
 
 
 _format_options = [
-    click.option('--filter', type=str, expose_value=False, callback=param_callback, hidden=True, multiple=True),
-    click.option('--columns', type=str, expose_value=False, callback=param_callback, hidden=True),
-    click.option('--sort', type=str, expose_value=False, callback=param_callback, hidden=True),
-    click.option('--format', type=click.Choice(['text', 'csv', 'json']), expose_value=False, callback=param_callback, hidden=True),
-    click.option('--width', type=int, expose_value=False, callback=param_callback, hidden=True),
-    click.option('--wide', is_flag=True, expose_value=False, callback=param_callback, hidden=True),
-    click.option('--header/--no-header', default=True, expose_value=False, callback=param_callback, hidden=True),
-    click.option('--help-format', is_flag=True, callback=print_format_help, expose_value=False, is_eager=True,
+    click.option('--filter', type=str, default=None, expose_value=False, callback=param_callback, hidden=True, multiple=True),
+    click.option('--columns', type=str, default=None, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--sort', type=str, default=None, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--format', type=click.Choice(['text', 'csv', 'json']), default=None, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--width', type=int, default=None, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--wide', is_flag=True, default=None, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--header/--no-header', default=None, expose_value=False, callback=param_callback, hidden=True),
+    click.option('--help-format', is_flag=True, default=None, callback=print_format_help, expose_value=False, is_eager=True,
                  help='Get help on the output formatting options.'),
-    click.option('--help-filter', is_flag=True, callback=print_filter_help, expose_value=False, is_eager=True,
+    click.option('--help-filter', is_flag=True, default=None, callback=print_filter_help, expose_value=False, is_eager=True,
                  help='Get help on the row filtering options.')
 ]
 
@@ -206,20 +212,23 @@ def print_df(df, header=True, width=0):
 
 
 def print_output(result):
-    obj = click.get_current_context().find_object(dict)
+    if isinstance(result, str):
+        print(result)
+        return
+    opts = get_options()
     is_single = isinstance(result, pd.Series)
     if is_single:
         result = result.T.reset_index()
         result.columns = ['field', 'value']
-    if obj.get('format') != 'json':
+    if opts.get('format') != 'json':
         result = result.applymap(lambda x: json.dumps(x) if isinstance(x, (list, dict)) else str(x))
-    if obj.get('filter') or obj.get('columns'):
-        result = filter_df(result, obj.get('filter'), obj.get('columns'))
-    if not is_single and 'sort' in obj:
-        result = sort_df(result, obj.get('sort'))
-    if obj.get('format') == 'csv':
-        print(result.to_csv(index=False, header=obj.get('header', True)))
-    elif obj.get('format') == 'json':
+    if opts.get('filter') or opts.get('columns'):
+        result = filter_df(result, opts.get('filter'), opts.get('columns'))
+    if not is_single and 'sort' in opts:
+        result = sort_df(result, opts.get('sort'))
+    if opts.get('format') == 'csv':
+        print(result.to_csv(index=False, header=opts.get('header', True)))
+    elif opts.get('format') == 'json':
         if is_single:
             result = result.set_index('field').value
             orient = 'index'
@@ -228,5 +237,5 @@ def print_output(result):
         result = json.loads(result.to_json(orient=orient, date_format='iso'))
         print(json.dumps(result, indent=2))
     else:
-        width = 99999999 if obj.get('wide') else obj.get('width') or 0
-        print_df(result, obj.get('header', True), width)
+        width = 99999999 if opts.get('wide') else opts.get('width') or 0
+        print_df(result, opts.get('header', True), width)

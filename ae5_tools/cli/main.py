@@ -23,8 +23,9 @@ from .commands.job import job
 from .commands.run import run
 from .commands.user import user
 
-from .login import login_options, cluster, cluster_call
+from .login import login_options, cluster, cluster_call, cluster_disconnect
 from .format import format_options, print_output
+from .utils import stash_defaults
 from ..api import AEUsageError
 
 
@@ -35,8 +36,6 @@ from ..api import AEUsageError
 @click.pass_context
 def cli(ctx):
     obj = ctx.ensure_object(dict)
-    obj['is_interactive'] = sys.__stdin__.isatty()
-    obj['is_console'] = sys.__stdout__.isatty()
     if ctx.invoked_subcommand is None:
         ctx.invoke(repl)
 
@@ -46,8 +45,7 @@ def cli(ctx):
 @format_options()
 @click.pass_context
 def repl(ctx):
-    obj = ctx.ensure_object(dict)
-    obj['in_repl'] = True
+    stash_defaults()
     click.echo('Anaconda Enterprise 5 REPL')
     click.echo('Type "--help" for a list of commands.')
     click.echo('Type "<command> --help" for help on a specific command.')
@@ -64,8 +62,7 @@ def login(admin):
        initiate a login if necessary. Furthermore, if an active session already
        exists for the given hostname/username/password, this will do nothing.
     '''
-    cluster(admin=admin)
-
+    cluster_disconnect(admin=admin)
 
 @cli.command()
 @click.option('--admin', is_flag=True, help='Perform a KeyCloak admin login instead of a user login.')
@@ -76,22 +73,37 @@ def logout(admin):
        Sessions automatically time out, but this allows an existing session to
        be closed out to prevent accidental further use.
     '''
-    c = cluster(admin=admin, retry=False)
-    if c is not None and c.connected:
-        c.disconnect()
-        click.echo('Logged out.', err=True)
+    cluster_disconnect(admin)
 
 
 @cli.command()
-@click.argument('endpoint')
+@click.argument('path')
 @login_options()
 @format_options()
-def call(endpoint):
-    '''Make a generic API call. Useful for experimentation. There is no input validation
-       nor is there a guarantee that the output will be compatible with the generic
-       formatting logic. Currently support GET calls only.
+def call(path):
+    '''Make a generic API call. This is useful for experimentation with the
+       AE5 API. However, it is particularly useful for accessing REST APIs
+       delivered as private deployments, because it handles authentication.
+       
+       The PATH argument looks like a standard URL path, without hostname or
+       scheme. However, if the path does not begin with a slash '/', this
+       component is assumed to be the subdomain for the deployment.
+
+       For instance, if the hostname is anaconda.test.com,
+          /api/v2/runs -> https://anaconda.test.com/api/v2/runs
+          deployment1  -> https://deployment1.anaconda.test.com/
+          deployment2/test/me -> https://deployment2.anaconda.test.com/test/me
+       
+       There is no input validation, nor is there a guarantee that the output will
+       be compatible with the generic formatting logic.
     '''
-    result = cluster_call('_api', 'get', endpoint, format='dataframe')
+    if path.startswith('/'):
+        subdomain = None
+    elif '/' in path:
+        subdomain, path = path.split('/', 1)
+    else:
+        subdomain, path = path, ''
+    result = cluster_call('_api', 'get', '/' + path.lstrip('/'), format='dataframe', subdomain=subdomain)
     print_output(result)
 
 
