@@ -3,6 +3,7 @@ import time
 import io
 import re
 import os
+import sys
 import json
 import pandas as pd
 from lxml import html
@@ -34,6 +35,8 @@ _DTYPES = {'created': 'datetime', 'updated': 'datetime',
 
 
 class AEAuthenticationError(RuntimeError):
+    def __init__(self):
+        super(AEAuthenticationError, self).__init__('Invalid username or password.')
     pass
 
 
@@ -53,6 +56,16 @@ class AEUnexpectedResponseError(RuntimeError):
             msg.append(f'  json: {kwargs["json"]}')
         super(AEUnexpectedResponseError, self).__init__('\n'.join(msg))
     pass
+
+
+def _password_prompt(key, last_valid=True):
+    if not last_valid:
+        print('Invalid username or password; please try again.', file=sys.stderr)
+    while True:
+        password = getpass.getpass(f'Password for {key}: ')
+        if password:
+            return password
+        print('Must supply a password.', file=sys.stderr)
 
 
 class AESessionBase(object):
@@ -91,21 +104,14 @@ class AESessionBase(object):
         self.persist = persist
         self.prefix = prefix.lstrip('/')
         self.dataframe = dataframe
-        if password_prompt:
-            self._password_prompt = password_prompt
+        if password_prompt is None:
+            password_prompt = _password_prompt
+        self._password_prompt = password_prompt
         self.connect(password, retry)
 
     def __del__(self):
         if not self.persist and self.connected:
             self.disconnect()
-
-    @staticmethod
-    def _password_prompt(key):
-        while True:
-            password = getpass.getpass(f'Password for {key}: ')
-            if password:
-                return password
-            print('Must supply a password.')
 
     def connect(self, password=None, retry=True, persist=True):
         self.connected = False
@@ -113,6 +119,7 @@ class AESessionBase(object):
         self.session.verify = False
         if isinstance(password, LWPCookieJar):
             self.session.cookies = password
+            password = None
         else:
             self.session.cookies = LWPCookieJar()
             if self.persist:
@@ -121,9 +128,19 @@ class AESessionBase(object):
             if not retry:
                 return None
             key = f'{self.username}@{self.hostname}'
-            if password is None or isinstance(password, LWPCookieJar):
-                password = self._password_prompt(key)
-            self._connect(password)
+            need_password = password is None
+            last_valid = True
+            while True:
+                try:
+                    if need_password:
+                        password = self._password_prompt(key, last_valid)
+                    self._connect(password)
+                except AEAuthenticationError as exc:
+                    if need_password:
+                        last_valid = False
+                        continue
+                    raise
+                break
             if not self._connected():
                 raise RuntimeError(f'Failed to create session for {key}')
         self.connected = True
@@ -263,7 +280,7 @@ class AEUserSession(AESessionBase):
         resp = self._post(login_path, data={'username': self.username, 'password': password}, format='text')
         elems = html.fromstring(resp).find_class('kc-feedback-text')
         if elems:
-            raise AEAuthenticationError(elems[0].text)
+            raise AEAuthenticationError()
 
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
@@ -772,6 +789,8 @@ class AEAdminSession(AESessionBase):
                                        'grant_type': 'password',
                                        'client_id': 'admin-cli'},
                                  format='json', pass_errors=True)
+        if self._sdata.get('error_description') == 'Invalid user credentials':
+            raise AEAuthenticationError()
         self._set_header()
 
     def _disconnect(self):

@@ -98,18 +98,20 @@ def get_account(admin=False):
     return hostname, username
 
 
-def click_password(key):
+def click_password(key, last_valid=True):
+    if not last_valid:
+        click.echo('Invalid username or password; please try again.', err=True)
     return click.prompt(f'Password for {key}', type=str, hide_input=True, err=True)
 
 
 SESSIONS = {}
 
 
-def cluster_connect(hostname, username, admin, reconnect, retry):
+def cluster_connect(hostname, username, admin, retry):
     opts = get_options()
     key = (hostname, username, admin)
     conn = SESSIONS.get(key)
-    if conn is None or reconnect:
+    if conn is None:
         if conn is not None:
             conn.disconnect()
             del sessions[key]
@@ -129,7 +131,7 @@ def cluster_connect(hostname, username, admin, reconnect, retry):
                                      persist=session_save)
                 if retry and impersonate and not conn.connected:
                     click.echo(f'Impersonating {username}@{hostname}...', err=True)
-                    conn = cluster(reconnect, True).impersonate(username)
+                    conn = cluster(True, retry).impersonate(username)
             if conn is not None:
                 if conn.connected:
                     SESSIONS[key] = conn
@@ -146,16 +148,16 @@ def cluster_connect(hostname, username, admin, reconnect, retry):
 
 def cluster_disconnect(admin=False):
     hostname, username = get_account(admin=admin)
-    conn = cluster_connect(hostname, username, admin, False, False)
+    conn = cluster_connect(hostname, username, admin, False)
     if conn is not None:
         conn.disconnect()
         click.echo(f'Logged out as {username}@{hostname}.', err=True)
         del SESSIONS[(hostname, username, admin)]
 
 
-def cluster(reconnect=False, admin=False, retry=True):
+def cluster(admin=False, retry=True):
     hostname, username = get_account(admin=admin)
-    return cluster_connect(hostname, username, admin, reconnect, retry)
+    return cluster_connect(hostname, username, admin, retry)
 
 
 def cluster_call(method, *args, **kwargs):
@@ -163,5 +165,4 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=kwargs.pop('admin', False))
         return getattr(c, method)(*args, **kwargs)
     except Exception as e:
-        raise
         raise click.ClickException(str(e))
