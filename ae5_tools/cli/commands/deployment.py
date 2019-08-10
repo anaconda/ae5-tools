@@ -3,7 +3,7 @@ import webbrowser
 import re
 
 from ..login import cluster_call, login_options
-from ..utils import add_param
+from ..utils import add_param, get_options
 from ..format import print_output, format_options
 from ...identifier import Identifier
 from .deployment_collaborator import collaborator
@@ -182,9 +182,10 @@ def restart(ctx, deployment, wait, open, frame):
     '''
     drec = cluster_call('deployment_info', deployment, format='json')
     ident = Identifier.from_record(drec)
-    obj = ctx.ensure_object(dict)
-    if drec['owner'] != obj['username']:
-        raise click.ClickException(f'user {obj["username"]} cannot restart deployment {ident}')
+    opts = get_options()
+    username = opts['username']
+    if drec['owner'] != username:
+        raise click.ClickException(f'user {username} cannot restart deployment {ident}')
     click.echo(f'Restarting deployment {ident}...', nl=False, err=True)
     response = cluster_call('deployment_restart', drec['id'], wait=wait or open, format='dataframe')
     click.echo('restarted.', err=True)

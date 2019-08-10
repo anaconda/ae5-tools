@@ -25,7 +25,7 @@ from .commands.user import user
 
 from .login import login_options, cluster, cluster_call, cluster_disconnect
 from .format import format_options, print_output
-from .utils import stash_defaults
+from .utils import stash_defaults, get_options
 from ..api import AEUsageError
 
 
@@ -62,7 +62,7 @@ def login(admin):
        initiate a login if necessary. Furthermore, if an active session already
        exists for the given hostname/username/password, this will do nothing.
     '''
-    cluster_disconnect(admin=admin)
+    cluster(admin)
 
 @cli.command()
 @click.option('--admin', is_flag=True, help='Perform a KeyCloak admin login instead of a user login.')
@@ -95,7 +95,8 @@ def call(path):
           deployment2/test/me -> https://deployment2.anaconda.test.com/test/me
        
        There is no input validation, nor is there a guarantee that the output will
-       be compatible with the generic formatting logic.
+       be compatible with the generic formatting logic. Only GET calls are currently
+       supported.
     '''
     if path.startswith('/'):
         subdomain = None
@@ -103,7 +104,8 @@ def call(path):
         subdomain, path = path.split('/', 1)
     else:
         subdomain, path = path, ''
-    result = cluster_call('_api', 'get', '/' + path.lstrip('/'), format='dataframe', subdomain=subdomain)
+    format = get_options().get('format')
+    result = cluster_call('_api', 'get', '/' + path.lstrip('/'), format=format, subdomain=subdomain)
     print_output(result)
 
 

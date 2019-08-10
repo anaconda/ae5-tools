@@ -3,6 +3,7 @@ import time
 import io
 import re
 import os
+import sys
 import json
 import pandas as pd
 from lxml import html
@@ -34,6 +35,8 @@ _DTYPES = {'created': 'datetime', 'updated': 'datetime',
 
 
 class AEAuthenticationError(RuntimeError):
+    def __init__(self):
+        super(AEAuthenticationError, self).__init__('Invalid username or password.')
     pass
 
 
@@ -53,6 +56,16 @@ class AEUnexpectedResponseError(RuntimeError):
             msg.append(f'  json: {kwargs["json"]}')
         super(AEUnexpectedResponseError, self).__init__('\n'.join(msg))
     pass
+
+
+def _password_prompt(key, last_valid=True):
+    if not last_valid:
+        print('Invalid username or password; please try again.', file=sys.stderr)
+    while True:
+        password = getpass.getpass(f'Password for {key}: ')
+        if password:
+            return password
+        print('Must supply a password.', file=sys.stderr)
 
 
 class AESessionBase(object):
@@ -91,21 +104,14 @@ class AESessionBase(object):
         self.persist = persist
         self.prefix = prefix.lstrip('/')
         self.dataframe = dataframe
-        if password_prompt:
-            self._password_prompt = password_prompt
+        if password_prompt is None:
+            password_prompt = _password_prompt
+        self._password_prompt = password_prompt
         self.connect(password, retry)
 
     def __del__(self):
         if not self.persist and self.connected:
             self.disconnect()
-
-    @staticmethod
-    def _password_prompt(key):
-        while True:
-            password = getpass.getpass(f'Password for {key}: ')
-            if password:
-                return password
-            print('Must supply a password.')
 
     def connect(self, password=None, retry=True, persist=True):
         self.connected = False
@@ -113,6 +119,7 @@ class AESessionBase(object):
         self.session.verify = False
         if isinstance(password, LWPCookieJar):
             self.session.cookies = password
+            password = None
         else:
             self.session.cookies = LWPCookieJar()
             if self.persist:
@@ -121,9 +128,19 @@ class AESessionBase(object):
             if not retry:
                 return None
             key = f'{self.username}@{self.hostname}'
-            if password is None or isinstance(password, LWPCookieJar):
-                password = self._password_prompt(key)
-            self._connect(password)
+            need_password = password is None
+            last_valid = True
+            while True:
+                try:
+                    if need_password:
+                        password = self._password_prompt(key, last_valid)
+                    self._connect(password)
+                except AEAuthenticationError as exc:
+                    if need_password:
+                        last_valid = False
+                        continue
+                    raise
+                break
             if not self._connected():
                 raise RuntimeError(f'Failed to create session for {key}')
         self.connected = True
@@ -183,8 +200,11 @@ class AESessionBase(object):
                 return response
             if format == 'blob':
                 return response.content
-            if format == 'text' or response.headers['content-type'] != 'application/json':
+            if format == 'text':
                 return response.text
+            ctype = response.headers['content-type']
+            if not ctype.endswith('json'):
+                raise AEUsageError(f'Content type {ctype} not compatible with json format')
             response = response.json()
         if format is None and columns:
             format = 'dataframe' if self.dataframe else 'json'
@@ -260,7 +280,7 @@ class AEUserSession(AESessionBase):
         resp = self._post(login_path, data={'username': self.username, 'password': password}, format='text')
         elems = html.fromstring(resp).find_class('kc-feedback-text')
         if elems:
-            raise AEAuthenticationError(elems[0].text)
+            raise AEAuthenticationError()
 
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
@@ -581,7 +601,7 @@ class AEUserSession(AESessionBase):
             self._join_collaborators('deployments', response)
         if endpoints and not internal:
             for record in response:
-                if record['url']:
+                if record.get('url'):
                     record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(response, format, _D_COLUMNS)
 
@@ -590,11 +610,13 @@ class AEUserSession(AESessionBase):
         self._join_projects(record)
         if collaborators:
             self._join_collaborators('deployments', record)
-        record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
+        if record.get('url'):
+            record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(record, format, _D_COLUMNS)
 
     def endpoint_list(self, format=None):
-        response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')['data']
+        response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')
+        response = response['data']
         self._join_projects(response, None)
         for rec in response:
             rec['deployment_id'] = 'a2-' + rec['deployment_id'] if rec['deployment_id'] else ''
@@ -681,9 +703,15 @@ class AEUserSession(AESessionBase):
     def deployment_restart(self, ident, wait=True, format=None):
         id, record = self._id('deployments', ident)
         collab = self.deployment_collaborators(id, format='json')
+        if record.get('url'):
+            endpoint = record['url'].split('/', 3)[2].split('.', 1)[0]
+            if id.endswith(endpoint):
+                endpoint = None
+        else:
+            endpoint = None
         self._delete(f'deployments/{id}', format='response')
         return self.deployment_start(record['project_id'],
-                                     endpoint=record['endpoint'], command=record['command'],
+                                     endpoint=endpoint, command=record['command'],
                                      resource_profile=record['resource_profile'], public=record['public'],
                                      collaborators=collab, wait=wait, format=format)
 
@@ -761,6 +789,8 @@ class AEAdminSession(AESessionBase):
                                        'grant_type': 'password',
                                        'client_id': 'admin-cli'},
                                  format='json', pass_errors=True)
+        if self._sdata.get('error_description') == 'Invalid user credentials':
+            raise AEAuthenticationError()
         self._set_header()
 
     def _disconnect(self):
