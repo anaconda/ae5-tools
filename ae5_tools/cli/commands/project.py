@@ -1,6 +1,6 @@
 import click
 
-from ..utils import add_param, get_options
+from ..utils import add_param
 from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 from ...identifier import Identifier

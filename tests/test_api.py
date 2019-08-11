@@ -37,7 +37,7 @@ def user_project_list(user_session):
     project_list = user_session.project_list(collaborators=True)
     for r in project_list:
         if r['name'] == 'test_upload':
-            user_session.project_delete(r['id'])    
+            user_session.project_delete(r['id'])
     return [r for r in project_list if r['name'] != 'test_upload']
 
 
@@ -46,7 +46,7 @@ def user_project_list_imp(impersonate_session):
     project_list = impersonate_session.project_list(collaborators=True)
     for r in project_list:
         if r['name'] == 'test_upload':
-            impersonate_session.project_delete(r['id'])    
+            impersonate_session.project_delete(r['id'])
     return [r for r in project_list if r['name'] != 'test_upload']
 
 

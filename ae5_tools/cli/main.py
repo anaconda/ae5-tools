@@ -23,10 +23,9 @@ from .commands.job import job
 from .commands.run import run
 from .commands.user import user
 
-from .login import login_options, cluster, cluster_call, cluster_disconnect
+from .login import login_options, cluster_call, cluster_disconnect
 from .format import format_options, print_output
 from .utils import stash_defaults, get_options
-from ..api import AEException
 
 
 @click.group(invoke_without_command=True,
@@ -35,7 +34,6 @@ from ..api import AEException
 @format_options()
 @click.pass_context
 def cli(ctx):
-    obj = ctx.ensure_object(dict)
     if ctx.invoked_subcommand is None:
         ctx.invoke(repl)
 
@@ -87,7 +85,7 @@ def call(path):
     '''Make a generic API call. This is useful for experimentation with the
        AE5 API. However, it is particularly useful for accessing REST APIs
        delivered as private deployments, because it handles authentication.
-       
+
        The PATH argument looks like a standard URL path, without hostname or
        scheme. However, if the path does not begin with a slash '/', this
        component is assumed to be the subdomain for the deployment.
@@ -96,7 +94,7 @@ def call(path):
           /api/v2/runs -> https://anaconda.test.com/api/v2/runs
           deployment1  -> https://deployment1.anaconda.test.com/
           deployment2/test/me -> https://deployment2.anaconda.test.com/test/me
-       
+
        There is no input validation, nor is there a guarantee that the output will
        be compatible with the generic formatting logic. Only GET calls are currently
        supported.

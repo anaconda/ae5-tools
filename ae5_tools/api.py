@@ -637,8 +637,7 @@ class AEUserSession(AESessionBase):
         collabs = [c for c in collabs if c['id'] not in userid]
         if len(collabs) != ncollabs:
             self.deployment_collaborator_list_set(id, collabs)
-        perm = 'r' if read_only else 'rw'
-        collabs.extend({'id': u, 'type': 'r', 'permission': perm} for u in userid)
+        collabs.extend({'id': u, 'type': 'r', 'permission': 'r'} for u in userid)
         return self.deployment_collaborator_list_set(id, collabs, format=format)
 
     def deployment_collaborator_remove(self, ident, userid, format='json'):
@@ -670,7 +669,7 @@ class AEUserSession(AESessionBase):
         if response.get('error'):
             raise RuntimeError('Error starting deployment: {}'.format(response['error']['message']))
         if collaborators:
-             self.deployment_set_collaborators(response['id'], collaborators)
+            self.deployment_set_collaborators(response['id'], collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
         while wait and response['state'] in ('initial', 'starting'):
             time.sleep(5)
