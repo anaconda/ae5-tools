@@ -29,7 +29,7 @@ def admin_session():
 @pytest.fixture
 def impersonate_session(admin_session):
     username = _get_vars('AE5_USERNAME')
-    return admin_session.impersonate(username)
+    return AEUserSession(admin_session.hostname, username, admin_session)
 
 
 @pytest.fixture()
