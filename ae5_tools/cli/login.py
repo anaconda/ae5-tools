@@ -1,7 +1,7 @@
 import click
 
 from ..config import config
-from ..api import AESessionBase, AEUserSession, AEAdminSession
+from ..api import AESessionBase, AEUserSession, AEAdminSession, AEException
 from .utils import param_callback, click_text, get_options, persist_option
 
 
@@ -98,58 +98,42 @@ def get_account(admin=False):
     return hostname, username
 
 
-def click_password(key, last_valid=True):
-    if not last_valid:
-        click.echo('Invalid username or password; please try again.', err=True)
-    return click.prompt(f'Password for {key}', type=str, hide_input=True, err=True)
+def _click_auth_message(msg, nl=True):
+    click.echo(msg, err=True, nl=nl)
 
 
 SESSIONS = {}
 
 
-def cluster_connect(hostname, username, admin, retry):
+def cluster_connect(hostname, username, admin):
     opts = get_options()
     key = (hostname, username, admin)
     conn = SESSIONS.get(key)
     if conn is None:
-        if conn is not None:
-            conn.disconnect()
-            del sessions[key]
-            conn = None
-        AESessionBase._password_prompt = click_password
+        atype = 'admin' if admin else 'user'
+        click.echo(f'Connecting to {atype} account {username}@{hostname}.', err=True)
+        AESessionBase._auth_message = _click_auth_message
         try:
             session_save = not opts.get('no_saved_logins', False)
             if admin:
                 conn = AEAdminSession(hostname, username, opts.get('admin_password'),
-                                      password_prompt=click_password, retry=retry,
                                       persist=session_save)
             else:
-                impersonate = opts.get('impersonate', False)
-                conn = AEUserSession(hostname, username, opts.get('password'),
-                                     retry=retry and not impersonate,
-                                     password_prompt=click_password,
+                password = opts.get('password')
+                if not password and opts.get('impersonate', False):
+                    password = cluster(True)
+                conn = AEUserSession(hostname, username, password,
                                      persist=session_save)
-                if retry and impersonate and not conn.connected:
-                    click.echo(f'Impersonating {username}@{hostname}...', err=True)
-                    conn = cluster(True, retry).impersonate(username)
-            if conn is not None:
-                if conn.connected:
-                    SESSIONS[key] = conn
-                else:
-                    conn = None
-        except ValueError as e:
+            SESSIONS[key] = conn
+        except (ValueError, AEException) as e:
             raise click.ClickException(str(e))
-        if conn is not None and conn.connected:
-            click.echo(f'Connected as {username}@{hostname}.', err=True)
-        else:
-            click.echo(f'No active connection for {username}@{hostname}.', err=True)
     return SESSIONS.get(key)
 
 
 def cluster_disconnect(admin=False):
     hostname, username = get_account(admin=admin)
-    conn = cluster_connect(hostname, username, admin, False)
-    if conn is not None:
+    conn = cluster_connect(hostname, username, admin)
+    if conn is not None and conn.connected:
         conn.disconnect()
         click.echo(f'Logged out as {username}@{hostname}.', err=True)
         del SESSIONS[(hostname, username, admin)]
@@ -157,12 +141,12 @@ def cluster_disconnect(admin=False):
 
 def cluster(admin=False, retry=True):
     hostname, username = get_account(admin=admin)
-    return cluster_connect(hostname, username, admin, retry)
+    return cluster_connect(hostname, username, admin)
 
 
 def cluster_call(method, *args, **kwargs):
     try:
         c = cluster(admin=kwargs.pop('admin', False))
         return getattr(c, method)(*args, **kwargs)
-    except Exception as e:
+    except AEException as e:
         raise click.ClickException(str(e))

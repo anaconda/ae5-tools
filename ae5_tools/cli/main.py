@@ -26,7 +26,7 @@ from .commands.user import user
 from .login import login_options, cluster, cluster_call, cluster_disconnect
 from .format import format_options, print_output
 from .utils import stash_defaults, get_options
-from ..api import AEUsageError
+from ..api import AEException
 
 
 @click.group(invoke_without_command=True,
@@ -62,7 +62,10 @@ def login(admin):
        initiate a login if necessary. Furthermore, if an active session already
        exists for the given hostname/username/password, this will do nothing.
     '''
-    cluster(admin)
+    # Execute a simple API call to force authentication
+    call = 'user_list' if admin else 'run_list'
+    cluster_call(call, admin=admin)
+
 
 @cli.command()
 @click.option('--admin', is_flag=True, help='Perform a KeyCloak admin login instead of a user login.')
