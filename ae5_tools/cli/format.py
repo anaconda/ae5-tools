@@ -123,30 +123,30 @@ def filter_df(df, filter, columns=None):
         missing = '\n  - '.join(set(columns) - set(df.columns))
         if missing:
             raise click.UsageError(f'One or more of the requested columns were not found:\n  - {missing}')
-    mask = None
-    if filter:
-        if not isinstance(filter, tuple):
-            filter = filter.split(',')
-        for filt1 in filter:
-            mask1 = None
-            for filt2 in filt1.split('|'):
-                mask2 = None
-                for filt3 in filt2.split('&'):
-                    parts = re.split(r'(==?|!=|>=?|<=?)', filt3.strip())
+    mask0 = None
+    for filt1 in filter:
+        mask1 = None
+        for filt2 in filt1.split(','):
+            mask2 = None
+            for filt3 in filt2.split('|'):
+                mask3 = None
+                for filt4 in filt3.split('&'):
+                    parts = re.split(r'(==?|!=|>=?|<=?)', filt4.strip())
                     if len(parts) != 3:
-                        raise click.UsageError(f'Invalid filter string: {filter_and}\n   Required format: <fieldname><op><value>')
+                        raise click.UsageError(f'Invalid filter string: {filt4}\n   Required format: <fieldname><op><value>')
                     field, op, value = list(map(str.strip, parts))
                     if field not in df.columns:
                         raise click.UsageError(f'Invalid filter field: {field}')
                     op = OPS[op]
-                    mask3 = [op(str(row), value) for row in df[field]]
-                    mask2 = mask3 if mask2 is None else [m1 and m2 for m1, m2 in zip(mask2, mask3)]
-                mask1 = mask2 if mask1 is None else [m1 or m2 for m1, m2 in zip(mask1, mask2)]
-            mask = mask1 if mask is None else [m1 and m2 for m1, m2 in zip(mask, mask1)]
+                    mask4 = [op(str(row), value) for row in df[field]]
+                    mask3 = mask4 if mask3 is None else [m1 and m2 for m1, m2 in zip(mask3, mask4)]
+                mask2 = mask3 if mask2 is None else [m1 or m2 for m1, m2 in zip(mask2, mask3)]
+            mask1 = mask2 if mask1 is None else [m1 and m2 for m1, m2 in zip(mask1, mask2)]
+        mask0 = mask1 if mask0 is None else [m1 and m2 for m1, m2 in zip(mask0, mask1)]
     if columns:
         df = df[columns]
-    if mask:
-        df = df.loc[mask, :]
+    if mask0:
+        df = df.loc[mask0, :]
     return df
 
 
@@ -212,23 +212,31 @@ def print_df(df, header=True, width=0):
 
 
 def print_output(result):
+    opts = get_options()
+    fmt = opts.get('format')
+    if isinstance(result, (list, dict)):
+        if fmt == 'text':
+            result = json.dumps(result)
+        elif fmt in ('json', None):
+            result = json.dumps(result, indent=2, sort_keys=False)
+        else:
+            raise click.UsageError(f'Invalid format for json data: {fmt}')
     if isinstance(result, str):
         print(result)
         return
-    opts = get_options()
     is_single = isinstance(result, pd.Series)
     if is_single:
         result = result.T.reset_index()
         result.columns = ['field', 'value']
-    if opts.get('format') != 'json':
+    if fmt != 'json':
         result = result.applymap(lambda x: json.dumps(x) if isinstance(x, (list, dict)) else str(x))
     if opts.get('filter') or opts.get('columns'):
         result = filter_df(result, opts.get('filter'), opts.get('columns'))
     if not is_single and 'sort' in opts:
         result = sort_df(result, opts.get('sort'))
-    if opts.get('format') == 'csv':
+    if fmt == 'csv':
         print(result.to_csv(index=False, header=opts.get('header', True)))
-    elif opts.get('format') == 'json':
+    elif fmt == 'json':
         if is_single:
             result = result.set_index('field').value
             orient = 'index'

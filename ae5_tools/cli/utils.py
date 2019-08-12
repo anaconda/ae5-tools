@@ -39,6 +39,7 @@ def persist_option(param, value):
     if 'defaults' in obj:
         obj['defaults'][param] = value
 
+
 def param_callback(ctx, param, value):
     if value in (None, ()):
         return
