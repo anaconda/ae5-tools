@@ -29,7 +29,9 @@ _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  
 _U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id']
 _T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
-_E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_id', 'project_url']
+_E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
+_R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
+_ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s'}
 
@@ -259,9 +261,10 @@ class AEUserSession(AESessionBase):
             resp = self.session.get(url, params=params)
             tree = html.fromstring(resp.text)
             form = tree.xpath("//form[@id='kc-form-login']")
-            url = form[0].action
-            self.session.post(url, data={'username': self.username, 'password': password})
-
+            if form:
+                url = form[0].action
+                self.session.post(url, data={'username': self.username, 'password': password})
+    
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
         # been captured for use elsewhere, it would no longer be useful.
@@ -333,24 +336,29 @@ class AEUserSession(AESessionBase):
 
     def _id_or_name(self, type, ident, quiet=False):
         matches = []
-        records = getattr(self, type.rstrip('s') + '_list')(format='json')
+        records = getattr(self, type.rstrip('s') + '_list')(format='json', internal=True)
+        has_id = any('id' in rec for rec in records)
         for rec in records:
-            if (fnmatch(rec['id'], ident) or fnmatch(rec['name'], ident)):
+            if (has_id and fnmatch(rec['id'], ident) or fnmatch(rec['name'], ident)):
                 matches.append(rec)
-        if len(matches) > 1:
+        if len(matches) > 1 and has_id:
             attempt = [rec for rec in matches if fnmatch(rec['id'], ident)]
             if len(attempt) == 1:
                 matches = attempt
         if len(matches) == 1:
             rec = matches[0]
-            id = rec['id']
+            id = rec.get('id', rec['name'])
         elif quiet:
             id, rec = None, None
         else:
+            tstr = type.replace('_', ' ')
             pfx = 'Multiple' if len(matches) else 'No'
-            msg = f'{pfx} {type}s found matching "{ident}"'
+            msg = f'{pfx} {tstr}s found matching "{ident}"'
             if matches:
-                matches = [f'{r["id"]}: {r["name"]}' for r in matches]
+                if has_id:
+                    matches =[f'{r["id"]}: {r["name"]}' for r in matches]
+                else:
+                    matches =[r["name"] for r in matches]
                 msg += ':\n  - ' + '\n  - '.join(matches)
             raise ValueError(msg)
         return id, rec
@@ -366,6 +374,33 @@ class AEUserSession(AESessionBase):
         if collaborators:
             self._join_collaborators('projects', record)
         return self._format_response(record, format=format, columns=_P_COLUMNS)
+
+    def resource_profile_list(self, internal=False, format=None):
+        response = self._get('projects/actions', params={'q':'create_action'}, format='json')
+        profiles = response[0]['resource_profiles']
+        for profile in profiles:
+            profile['description'], params = profile['description'].rsplit(' (', 1)
+            for param in params.rstrip(')').split(', '):
+                k, v = param.split(': ', 1)
+                profile[k.lower()] = v
+            if 'gpu' not in profile:
+                profile['gpu'] = 0
+        return self._format_response(profiles, format=format, columns=_R_COLUMNS)
+
+    def resource_profile_info(self, name, format=None):
+        id, rec = self._id_or_name('resource_profile', name)
+        return self._format_response(rec, format=format, columns=_R_COLUMNS)
+
+    def editor_list(self, internal=False, format=None):
+        response = self._get('projects/actions', params={'q':'create_action'}, format='json')[0]
+        editors = response['editors']
+        for rec in editors:
+            rec['packages'] = ' '.join(rec['packages'])
+        return self._format_response(editors, format=format, columns=_ED_COLUMNS)
+
+    def editor_info(self, name, format=None):
+        id, rec = self._id_or_name('editor', name)
+        return self._format_response(rec, format=format, columns=_ED_COLUMNS)
 
     def sample_list(self, format=None):
         result = []
@@ -438,7 +473,9 @@ class AEUserSession(AESessionBase):
 
     def project_deployments(self, ident, format=None):
         id, _ = self._id('projects', ident)
-        return self._get(f'projects/{id}/deployments', format=format, columns=_D_COLUMNS)
+        response = self._get(f'projects/{id}/deployments', format='json')
+        self._fix_endpoints(response)
+        return self._format_response(response, format=format, columns=_D_COLUMNS)
 
     def project_jobs(self, ident, format=None):
         id, _ = self._id('projects', ident)
@@ -528,15 +565,17 @@ class AEUserSession(AESessionBase):
                 response['name'] = project['name']
             response['project_id'] = pid
         elif response:
-            if nameprefix or 'name' not in response[0]:
-                pnames = {x['id']: x['name'] for x in self._get('projects', format='json')}
+            pnames = {x['id']: x['name'] for x in self._get('projects', format='json')}
             for rec in response:
                 pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
-                if nameprefix or 'name' not in rec:
-                    if 'name' in rec:
-                        rec[f'{nameprefix}_name'] = rec['name']
-                    rec['name'] = pnames.get(pid, '')
-                rec['project_id'] = pid
+                pname = pnames.get(pid)
+                if nameprefix:
+                    rec[f'{nameprefix}_name'] = rec['name']
+                if pname:
+                    rec['name'] = pname
+                    rec['project_id'] = pid
+                else:
+                    rec['project_id'] = rec['name'] = ''
 
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
@@ -545,6 +584,14 @@ class AEUserSession(AESessionBase):
         elif response:
             for rec in response:
                 self._join_collaborators(what, rec)
+
+    def _fix_endpoints(self, response):
+        if isinstance(response, dict):
+            if response.get('url'):
+                response['endpoint'] = response['url'].split('/', 3)[2].split('.', 1)[0]
+        else:
+            for record in response:
+                self._fix_endpoints(record)
 
     def session_list(self, internal=False, format=None):
         response = self._get('sessions', format='json')
@@ -580,9 +627,7 @@ class AEUserSession(AESessionBase):
         if collaborators:
             self._join_collaborators('deployments', response)
         if endpoints and not internal:
-            for record in response:
-                if record.get('url'):
-                    record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
+            self._fix_endpoints(response)
         return self._format_response(response, format, _D_COLUMNS)
 
     def deployment_info(self, ident, collaborators=False, format=None, quiet=False):
@@ -594,17 +639,28 @@ class AEUserSession(AESessionBase):
             record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(record, format, _D_COLUMNS)
 
-    def endpoint_list(self, format=None):
+    def endpoint_list(self, format=None, internal=False):
         response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')
         response = response['data']
-        self._join_projects(response, None)
+        deps = self.deployment_list()
+        dmap = {drec['endpoint']: drec for drec in deps if drec['endpoint']}
+        pnames = {prec['id']: prec['name'] for prec in self.project_list()}
+        good_records = []
         for rec in response:
-            rec['deployment_id'] = 'a2-' + rec['deployment_id'] if rec['deployment_id'] else ''
+            drec = dmap.get(rec['id'])
+            if drec:
+                rec['project_url'] = drec['project_url']
+                rec['project_name'], rec['project_id'] = drec['project_name'], drec['project_id']
+                rec['name'], rec['deployment_id'] = drec['name'], drec['id']
+                rec['owner'] = drec['owner']
+            else:
+                rec['name'], rec['deployment_id'] = '', ''
+                rec['project_id'] = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
+                rec['project_name'] = pnames.get(rec['project_id'], '')
         return self._format_response(response, format=format, columns=_E_COLUMNS)
 
     def endpoint_info(self, ident, quiet=False, format=None):
         id, rec = self._id_or_name('endpoint', ident, quiet=quiet)
-        rec['deployment_id'] = 'a2-' + rec['deployment_id'] if rec['deployment_id'] else ''
         return self._format_response(rec, format=format, columns=_E_COLUMNS)
 
     def deployment_collaborators(self, ident, format=None):
@@ -652,17 +708,18 @@ class AEUserSession(AESessionBase):
         collabs = [c for c in collabs if c['id'] not in userid]
         return self.deployment_collaborator_list_set(id, collabs, format=format)
 
-    def deployment_start(self, ident, endpoint=None, command=None,
+    def deployment_start(self, ident, name=None, endpoint=None, command=None,
                          resource_profile=None, public=False,
                          collaborators=None, wait=True, format=None):
         id, rev, prec, rrec = self._revision(ident)
-        data = {'name': prec['name'],
-                'source': rrec['url'],
+        data = {'source': rrec['url'],
                 'revision': rrec['id'],
                 'resource_profile': resource_profile or prec['resource_profile'],
                 'command': command or rrec['commands'][0]['id'],
                 'public': bool(public),
                 'target': 'deploy'}
+        if name:
+            data['name'] = name
         if endpoint:
             data['static_endpoint'] = endpoint
         response = self._post(f'projects/{id}/deployments', json=data, format='json')

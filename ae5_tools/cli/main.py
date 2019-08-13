@@ -18,7 +18,9 @@ from .commands.account import account
 from .commands.session import session
 from .commands.sample import sample
 from .commands.endpoint import endpoint
+from .commands.editor import editor
 from .commands.deployment import deployment
+from .commands.resource_profile import resource_profile
 from .commands.job import job
 from .commands.run import run
 from .commands.user import user
@@ -119,6 +121,8 @@ cli.add_command(job)
 cli.add_command(run)
 cli.add_command(account)
 cli.add_command(user)
+cli.add_command(resource_profile)
+cli.add_command(editor)
 
 
 def main():
