@@ -124,7 +124,7 @@ def filter_df(df, filter, columns=None):
         if missing:
             raise click.UsageError(f'One or more of the requested columns were not found:\n  - {missing}')
     mask0 = None
-    for filt1 in filter:
+    for filt1 in filter or ():
         mask1 = None
         for filt2 in filt1.split(','):
             mask2 = None
