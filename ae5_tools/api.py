@@ -803,8 +803,8 @@ class AEUserSession(AESessionBase):
         return self._post(f'jobs/{id}/unpause', format=format, columns=_J_COLUMNS)
 
     def job_create(self, ident, schedule=None, name=None, command=None,
-                   resource_profile=None, variables=None,
-                   run=False, wait=False, cleanup=False, show_run=False, format=None):
+                   resource_profile=None, variables=None, run=False,
+                   wait=False, cleanup=False, show_run=False, format=None):
         if cleanup and schedule:
             raise ValueError('cannot use cleanup=True with a scheduled job')
         if cleanup and (not run or not wait):
