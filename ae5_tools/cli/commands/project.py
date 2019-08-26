@@ -1,6 +1,6 @@
 import click
 
-from ..utils import add_param
+from ..utils import add_param, ident_filter
 from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 from ...identifier import Identifier
@@ -21,11 +21,10 @@ project.add_command(revision)
 
 
 @project.command()
-@click.argument('project', required=False)
-@click.option('--collaborators', is_flag=True, help='Include the list of collaborators. This adds a separate API call for each project, so for performance reasons it is off by default.')
+@ident_filter('project')
 @format_options()
 @login_options()
-def list(project, collaborators):
+def list():
     '''List available projects.
 
        By default, lists all projects visible to the authenticated user.
@@ -33,10 +32,7 @@ def list(project, collaborators):
        supplying an optional PROJECT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    result = cluster_call('project_list', collaborators=collaborators, format='dataframe')
-    if project:
-        add_param('filter', Identifier.from_string(project).project_filter())
-    print_output(result)
+    cluster_call('project_list', cli=True)
 
 
 @project.command()
@@ -49,8 +45,7 @@ def info(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_info', project, collaborators=True, format='dataframe')
-    print_output(result)
+    cluster_call('project_info', project, cli=True)
 
 
 @project.command()
@@ -63,8 +58,7 @@ def jobs(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_jobs', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_jobs', project, cli=True)
 
 
 @project.command(short_help='Retrieve the project\'s runs.')
@@ -77,8 +71,7 @@ def runs(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_collaborators', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_runs', project, cli=True)
 
 
 @project.command()
@@ -91,8 +84,7 @@ def sessions(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_sessions', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_sessions', project, cli=True)
 
 
 @project.command()
@@ -105,8 +97,7 @@ def deployments(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_deployments', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_deployments', project, cli=True)
 
 
 @project.command()
@@ -124,8 +115,7 @@ def activity(project, limit, all):
        By default, the latest 10 records will be returned. This behavior can be
        adjusted using the --limit or --all options.
     '''
-    result = cluster_call('project_activity', project, limit=0 if all else limit, format='dataframe')
-    print_output(result)
+    cluster_call('project_activity', project, limit=0 if all else limit, cli=True)
 
 
 @project.command()
@@ -141,9 +131,7 @@ def patch(project, **kwargs):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    kwargs['format'] = 'dataframe'
-    result = cluster_call('project_patch', project, **kwargs)
-    print_output(result)
+    cluster_call('project_patch', project, **kwargs, cli=True)
 
 
 @project.command()
@@ -156,8 +144,7 @@ def status(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_activity', project, latest=True, format='dataframe')
-    print_output(result)
+    cluster_call('project_activity', project, latest=True, cli=True)
 
 
 @project.command()
@@ -192,8 +179,7 @@ def upload(filename, name, tag, no_wait):
        the file. This can be overridden by using the --name option. The
        name must not be the same as an existing project.
     '''
-    result = cluster_call('project_upload', filename, name=name, tag=tag, wait=not no_wait, format='dataframe')
-    print_output(result)
+    cluster_call('project_upload', filename, name=name, tag=tag, wait=not no_wait, cli=True)
 
 
 @project.command()
@@ -244,9 +230,7 @@ def delete(project, yes):
     '''
     result = cluster_call('project_info', project, format='json')
     ident = Identifier.from_record(result)
-    if not yes:
-        yes = click.confirm(f'Delete project {ident}', err=True)
-    if yes:
-        click.echo(f'Deleting project {ident}...', nl=False, err=True)
-        result = cluster_call('project_delete', result['id'])
-        click.echo('deleted.', err=True)
+    cluster_call('project_delete', result['id'],
+                 confirm=None if yes else f'Delete project {ident}',
+                 prefix=f'Deleting project {ident}...',
+                 postfix='deleted.', cli=True)

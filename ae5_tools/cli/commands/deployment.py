@@ -3,7 +3,7 @@ import webbrowser
 import re
 
 from ..login import cluster_call, login_options
-from ..utils import add_param, get_options
+from ..utils import add_param, ident_filter, get_options
 from ..format import print_output, format_options
 from ...identifier import Identifier
 from .deployment_collaborator import collaborator
@@ -21,11 +21,10 @@ deployment.add_command(collaborator)
 
 
 @deployment.command()
-@click.argument('deployment', required=False)
-@click.option('--collaborators', is_flag=True, help='Include the list of collaborators. This adds a separate API call for each project, so for performance reasons it is off by default.')
+@ident_filter('deployment')
 @format_options()
 @login_options()
-def list(deployment, collaborators):
+def list():
     '''List available projects.
 
        By default, lists all projects visible to the authenticated user.
@@ -33,36 +32,26 @@ def list(deployment, collaborators):
        supplying an optional DEPLOYMENT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    result = cluster_call('deployment_list', collaborators=collaborators, format='dataframe')
-    if deployment:
-        add_param('filter', Identifier.from_string(deployment).project_filter())
-    print_output(result)
-
-
-def single_deployment(deployment, collaborators=False):
-    ident = Identifier.from_string(deployment)
-    return cluster_call('deployment_info', ident, collaborators=collaborators, format='dataframe')
+    cluster_call('deployment_list', cli=True)
 
 
 @deployment.command()
 @click.argument('deployment')
-@click.option('--collaborators', is_flag=True, help='Include the list of collaborators. This adds a separate API call for each project, so for performance reasons it is off by default.')
 @format_options()
 @login_options()
-def info(deployment, collaborators):
+def info(deployment):
     '''Obtain information about a single deployment.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = single_deployment(deployment, collaborators)
-    print_output(result)
+    cluster_call('deployment_info', deployment, cli=True)
 
 
 @deployment.command()
 @click.argument('deployment')
-@click.option('--public', is_flag=True, help='Set the deployment to public.')
-@click.option('--private', is_flag=True, help='Set the deployment to private.')
+@click.option('--public', is_flag=True, help='Make the deployment public.')
+@click.option('--private', is_flag=True, help='Make the deployment private.')
 @format_options()
 @login_options()
 def patch(deployment, public, private):
@@ -75,16 +64,15 @@ def patch(deployment, public, private):
         raise click.ClickException('Cannot specify both --public and --private')
     if not public and not private:
         public = None
-    result = cluster_call('deployment_patch', deployment, public=public, format='dataframe')
-    print_output(result)
+    cluster_call('deployment_patch', deployment, public=public, cli=True)
 
 
 def _open(record, frame):
-    scheme, _, hostname, _ = record.project_url.split('/', 3)
+    scheme, _, hostname, _ = record['project_url'].split('/', 3)
     if frame:
-        url = f'{scheme}//{hostname}/deployments/detail/{record.id}/view'
+        url = f'{scheme}//{hostname}/deployments/detail/{record["id"]}/view'
     else:
-        url = record.url
+        url = record['url']
     webbrowser.open(url, 1, True)
 
 
@@ -96,9 +84,9 @@ def _open(record, frame):
 @click.option('--resource-profile', help='The resource profile to use for this deployment.')
 @click.option('--public', is_flag=True, help='Make the deployment public.')
 @click.option('--private', is_flag=True, help='Make the deployment private (the default).')
-@click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
-@click.option('--open/--no-open', default=False, help='Open a browser upon initialization. Implies --wait.')
-@click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
+@click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
+@click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
@@ -118,12 +106,12 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
        creation before returning. To return more quickly, use the --no-wait option.
     '''
     if public and private:
-        click.ClickException('Cannot specify both --public and --private')
-    prec = cluster_call('project_info', project, format='json')
+        raise click.ClickException('Cannot specify both --public and --private')
     if endpoint:
         endpoints = cluster_call('endpoint_list', format='json')
         if not re.match(r'[A-Za-z0-9-]+', endpoint):
             click.ClickException(f'Invalid endpoint: {endpoint}')
+        prec = cluster_call('project_info', project, format='json')
         for e in endpoints:
             if e['id'] != endpoint:
                 continue
@@ -133,25 +121,24 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
                 raise click.ClickException(f'Endpoint {endpoint} is claimed by user {e["owner"]}')
             elif e['project_id'] and e['project_id'] != prec['id']:
                 raise click.ClickException(f'Endpoint {endpoint} is claimed by project {e["project_name"]}')
-    ident = Identifier.from_record(prec)
     endpoint_s = f' {endpoint}' if endpoint else ''
-    click.echo(f'Starting deployment{endpoint_s} for {ident}...', nl=False, err=True)
-    response = cluster_call('deployment_start', ident,
+    response = cluster_call('deployment_start', ident=project, id_class='project',
                             name=name if name else None,
                             endpoint=endpoint, command=command,
                             resource_profile=resource_profile, public=public,
-                            wait=wait or open, format='dataframe')
-    click.echo('restarted.', err=True)
+                            wait=wait or open,
+                            prefix=f'Starting deployment{endpoint_s} for {{ident}}...',
+                            postfix='started.')
     if open:
         _open(response, frame)
     print_output(response)
 
 
-@deployment.command(short_help='Start a deployment for a project.')
+@deployment.command(short_help='Restart a deployment for a project.')
 @click.argument('deployment')
-@click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
-@click.option('--open/--no-open', default=False, help='Open a browser upon initialization. Implies --wait.')
-@click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
+@click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
+@click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
@@ -161,18 +148,12 @@ def restart(ctx, deployment, wait, open, frame):
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    drec = cluster_call('deployment_info', deployment, format='json')
-    ident = Identifier.from_record(drec)
-    opts = get_options()
-    username = opts['username']
-    if drec['owner'] != username:
-        raise click.ClickException(f'user {username} cannot restart deployment {ident}')
-    click.echo(f'Restarting deployment {ident}...', nl=False, err=True)
-    response = cluster_call('deployment_restart', drec['id'], wait=wait or open, format='dataframe')
-    click.echo('restarted.', err=True)
+    cluster_call('deployment_restart', ident=deployment,
+                 wait=wait or open,
+                 prefix='Restarting deployment {ident}...', 
+                 postfix='restarted.')
     if open:
         _open(response, frame)
-    print_output(response)
 
 
 @deployment.command(short_help='Stop a deployment.')
@@ -185,14 +166,10 @@ def stop(deployment, yes):
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = single_deployment(deployment)
-    ident = Identifier.from_record(result)
-    if not yes:
-        yes = click.confirm(f'Stop deployment {ident}', err=True)
-    if yes:
-        click.echo(f'Stopping {ident}...', nl=False, err=True)
-        cluster_call('deployment_stop', result.id)
-        click.echo('stopped.', err=True)
+    cluster_call('deployment_stop', ident=deployment,
+                 confirm='Stop deployment {ident}',
+                 prefix='Stopping {ident}...',
+                 postfix='stopped.')
 
 
 @deployment.command(short_help='Open a deployment in a browser.')
@@ -209,5 +186,5 @@ def open(deployment, frame):
        default. If you wish to the Anaconda Enterprise banner at the top
        of the window, use the --frame option.
     '''
-    result = single_deployment(deployment)
+    result = cluster_call('deployment_info', deployment, format='json')
     _open(result, frame)

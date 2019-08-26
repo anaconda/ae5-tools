@@ -25,9 +25,12 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
             return ValueError(f'Invalid identifier type: {type}')
 
     @classmethod
-    def from_string(self, idstr, quiet=False):
+    def from_string(self, idstr, no_revision=False, quiet=False):
         try:
-            rev_parts = idstr.rsplit(':', 1)
+            if no_revision:
+                rev_parts = (idstr,)
+            else:
+                rev_parts = idstr.rsplit(':', 1)
             if len(rev_parts) == 1 or rev_parts[1] == '*':
                 revision = ''
             else:
