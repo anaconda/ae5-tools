@@ -26,7 +26,7 @@ _S_COLUMNS = [            'name', 'owner',             'resource_profile',      
 _D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
-_U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id']
+_U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id', 'last-login']
 _T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
@@ -283,7 +283,7 @@ class AEUserSession(AESessionBase):
             resp = self.session.post(form[0].action, data=data)
             if 'Invalid username or password.' in resp.text:
                 self.session.cookies.clear()
-    
+
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
         # been captured for use elsewhere, it would no longer be useful.
@@ -954,7 +954,38 @@ class AEAdminSession(AESessionBase):
             json.dump(self._sdata, fp)
 
     def user_list(self, internal=False, format=None):
-        return self._get(f'users', format=format, columns=_U_COLUMNS)
+        users = pd.DataFrame(self._get(f'users', format='response').json()).rename(columns={'id':'userId'})
+        _events = self._get('events', params={'type':'LOGIN', 'max':10000, 'client':'anaconda-platform'},
+                            format='response').json()
+        for e in _events:
+            if 'identity_provider' in e['details']:
+                e['impersonate'] = False
+            else:
+                e['impersonate'] = True
+
+        events = pd.DataFrame(_events)
+        events = events.loc[~events['impersonate']]
+
+        events['time'] = pd.to_datetime(events['time'], unit='ms').dt.tz_localize('UTC')
+        events = events.merge(users, on='userId')
+        by_user = events.groupby('username', as_index=False)['time'].max().rename(columns={'time':"lastLogin"})
+
+        result = by_user.merge(users)
+        return self._as_response(result.to_dict(orient='records'), format=format, columns=_U_COLUMNS)
+
+    def _as_response(self, records, format, columns):
+        from requests.models import Response
+        import json
+
+        the_response = Response()
+        the_response.status_code = 200
+        the_response.headers['content-type'] = 'json'
+        the_response._content = bytes(json.dumps(records, default=str), encoding='utf-8')
+
+        return self._format_response(the_response, format=format, columns=columns)
+
+
+
 
     def user_info(self, user_or_id, format=None):
         if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
@@ -980,3 +1011,22 @@ class AEAdminSession(AESessionBase):
         finally:
             self.session.cookies.clear()
             self.session.headers = old_headers
+
+    def last_login(self, event_type='LOGIN', client='anaconda-platform', max_entries=10000):
+        events = self._get('events', params={'type':event_type, 'max':max_entries, 'client':'anaconda-platform'},
+                           format='dataframe')
+        events['time'] = pd.to_datetime(events['time'], unit='ms').dt.tz_localize('UTC')
+
+        users = self.user_list(format='dataframe').rename(columns={'id':'userId'})
+
+        events = events.merge(users, on='userId')
+
+        by_user = events.groupby('username')['time'].max().sort_values(ascending=True)
+        return by_user
+
+
+
+
+
+
+
