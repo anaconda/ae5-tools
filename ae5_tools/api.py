@@ -954,38 +954,30 @@ class AEAdminSession(AESessionBase):
             json.dump(self._sdata, fp)
 
     def user_list(self, internal=False, format=None):
-        users = pd.DataFrame(self._get(f'users', format='response').json()).rename(columns={'id':'userId'})
-        _events = self._get('events', params={'type':'LOGIN', 'max':10000, 'client':'anaconda-platform'},
-                            format='response').json()
+        users = pd.DataFrame(self._get(f'users', format='json')).rename(columns={'id':'userId'})
+
+        # add last-login event
+        _events = self._get('events',
+                            params={
+                                'type':'LOGIN',
+                                 'max':100000,
+                                 'client':'anaconda-platform'
+                            },
+                            format='json')
+
+        _no_impersonate = []
         for e in _events:
-            if 'response_mode' in e['details']:
-                e['impersonate'] = True
-            else:
-                e['impersonate'] = False
+            if 'response_mode' not in e['details']:
+                # response_mode means the login event
+                # was an impersonation
+                _no_impersonate.append(e)
 
-        events = pd.DataFrame(_events)
-        events = events.loc[~events['impersonate']]
+        events = pd.DataFrame(_no_impersonate)
+        by_user = events.groupby('userId', as_index=False)['time'].max().rename(columns={'time':"lastLogin"})
+        by_user['lastLogin'] = pd.to_datetime(by_user['lastLogin'], unit='ms').dt.tz_localize('UTC')
 
-        events['time'] = pd.to_datetime(events['time'], unit='ms').dt.tz_localize('UTC')
-        events = events.merge(users, on='userId')
-        by_user = events.groupby('username', as_index=False)['time'].max().rename(columns={'time':"lastLogin"})
-
-        result = by_user.merge(users)
-        return self._as_response(result.to_dict(orient='records'), format=format, columns=_U_COLUMNS)
-
-    def _as_response(self, records, format, columns):
-        from requests.models import Response
-        import json
-
-        the_response = Response()
-        the_response.status_code = 200
-        the_response.headers['content-type'] = 'json'
-        the_response._content = bytes(json.dumps(records, default=str), encoding='utf-8')
-
-        return self._format_response(the_response, format=format, columns=columns)
-
-
-
+        records = by_user.merge(users).to_dict(orient='records')
+        return self._format_response(records, format=format, columns=_U_COLUMNS)
 
     def user_info(self, user_or_id, format=None):
         if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
