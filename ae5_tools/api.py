@@ -1011,22 +1011,3 @@ class AEAdminSession(AESessionBase):
         finally:
             self.session.cookies.clear()
             self.session.headers = old_headers
-
-    def last_login(self, event_type='LOGIN', client='anaconda-platform', max_entries=10000):
-        events = self._get('events', params={'type':event_type, 'max':max_entries, 'client':'anaconda-platform'},
-                           format='dataframe')
-        events['time'] = pd.to_datetime(events['time'], unit='ms').dt.tz_localize('UTC')
-
-        users = self.user_list(format='dataframe').rename(columns={'id':'userId'})
-
-        events = events.merge(users, on='userId')
-
-        by_user = events.groupby('username')['time'].max().sort_values(ascending=True)
-        return by_user
-
-
-
-
-
-
-
