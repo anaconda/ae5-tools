@@ -250,7 +250,7 @@ def schedule(ctx, project, schedule, command, name, resource_profile, variable):
 @format_options()
 @login_options()
 @click.pass_context
-def run(ctx, project, command, name, resource_profile, variable, wait, show_run, cleanup):
+def run(ctx, project, command, name, resource_profile, variable):
     '''Execute a project as a run-once job.
 
     This command is a shortcut for the "ae5 job create" command when the intent is to
@@ -259,8 +259,6 @@ def run(ctx, project, command, name, resource_profile, variable, wait, show_run,
 
     For finer control over job behavior, use "ae5 job create" instead.'''
     from .job import create as job_create
-    cleanup = True if wait is None else wait
-    wait = cleanup if wait is None else cleanup
     ctx.invoke(job_create, project=project, schedule=None, command=command, name=name,
                resource_profile=resource_profile, variable=variable, run=True,
                wait=True, show_run=True, cleanup=True)

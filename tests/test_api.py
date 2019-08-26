@@ -42,6 +42,24 @@ def user_project_list(user_session):
 
 
 @pytest.fixture()
+def user_job_list(user_session):
+    job_list = user_session.job_list()
+    for r in job_list:
+        if r['name'].startswith('testjob'):
+            user_session.job_delete(r['id'])
+    return [r for r in job_list if not r['name'].startswith('testjob')]
+
+
+@pytest.fixture()
+def user_run_list(user_session):
+    job_list = user_session.run_list()
+    for r in job_list:
+        if r['name'].startswith('testjob'):
+            user_session.run_delete(r['id'])
+    return [r for r in job_list if not r['name'].startswith('testjob')]
+
+
+@pytest.fixture()
 def user_project_list_imp(impersonate_session):
     project_list = impersonate_session.project_list(collaborators=True)
     for r in project_list:
@@ -107,8 +125,10 @@ def test_project_download_upload_delete(user_session, project_set, user_project_
     assert not any(r['name'] == 'test_upload' for r in user_project_list)
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob')
+        fname2 = os.path.join(tempd, 'blob2')
         user_session.project_download(project_set[0]['id'], filename=fname)
-        user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
+        prec = user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
+        user_session.project_download(prec['id'], filename=fname2)
         for r in user_session.project_list():
             if r['name'] == 'test_upload':
                 user_session.project_delete(r['id'])
@@ -116,3 +136,36 @@ def test_project_download_upload_delete(user_session, project_set, user_project_
         else:
             assert False, 'Uploaded project could not be found'
     assert not any(r['name'] == 'test_upload' for r in user_session.project_list())
+
+
+def test_job_run1(user_session, user_job_list, user_run_list):
+    user_session.job_create('testproj3', name='testjob1', command='run', run=True, wait=True)
+    jrecs = [r for r in user_session.job_list(format='json') if r['name'] == 'testjob1']
+    assert len(jrecs) == 1, jrecs
+    rrecs = [r for r in user_session.run_list(format='json') if r['name'] == 'testjob1']
+    assert len(rrecs) == 1, rrecs
+    ldata1 = user_session.run_log(rrecs[0]['id'], format='text')
+    assert ldata1.endswith('Hello Anaconda Enterprise!\n'), repr(ldata1)
+    user_session.run_delete(rrecs[0]['id'])
+    user_session.job_delete(jrecs[0]['id'])
+    assert not any(r['name'] != 'testjob1' for r in user_session.job_list())
+    assert not any(r['name'] != 'testjob1' for r in user_session.run_list())
+
+
+def test_job_run2(user_session, user_job_list, user_run_list):
+    # Test cleanup mode and variables in jobs
+    variables = {'INTEGRATION_TEST_KEY_1': 'value1', 'INTEGRATION_TEST_KEY_2': 'value2'}
+    user_session.job_create('testproj3', name='testjob2', command='run_with_env_vars',
+                            variables=variables, run=True, wait=True, cleanup=True)
+    # The job record should have already been deleted
+    assert not any(r['name'] == 'testjob2' for r in user_session.job_list())
+    rrecs = [r for r in user_session.run_list(format='json') if r['name'] == 'testjob2']
+    assert len(rrecs) == 1, rrecs
+    ldata2 = user_session.run_log(rrecs[0]['id'], format='text')
+    # Confirm that the environment variables were passed through
+    outvars = dict(line.strip().replace(' ', '').split(':', 1)
+                   for line in ldata2.splitlines()
+                   if line.startswith('INTEGRATION_TEST_KEY_'))
+    assert variables == outvars, outvars
+    user_session.run_delete(rrecs[0]['id'])
+    assert not any(r['name'] == 'testjob2' for r in user_session.run_list())

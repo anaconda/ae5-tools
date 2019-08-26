@@ -546,6 +546,7 @@ class AEUserSession(AESessionBase):
                 raise RuntimeError('Project name must be supplied for binary input')
             name = basename(project_archive).split('.', 1)[0]
         try:
+            f = None
             if type(project_archive) == bytes:
                 f = io.BytesIO(project_archive)
             else:
@@ -555,7 +556,8 @@ class AEUserSession(AESessionBase):
                 data['tag'] = tag
             response = self._post('projects/upload', files={'project_file': f}, data=data, format='json')
         finally:
-            f.close()
+            if f is not None:
+                f.close()
         if response.get('error'):
             raise RuntimeError('Error uploading project: {}'.format(response['error']['message']))
         if wait:
