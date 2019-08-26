@@ -267,7 +267,9 @@ class AEUserSession(AESessionBase):
             form = tree.xpath("//form[@id='kc-form-login']")
             if form:
                 url = form[0].action
-                self.session.post(url, data={'username': self.username, 'password': password})
+                resp = self.session.post(url, data={'username': self.username, 'password': password})
+                if 'Invalid username or password.' in resp.text:
+                    self.session.cookies.clear()
     
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
