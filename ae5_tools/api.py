@@ -872,15 +872,6 @@ class AEUserSession(AESessionBase):
         response = self._patch(f'jobs/{id}', json=data, format='json')
         return self._format_response(response, format=format, columns=_J_COLUMNS)
 
-    def job_activity(self, ident, limit=0, latest=False, format=None):
-        id, _ = self._id('jobs', ident)
-        limit = 1 if latest else (999999 if limit <= 0 else limit)
-        params = {'sort': '-updated', 'page[size]': limit}
-        response = self._get(f'jobs/{id}/activity', params=params, format='json')['data']
-        if latest:
-            response = response[0]
-        return self._format_response(response, format=format, columns=_J_COLUMNS)
-
     def run_list(self, internal=False, format=None):
         return self._get('runs', format=format, columns=_J_COLUMNS)
 
