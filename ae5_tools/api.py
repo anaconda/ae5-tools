@@ -958,10 +958,10 @@ class AEAdminSession(AESessionBase):
         _events = self._get('events', params={'type':'LOGIN', 'max':10000, 'client':'anaconda-platform'},
                             format='response').json()
         for e in _events:
-            if 'identity_provider' in e['details']:
-                e['impersonate'] = False
-            else:
+            if 'response_mode' in e['details']:
                 e['impersonate'] = True
+            else:
+                e['impersonate'] = False
 
         events = pd.DataFrame(_events)
         events = events.loc[~events['impersonate']]
