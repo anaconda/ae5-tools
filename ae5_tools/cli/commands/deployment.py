@@ -14,6 +14,7 @@ from .deployment_collaborator import collaborator
 @format_options()
 @login_options()
 def deployment():
+    '''Commands related to project deployments.'''
     pass
 
 
@@ -25,9 +26,9 @@ deployment.add_command(collaborator)
 @format_options()
 @login_options()
 def list():
-    '''List available projects.
+    '''List available deployments.
 
-       By default, lists all projects visible to the authenticated user.
+       By default, lists all deployments visible to the authenticated user.
        Simple filters on owner, project name, or id can be performed by
        supplying an optional DEPLOYMENT argument. Filters on other fields may
        be applied using the --filter option.
@@ -40,7 +41,7 @@ def list():
 @format_options()
 @login_options()
 def info(deployment):
-    '''Obtain information about a single deployment.
+    '''Retrieve information about a single deployment.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
@@ -55,7 +56,7 @@ def info(deployment):
 @format_options()
 @login_options()
 def patch(deployment, public, private):
-    '''Change the deployment's public/private status.
+    '''Change a deployment's public/private status.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one deployment.

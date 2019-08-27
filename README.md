@@ -47,16 +47,17 @@ The package has the following particular dependencies:
 
 - Composite commands:
     - `account`: `list`
-    - `deployment`: `list`, `info`, `open`, `patch`, `start`, `stop`
+    - `deployment`: `info`, `list`, `open`, `patch`, `restart`, `start`, `stop`
       - `collaborator`: `list`, `info`, `add`, `remove`
-    - `endpoint`: `list`, `info`
-    - `job`: `info`, `list`, `stop`
-    - `project`: `activity`, `delete`, `deploy`, `deployments`, `info`, `jobs`,
-      `list`, `patch`, `runs`, `sessions`, `status`, `upload`
-      - `collaborator`: `list`, `info`, `add`, `remove`
+    - `editor`: `info`, `list`
+    - `endpoint`: `info`, `list`
+    - `job`: `create`, `delete`, `info`, `list`, `patch`, `run`, `runs`, `unpause`
+    - `project`: `activity`, `delete`, `deploy`, `deployments`, `download`, `info`, `jobs`,
+      `list`, `patch`, `run`, `runs`, `schedule`, `sessions`, `status`, `upload`
+      - `collaborator`: `add`, `info`, `list`, `remove`
       - `revision`: `list`, `info`, `download`
-    - `sample`: `list`, `info`
-    - `run`: `info`, `list`, `stop`
+    - `sample`: `info`, `list`
+    - `run`: `delete`, `info`, `list`, `log`, `stop`
     - `session`: `info`, `list`, `open`, `start`, `stop`
     - `user`: `info`, `list`
 - Simple commands: `call`, `login`, `logout`

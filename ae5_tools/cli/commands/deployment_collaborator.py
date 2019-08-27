@@ -9,6 +9,11 @@ from ..format import print_output, format_options
 @format_options()
 @login_options()
 def collaborator():
+    '''Commands related to collaborators on a deployment.
+
+       Since deployments are read-only, collaborators are simply those
+       users or groups who can access the deployment.
+    '''
     pass
 
 

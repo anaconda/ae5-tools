@@ -12,6 +12,7 @@ from ...identifier import Identifier
 @format_options()
 @login_options()
 def session():
+    '''Commands related to project development sessions.'''
     pass
 
 
@@ -35,7 +36,7 @@ def list():
 @format_options()
 @login_options()
 def info(session):
-    '''Obtain information about a single session.
+    '''Retreive information about a single session.
 
        The SESSION identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one session.

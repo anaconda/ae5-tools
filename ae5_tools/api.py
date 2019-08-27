@@ -140,14 +140,7 @@ class AESessionBase(object):
         self.connected = False
 
     def _format_kwargs(self, kwargs):
-        dataframe = kwargs.pop('dataframe', None)
-        format = kwargs.pop('format', None)
-        if dataframe is not None:
-            if format is None:
-                format = 'dataframe' if dataframe else 'json'
-            elif (format == 'dataframe') != dataframe:
-                raise RuntimeError('Conflicting "format" and "dataframe" specifications')
-        return format, kwargs.pop('columns', None)
+        return kwargs.pop('format', None), kwargs.pop('columns', None)
 
     def _format_dataframe(self, response, columns):
         if isinstance(response, dict):
@@ -188,10 +181,13 @@ class AESessionBase(object):
             if format == 'text':
                 return response.text
             ctype = response.headers['content-type']
-            if not ctype.endswith('json'):
+            if ctype.endswith('json'):
+                response = response.json()
+            elif format in ('dataframe', 'json'):
                 raise AEException(f'Content type {ctype} not compatible with json format')
-            response = response.json()
-        if columns and format == 'dataframe':
+            else:
+                return response.text
+        if format == 'dataframe' or format is None and columns:
             return self._format_dataframe(response, columns)
         return response
 
@@ -371,14 +367,14 @@ class AEUserSession(AESessionBase):
             raise ValueError(msg)
         return id, rec
 
-    def project_list(self, collaborators=True, internal=False, format=None):
+    def project_list(self, collaborators=False, internal=False, format=None):
         records = self._get('projects', format='json')
         if not internal:
             if collaborators:
                 self._join_collaborators('projects', records)
         return self._format_response(records, format=format, columns=_P_COLUMNS)
 
-    def project_info(self, ident, collaborators=False, format=None, quiet=False):
+    def project_info(self, ident, collaborators=True, format=None, quiet=False):
         id, record = self._id('projects', ident, quiet=quiet)
         if collaborators:
             self._join_collaborators('projects', record)

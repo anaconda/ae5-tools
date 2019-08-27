@@ -8,11 +8,12 @@ from .project_collaborator import collaborator
 from .project_revision import revision
 
 
-@click.group(short_help='activity, collaborator, delete, deploy, deployments, info, jobs, list, patch, revision, runs, sessions, status, upload',
+@click.group(short_help='activity, collaborator, delete, deploy, deployments, download, info, jobs, list, patch, revision, run, runs, schedule, sessions, status, upload',
              epilog='Type "ae5 project <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
 def project():
+    '''Commands related to user projects.'''
     pass
 
 
@@ -22,9 +23,10 @@ project.add_command(revision)
 
 @project.command()
 @ident_filter('project')
+@click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
 @format_options()
 @login_options()
-def list():
+def list(collaborators):
     '''List available projects.
 
        By default, lists all projects visible to the authenticated user.
@@ -32,7 +34,7 @@ def list():
        supplying an optional PROJECT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    cluster_call('project_list', cli=True)
+    cluster_call('project_list', collaborators=collaborators, cli=True)
 
 
 @project.command()

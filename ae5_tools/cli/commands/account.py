@@ -12,7 +12,7 @@ from ...config import config
 @login_options()
 @click.pass_context
 def account(ctx):
-    '''list'''
+    '''Commands related to the saved session information.'''
     pass
 
 

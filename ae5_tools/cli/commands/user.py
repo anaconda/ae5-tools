@@ -10,6 +10,10 @@ from ..format import print_output, format_options
 @format_options()
 @login_options()
 def user():
+    '''Commands related to user accounts.
+
+    These commands require the use of the KeyCloak administrator account.
+    '''
     pass
 
 
@@ -18,6 +22,7 @@ def user():
 @format_options()
 @login_options()
 def list(username):
+    '''List all users.'''
     result = cluster_call('user_list', format='dataframe', admin=True)
     if username:
         add_param('filter', f'username={username}')
@@ -29,5 +34,8 @@ def list(username):
 @format_options()
 @login_options()
 def info(username):
+    '''Retrieve information about a single user.
+
+    USERNAME must exactly match either one username or one KeyCloak user ID.'''
     result = cluster_call('user_info', username, format='dataframe', admin=True)
     print_output(result)
