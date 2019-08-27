@@ -9,6 +9,7 @@ import pandas as pd
 from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
+from datetime import datetime
 import getpass
 
 from .config import config
@@ -26,7 +27,7 @@ _S_COLUMNS = [            'name', 'owner',             'resource_profile',      
 _D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
-_U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id']
+_U_COLUMNS = ['username', 'email', 'lastLogin', 'firstName', 'lastName', 'id']
 _T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
@@ -283,7 +284,7 @@ class AEUserSession(AESessionBase):
             resp = self.session.post(form[0].action, data=data)
             if 'Invalid username or password.' in resp.text:
                 self.session.cookies.clear()
-    
+
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
         # been captured for use elsewhere, it would no longer be useful.
@@ -953,20 +954,52 @@ class AEAdminSession(AESessionBase):
         with open(self._filename, 'w') as fp:
             json.dump(self._sdata, fp)
 
-    def user_list(self, internal=False, format=None):
-        return self._get(f'users', format=format, columns=_U_COLUMNS)
+    def _get_last_login(self, urec):
+        time = urec.get('lastLogin', 0)
+        if time == 0:
+            params = {'type': 'LOGIN', 'user': urec['id'],
+                      'client': 'anaconda-platform'}
+            events = self._get('events', params=params, format='json')
+            time = next((e['time'] for e in events
+                         if 'response_mode' not in e['details']), 0)
+        urec['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
 
-    def user_info(self, user_or_id, format=None):
+    def user_list(self, internal=False, format=None):
+        users = self._get(f'users', format='json')
+        users = {u['id']: u for u in users}
+
+        params = {'type':'LOGIN', 'max':100000,
+                  'client':'anaconda-platform'}
+        events = self._get('events', params=params, format='json')
+        for e in events:
+            if 'response_mode' not in e['details']:
+                urec = users.get(e['userId'])
+                if urec and 'lastLogin' not in urec:
+                    urec['lastLogin'] = e['time']
+
+        users = list(users.values())
+        for urec in users:
+            # Give users who have did not have a login event in the
+            # last 100000 events one more dedicated search. For those
+            # that did find a login time, convert from numeric
+            self._get_last_login(urec)
+
+        return self._format_response(users, format=format, columns=_U_COLUMNS)
+
+    def user_info(self, user_or_id, internal=False, format=None):
         if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
             response = [self._get(f'users/{user_or_id}', format='json')]
         else:
             response = self._get(f'users?username={user_or_id}', format='json')
         if len(response) == 0:
             raise ValueError(f'Could not find user {user_or_id}')
-        return self._format_response(response[0], format, _U_COLUMNS)
+        response = response[0]
+        if not internal:
+            self._get_last_login(response)
+        return self._format_response(response, format, _U_COLUMNS)
 
     def impersonate(self, user_or_id):
-        record = self.user_info(user_or_id, format='json')
+        record = self.user_info(user_or_id, internal=True, format='json')
         old_headers = self.session.headers.copy()
         try:
             self._post(f'users/{record["id"]}/impersonation', format='response')
