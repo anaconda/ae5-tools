@@ -1,9 +1,10 @@
 import pytest
 
 import tempfile
+import time
 import os
 
-from ae5_tools.api import AEUserSession, AEAdminSession
+from ae5_tools.api import AEUserSession, AEAdminSession, AEUnexpectedResponseError
 
 
 def _get_vars(*vars):
@@ -57,6 +58,15 @@ def user_run_list(user_session):
         if r['name'].startswith('testjob'):
             user_session.run_delete(r['id'])
     return [r for r in job_list if not r['name'].startswith('testjob')]
+
+
+@pytest.fixture()
+def user_deploy_list(user_session):
+    deploy_list = user_session.deployment_list()
+    for r in deploy_list:
+        if r['name'] == 'testdeploy':
+            user_session.deployment_stop(r['id'])
+    return [r for r in deploy_list if not r['name'] == 'testdeploy']
 
 
 @pytest.fixture()
@@ -169,3 +179,24 @@ def test_job_run2(user_session, user_job_list, user_run_list):
     assert variables == outvars, outvars
     user_session.run_delete(rrecs[0]['id'])
     assert not any(r['name'] == 'testjob2' for r in user_session.run_list())
+
+
+def test_deploy(user_session, user_deploy_list):
+    assert not any(r['name'] == 'testdeploy' for r in user_session.deployment_list())
+    user_session.deployment_start('testproj3', name='testdeploy', endpoint='testendpoint',
+                                  command='default', public=False, wait=True)
+    drecs = [r for r in user_session.deployment_list(format='json') if r['name'] == 'testdeploy']
+    assert len(drecs) == 1, drecs
+    for attempt in range(3):
+        try:
+            ldata = user_session._get('/', subdomain='testendpoint', format='text')
+            break
+        except AEUnexpectedResponseError:
+            time.sleep(attempt * 5)
+            pass
+    else:
+        raise RuntimeError("Could not get the endpoint to respond")
+    assert ldata.strip() == 'Hello Anaconda Enterprise!', ldata
+    user_session.deployment_stop(drecs[0]['id'])
+    assert not any(r['name'] == 'testdeploy' for r in user_session.deployment_list())
+

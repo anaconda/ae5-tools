@@ -582,8 +582,8 @@ class AEUserSession(AESessionBase):
             for rec in response:
                 pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
                 pname = pnames.get(pid, '')
-                if nameprefix or 'name' not in response:
-                    if 'name' in response:
+                if nameprefix or 'name' not in rec:
+                    if 'name' in rec:
                         rec[f'{nameprefix}_name'] = rec['name']
                     rec['name'] = pname
                 else:
