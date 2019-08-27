@@ -44,6 +44,8 @@ class AEUnexpectedResponseError(AEException):
     def __init__(self, response, method, url, **kwargs):
         msg = [f'Unexpected response: {response.status_code} {response.reason}',
                f'  {method.upper()} {url}']
+        if response.headers:
+            msg.append(f'  headers: {response.headers}')
         if response.text:
             msg.append(f'  text: {response.text}')
         if 'params' in kwargs:
@@ -109,6 +111,9 @@ class AESessionBase(object):
     def __del__(self):
         if not self.persist and self.connected:
             self.disconnect()
+
+    def _is_login(self, response):
+        pass
 
     def authorize(self):
         key = f'{self.username}@{self.hostname}'
@@ -206,7 +211,7 @@ class AESessionBase(object):
         kwargs.update((('verify', False), ('allow_redirects', True)))
         if self.connected:
             response = getattr(self.session, method)(url, **kwargs)
-        if not self.connected or response.status_code == 401:
+        if not self.connected or response.status_code == 401 or self._is_login(response):
             self.authorize()
             response = getattr(self.session, method)(url, **kwargs)
         if 400 <= response.status_code:
@@ -251,21 +256,33 @@ class AEUserSession(AESessionBase):
     def _connected(self):
         return any(c.name == '_xsrf' for c in self.session.cookies)
 
+    def _is_login(self, response):
+        if response.status_code == 200:
+            ctype = response.headers['content-type']
+            if ctype.startswith('text/html'):
+                tree = html.fromstring(response.text)
+                form = tree.xpath("//form[@id='kc-form-login']")
+                return bool(form)
+
     def _connect(self, password):
         if isinstance(password, AEAdminSession):
             self.session.cookies = password.impersonate(self.username)
         else:
-            params = {'client_id': 'anaconda-platform', 'scope': 'openid',
-                      'response_type': 'code', 'redirect_uri': f'https://{self.hostname}/login'}
+            params = {'client_id': 'anaconda-platform',
+                      'scope': 'openid',
+                      'response_type': 'code',
+                      'redirect_uri': f'https://{self.hostname}/login'}
             url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth'
             resp = self.session.get(url, params=params)
             tree = html.fromstring(resp.text)
             form = tree.xpath("//form[@id='kc-form-login']")
-            if form:
-                url = form[0].action
-                resp = self.session.post(url, data={'username': self.username, 'password': password})
-                if 'Invalid username or password.' in resp.text:
-                    self.session.cookies.clear()
+            if not form:
+                # Already logged in, apparently?
+                return
+            data = {'username': self.username, 'password': password}
+            resp = self.session.post(form[0].action, data=data)
+            if 'Invalid username or password.' in resp.text:
+                self.session.cookies.clear()
     
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
