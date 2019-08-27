@@ -9,6 +9,7 @@ import pandas as pd
 from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
+from datetime import datetime
 import getpass
 
 from .config import config
@@ -26,7 +27,7 @@ _S_COLUMNS = [            'name', 'owner',             'resource_profile',      
 _D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
-_U_COLUMNS = ['username', 'email', 'firstName', 'lastName', 'id', 'last-login']
+_U_COLUMNS = ['username', 'email', 'lastLogin', 'firstName', 'lastName', 'id']
 _T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
@@ -953,43 +954,51 @@ class AEAdminSession(AESessionBase):
         with open(self._filename, 'w') as fp:
             json.dump(self._sdata, fp)
 
+    def _get_last_login(self, urec):
+        time = urec.get('lastLogin', 0)
+        if time == 0:
+            params = {'type': 'LOGIN', 'user': urec['id'],
+                      'client': 'anaconda-platform'}
+            events = self._get('events', params=params, format='json')
+            time = next((e['time'] for e in events
+                         if 'response_mode' not in e['details']), 0)
+        urec['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
+
     def user_list(self, internal=False, format=None):
-        users = pd.DataFrame(self._get(f'users', format='json')).rename(columns={'id':'userId'})
+        users = self._get(f'users', format='json')
+        users = {u['id']: u for u in users}
 
-        # add last-login event
-        _events = self._get('events',
-                            params={
-                                'type':'LOGIN',
-                                 'max':100000,
-                                 'client':'anaconda-platform'
-                            },
-                            format='json')
-
-        _no_impersonate = []
-        for e in _events:
+        params = {'type':'LOGIN', 'max':100000,
+                  'client':'anaconda-platform'}
+        events = self._get('events', params=params, format='json')
+        for e in events:
             if 'response_mode' not in e['details']:
-                # response_mode means the login event
-                # was an impersonation
-                _no_impersonate.append(e)
+                urec = users.get(e['userId'])
+                if urec and 'lastLogin' not in urec:
+                    urec['lastLogin'] = e['time']
 
-        events = pd.DataFrame(_no_impersonate)
-        by_user = events.groupby('userId', as_index=False)['time'].max().rename(columns={'time':"lastLogin"})
-        by_user['lastLogin'] = pd.to_datetime(by_user['lastLogin'], unit='ms').dt.tz_localize('UTC')
+        users = list(users.values())
+        for urec in users:
+            # Give users who have did not have a login event in the
+            # last 100000 events one more dedicated search
+            self._get_last_login(urec)
 
-        records = by_user.merge(users).to_dict(orient='records')
-        return self._format_response(records, format=format, columns=_U_COLUMNS)
+        return self._format_response(users, format=format, columns=_U_COLUMNS)
 
-    def user_info(self, user_or_id, format=None):
+    def user_info(self, user_or_id, internal=False, format=None):
         if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
             response = [self._get(f'users/{user_or_id}', format='json')]
         else:
             response = self._get(f'users?username={user_or_id}', format='json')
         if len(response) == 0:
             raise ValueError(f'Could not find user {user_or_id}')
-        return self._format_response(response[0], format, _U_COLUMNS)
+        response = response[0]
+        if not internal:
+            self._get_last_login(response)
+        return self._format_response(response, format, _U_COLUMNS)
 
     def impersonate(self, user_or_id):
-        record = self.user_info(user_or_id, format='json')
+        record = self.user_info(user_or_id, internal=True, format='json')
         old_headers = self.session.headers.copy()
         try:
             self._post(f'users/{record["id"]}/impersonation', format='response')
