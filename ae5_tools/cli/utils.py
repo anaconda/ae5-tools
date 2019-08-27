@@ -1,5 +1,7 @@
 import click
 
+from ..identifier import Identifier
+
 
 def add_param(param, value):
     ctx = click.get_current_context()
@@ -44,6 +46,16 @@ def param_callback(ctx, param, value):
     if value in (None, ()):
         return
     add_param(param.name.lower().replace('-', '_'), value)
+
+
+def ident_callback(ctx, param, value):
+    if value in (None, '', ()):
+        return
+    add_param('filter', Identifier.from_string(value).project_filter())
+
+
+def ident_filter(name):
+    return click.argument(name, expose_value=False, callback=ident_callback, required=False)
 
 
 def click_text(text):

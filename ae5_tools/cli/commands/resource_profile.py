@@ -9,6 +9,7 @@ from ..format import print_output, format_options
 @format_options()
 @login_options()
 def resource_profile():
+    '''Commands related to resource profiles.'''
     pass
 
 
@@ -16,7 +17,7 @@ def resource_profile():
 @format_options()
 @login_options()
 def list():
-    '''List the resource profiles.
+    '''List all availables resource profiles.
     '''
     result = cluster_call('resource_profile_list', format='dataframe')
     print_output(result)

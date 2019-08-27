@@ -9,6 +9,7 @@ from ..format import print_output, format_options
 @format_options()
 @login_options()
 def editor():
+    '''Commands related to development editors.'''
     pass
 
 

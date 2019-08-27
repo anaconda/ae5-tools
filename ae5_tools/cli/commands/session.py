@@ -2,7 +2,7 @@ import click
 import webbrowser
 
 from ..login import cluster_call, login_options
-from ..utils import add_param
+from ..utils import add_param, ident_filter
 from ..format import print_output, format_options
 from ...identifier import Identifier
 
@@ -12,14 +12,15 @@ from ...identifier import Identifier
 @format_options()
 @login_options()
 def session():
+    '''Commands related to project development sessions.'''
     pass
 
 
 @session.command(short_help='List active sessions.')
-@click.argument('session', required=False)
+@ident_filter('session')
 @format_options()
 @login_options()
-def list(session):
+def list():
     '''List sessions.
 
        By default, lists all sessions visible to the authenticated user.
@@ -27,15 +28,7 @@ def list(session):
        can be performed by supplying an optional SESSION argument. Filters
        on other fields may be applied using the --filter option.
     '''
-    result = cluster_call('session_list', format='dataframe')
-    if session:
-        add_param('filter', Identifier.from_string(session).project_filter(session=True))
-    print_output(result)
-
-
-def single_session(session):
-    ident = Identifier.from_string(session)
-    return cluster_call('session_info', ident, format='dataframe')
+    cluster_call('session_list', cli=True)
 
 
 @session.command(short_help='Obtain information about a single session.')
@@ -43,13 +36,12 @@ def single_session(session):
 @format_options()
 @login_options()
 def info(session):
-    '''Obtain information about a single session.
+    '''Retreive information about a single session.
 
        The SESSION identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one session.
     '''
-    result = single_session(session)
-    print_output(result)
+    cluster_call('session_info', session, cli=True)
 
 
 def _open(record, frame):
@@ -83,18 +75,15 @@ def start(ctx, project, editor, resource_profile, wait, open, frame):
     '''
     if not wait and open:
         raise click.UsageError('Options --no-wait and --open confict')
-    result = cluster_call('project_info', project, format='json')
     patches = {}
     for key, value in (('editor', editor), ('resource_profile', resource_profile)):
         if value and result.get(key) != value:
             patches[key] = value
     if patches:
-        cluster_call('project_patch', result['id'], **patches)
-    ident = Identifier.from_record(result)
-    click.echo(f'Starting session for {ident}...', nl=False, err=True)
-    response = cluster_call('session_start', result['id'], wait=wait, format='dataframe')
-    click.echo('started.', err=True)
-    print_output(response)
+        cluster_call('project_patch', project, **patches)
+    response = cluster_call('session_start', ident=project, id_class='project', wait=wait,
+                            prefix='Starting session for {ident}...',
+                            postfix='started.', cli=True)
     if open:
         _open(response, frame)
 
@@ -109,14 +98,10 @@ def stop(session, yes):
        The SESSION identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one session.
     '''
-    result = single_session(session)
-    ident = Identifier.from_record(result)
-    if not yes:
-        yes = click.confirm(f'Stop session {ident}', err=True)
-    if yes:
-        click.echo(f'Stopping {ident}...', nl=False, err=True)
-        cluster_call('session_stop', result.id)
-        click.echo('stopped.', err=True)
+    cluster_call('session_stop', ident=session,
+                 confirm='Stop session {ident}',
+                 prefix='Stopping {ident}...',
+                 postfix='stopped.', cli=True)
 
 
 @session.command(short_help='Open an existing session in a browser.')
@@ -133,5 +118,5 @@ def open(session, frame):
        Anaconda Enterprise project frame. To omit this frame and open only the
        session UI, use the --frameless option.
     '''
-    result = single_session(session)
+    result = cluster_call('session_info', session, format='json')
     _open(result, frame)

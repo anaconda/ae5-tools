@@ -9,6 +9,7 @@ from ..format import print_output, format_options
 @format_options()
 @login_options()
 def endpoint():
+    '''Commands related to static endpoints.'''
     pass
 
 

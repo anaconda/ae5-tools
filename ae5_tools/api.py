@@ -44,6 +44,10 @@ class AEUnexpectedResponseError(AEException):
     def __init__(self, response, method, url, **kwargs):
         msg = [f'Unexpected response: {response.status_code} {response.reason}',
                f'  {method.upper()} {url}']
+        if response.headers:
+            msg.append(f'  headers: {response.headers}')
+        if response.text:
+            msg.append(f'  text: {response.text}')
         if 'params' in kwargs:
             msg.append(f'  params: {kwargs["params"]}')
         if 'data' in kwargs:
@@ -108,6 +112,9 @@ class AESessionBase(object):
         if not self.persist and self.connected:
             self.disconnect()
 
+    def _is_login(self, response):
+        pass
+
     def authorize(self):
         key = f'{self.username}@{self.hostname}'
         need_password = self.password is None
@@ -138,14 +145,7 @@ class AESessionBase(object):
         self.connected = False
 
     def _format_kwargs(self, kwargs):
-        dataframe = kwargs.pop('dataframe', None)
-        format = kwargs.pop('format', None)
-        if dataframe is not None:
-            if format is None:
-                format = 'dataframe' if dataframe else 'json'
-            elif (format == 'dataframe') != dataframe:
-                raise RuntimeError('Conflicting "format" and "dataframe" specifications')
-        return format, kwargs.pop('columns', None)
+        return kwargs.pop('format', None), kwargs.pop('columns', None)
 
     def _format_dataframe(self, response, columns):
         if isinstance(response, dict):
@@ -179,15 +179,20 @@ class AESessionBase(object):
         if isinstance(response, requests.models.Response):
             if format == 'response':
                 return response
+            if len(response.content) == 0:
+                return None
             if format == 'blob':
                 return response.content
             if format == 'text':
                 return response.text
             ctype = response.headers['content-type']
-            if not ctype.endswith('json'):
+            if ctype.endswith('json'):
+                response = response.json()
+            elif format == 'json':
                 raise AEException(f'Content type {ctype} not compatible with json format')
-            response = response.json()
-        if columns and format == 'dataframe':
+            else:
+                return response.text
+        if format == 'dataframe':
             return self._format_dataframe(response, columns)
         return response
 
@@ -206,7 +211,7 @@ class AESessionBase(object):
         kwargs.update((('verify', False), ('allow_redirects', True)))
         if self.connected:
             response = getattr(self.session, method)(url, **kwargs)
-        if not self.connected or response.status_code == 401:
+        if not self.connected or response.status_code == 401 or self._is_login(response):
             self.authorize()
             response = getattr(self.session, method)(url, **kwargs)
         if 400 <= response.status_code:
@@ -251,19 +256,33 @@ class AEUserSession(AESessionBase):
     def _connected(self):
         return any(c.name == '_xsrf' for c in self.session.cookies)
 
+    def _is_login(self, response):
+        if response.status_code == 200:
+            ctype = response.headers['content-type']
+            if ctype.startswith('text/html'):
+                tree = html.fromstring(response.text)
+                form = tree.xpath("//form[@id='kc-form-login']")
+                return bool(form)
+
     def _connect(self, password):
         if isinstance(password, AEAdminSession):
             self.session.cookies = password.impersonate(self.username)
         else:
-            params = {'client_id': 'anaconda-platform', 'scope': 'openid',
-                      'response_type': 'code', 'redirect_uri': f'https://{self.hostname}/login'}
+            params = {'client_id': 'anaconda-platform',
+                      'scope': 'openid',
+                      'response_type': 'code',
+                      'redirect_uri': f'https://{self.hostname}/login'}
             url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth'
             resp = self.session.get(url, params=params)
             tree = html.fromstring(resp.text)
             form = tree.xpath("//form[@id='kc-form-login']")
-            if form:
-                url = form[0].action
-                self.session.post(url, data={'username': self.username, 'password': password})
+            if not form:
+                # Already logged in, apparently?
+                return
+            data = {'username': self.username, 'password': password}
+            resp = self.session.post(form[0].action, data=data)
+            if 'Invalid username or password.' in resp.text:
+                self.session.cookies.clear()
     
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
@@ -277,9 +296,10 @@ class AEUserSession(AESessionBase):
 
     def _id(self, type, ident, quiet=False):
         if isinstance(ident, str):
-            ident = Identifier.from_string(ident)
-        idtype = ident.id_type(ident.id) if ident.id else type
-        if idtype not in ('projects', type):
+            ident = Identifier.from_string(ident, no_revision=type != 'projects')
+        tval = 'deployments' if type in ('jobs', 'runs') else type
+        idtype = ident.id_type(ident.id) if ident.id else tval
+        if idtype not in ('projects', tval):
             raise ValueError(f'Expected a {type} ID type, found a {idtype} ID: {ident}')
         matches = []
         # NOTE: we are retrieving all project records here, even if we have the unique
@@ -289,7 +309,7 @@ class AEUserSession(AESessionBase):
         # call so we get the benefit of our record cleanup.
         records = getattr(self, type.rstrip('s') + '_list')(internal=True, format='json')
         owner, name, id, pid = (ident.owner or '*', ident.name or '*',
-                                ident.id if ident.id and type == idtype else '*',
+                                ident.id if ident.id and tval == idtype else '*',
                                 ident.pid if ident.pid and type != 'projects' else '*')
         for rec in records:
             if (fnmatch(rec['owner'], owner) and fnmatch(rec['name'], name) and
@@ -309,7 +329,7 @@ class AEUserSession(AESessionBase):
             raise ValueError(msg)
         return rec['id'], rec
 
-    def _revision(self, ident, quiet=False):
+    def _revision(self, ident, keep_latest=False, quiet=False):
         if isinstance(ident, str):
             ident = Identifier.from_string(ident)
         id, prec = self._id('projects', ident, quiet=quiet)
@@ -325,7 +345,8 @@ class AEUserSession(AESessionBase):
                         matches.append(response)
             if len(matches) == 1:
                 rrec = matches[0]
-                rev = rrec['name']
+                if not keep_latest or (ident.revision and ident.revision != 'latest'):
+                    rev = rrec['name']
             elif not quiet:
                 pfx = 'Multiple' if len(matches) else 'No'
                 msg = f'{pfx} revisions found matching {ident.revision}'
@@ -365,11 +386,12 @@ class AEUserSession(AESessionBase):
 
     def project_list(self, collaborators=False, internal=False, format=None):
         records = self._get('projects', format='json')
-        if collaborators:
-            self._join_collaborators('projects', records)
+        if not internal:
+            if collaborators:
+                self._join_collaborators('projects', records)
         return self._format_response(records, format=format, columns=_P_COLUMNS)
 
-    def project_info(self, ident, collaborators=False, format=None, quiet=False):
+    def project_info(self, ident, collaborators=True, format=None, quiet=False):
         id, record = self._id('projects', ident, quiet=quiet)
         if collaborators:
             self._join_collaborators('projects', record)
@@ -537,6 +559,7 @@ class AEUserSession(AESessionBase):
                 raise RuntimeError('Project name must be supplied for binary input')
             name = basename(project_archive).split('.', 1)[0]
         try:
+            f = None
             if type(project_archive) == bytes:
                 f = io.BytesIO(project_archive)
             else:
@@ -546,7 +569,8 @@ class AEUserSession(AESessionBase):
                 data['tag'] = tag
             response = self._post('projects/upload', files={'project_file': f}, data=data, format='json')
         finally:
-            f.close()
+            if f is not None:
+                f.close()
         if response.get('error'):
             raise RuntimeError('Error uploading project: {}'.format(response['error']['message']))
         if wait:
@@ -558,24 +582,26 @@ class AEUserSession(AESessionBase):
     def _join_projects(self, response, nameprefix=None):
         if isinstance(response, dict):
             pid = 'a0-' + response['project_url'].rsplit('/', 1)[-1]
+            project = self._get(f'projects/{pid}', format='json')
             if nameprefix or 'name' not in response:
-                project = self._get(f'projects/{pid}', format='json')
                 if 'name' in response:
                     response[f'{nameprefix}_name'] = response['name']
                 response['name'] = project['name']
+            else:
+                response['project_name'] = project['name']
             response['project_id'] = pid
         elif response:
             pnames = {x['id']: x['name'] for x in self._get('projects', format='json')}
             for rec in response:
                 pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
-                pname = pnames.get(pid)
-                if nameprefix:
-                    rec[f'{nameprefix}_name'] = rec['name']
-                if pname:
+                pname = pnames.get(pid, '')
+                if nameprefix or 'name' not in rec:
+                    if 'name' in rec:
+                        rec[f'{nameprefix}_name'] = rec['name']
                     rec['name'] = pname
-                    rec['project_id'] = pid
                 else:
-                    rec['project_id'] = rec['name'] = ''
+                    rec['project_name'] = pname
+                rec['project_id'] = pid if pname else ''
 
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
@@ -617,20 +643,21 @@ class AEUserSession(AESessionBase):
             raise RuntimeError('Error completing session start: {}'.format(response['action']['message']))
         return self._format_response(response, format=format, columns=_S_COLUMNS)
 
-    def session_stop(self, ident):
+    def session_stop(self, ident, format=format):
         id, _ = self._id('sessions', ident)
-        self._delete(f'sessions/{id}', format='response')
+        return self._delete(f'sessions/{id}', format=format)
 
-    def deployment_list(self, collaborators=False, endpoints=True, internal=False, format=None):
+    def deployment_list(self, collaborators=True, endpoints=True, internal=False, format=None):
         response = self._get('deployments', format='json')
         self._join_projects(response)
-        if collaborators:
-            self._join_collaborators('deployments', response)
-        if endpoints and not internal:
-            self._fix_endpoints(response)
+        if not internal:
+            if collaborators:
+                self._join_collaborators('deployments', response)
+            if endpoints:
+                self._fix_endpoints(response)
         return self._format_response(response, format, _D_COLUMNS)
 
-    def deployment_info(self, ident, collaborators=False, format=None, quiet=False):
+    def deployment_info(self, ident, collaborators=True, format=None, quiet=False):
         id, record = self._id('deployments', ident, quiet=quiet)
         self._join_projects(record)
         if collaborators:
@@ -693,7 +720,7 @@ class AEUserSession(AESessionBase):
         collabs = [c for c in collabs if c['id'] not in userid]
         if len(collabs) != ncollabs:
             self.deployment_collaborator_list_set(id, collabs)
-        collabs.extend({'id': u, 'type': 'r', 'permission': 'r'} for u in userid)
+        collabs.extend({'id': u, 'type': 'group' if group else 'user', 'permission': 'r'} for u in userid)
         return self.deployment_collaborator_list_set(id, collabs, format=format)
 
     def deployment_collaborator_remove(self, ident, userid, format='json'):
@@ -759,21 +786,106 @@ class AEUserSession(AESessionBase):
             self._patch(f'deployments/{id}', json=data, format='response')
         return self.deployment_info(id, format=format)
 
-    def deployment_stop(self, ident):
+    def deployment_stop(self, ident, format=None):
         id, _ = self._id('deployments', ident)
-        self._delete(f'deployments/{id}', format='response')
+        return self._delete(f'deployments/{id}', format=format)
 
     def job_list(self, internal=False, format=None):
-        return self._get('jobs', format=format, columns=_J_COLUMNS)
+        response = self._get('jobs', format='json')
+        return self._format_response(response, format=format, columns=_J_COLUMNS)
 
     def job_info(self, ident, format=None, quiet=False):
         id, record = self._id('jobs', ident, quiet=quiet)
         if id:
             return self._format_response(record, format=format, columns=_J_COLUMNS)
 
-    def job_stop(self, ident):
+    def job_runs(self, ident, format=None):
+        id, record = self._id('jobs', ident)
+        return self._get(f'jobs/{id}/runs', format=format, columns=_J_COLUMNS)
+
+    def job_run(self, ident, format=None):
         id, _ = self._id('jobs', ident)
-        self._delete(f'jobs/{id}', format='response')
+        return self._post(f'jobs/{id}/runs', format=format, columns=_J_COLUMNS)
+
+    def job_delete(self, ident, format=None):
+        id, _ = self._id('jobs', ident)
+        return self._delete(f'jobs/{id}', format=format)
+
+    def job_pause(self, ident, format=None):
+        id, _ = self._id('jobs', ident)
+        return self._post(f'jobs/{id}/pause', format=format, columns=_J_COLUMNS)
+
+    def job_unpause(self, ident, format=format):
+        id, _ = self._id('jobs', ident)
+        return self._post(f'jobs/{id}/unpause', format=format, columns=_J_COLUMNS)
+
+    def job_create(self, ident, schedule=None, name=None, command=None,
+                   resource_profile=None, variables=None, run=False,
+                   wait=False, cleanup=False, show_run=False, format=None):
+        if cleanup and schedule:
+            raise ValueError('cannot use cleanup=True with a scheduled job')
+        if cleanup and (not run or not wait):
+            raise ValueError('must specify run=wait=True with cleanup=True')
+        id, rev, prec, rrec = self._revision(ident, keep_latest=True)
+        if not command:
+            command = rrec['commands'][0]['id']
+        # AE5's default name generator unfortunately uses colons
+        # in the creation of its job names which causes confusion for
+        # ae5-tools, which uses them to mark a revision identifier.
+        # Furthermore, creating a job with the same name as an deleted
+        # job that still has run listings causes an error.
+        if not name:
+            name = f'{command}-{prec["name"]}'
+            jnames = {j['name'] for j in self._get(f'jobs', format='json')}
+            jnames.update(j['name'] for j in self._get(f'runs', format='json'))
+            if name in jnames:
+                bname = name
+                for counter in range(1, len(jnames) + 1):
+                    name = f'{bname}-{counter}'
+                    if name not in jnames:
+                        break
+        data = {'source': rrec['url'],
+                'resource_profile': resource_profile or prec['resource_profile'],
+                'command': command,
+                'target': 'deploy',
+                'schedule': schedule,
+                'autorun': run,
+                'revision': rev or 'latest',
+                'name': name}
+        if variables:
+            data['variables'] = variables
+        response = self._post(f'projects/{id}/jobs', json=data, format='json')
+        if response.get('error'):
+            raise RuntimeError('Error starting job: {}'.format(response['error']['message']))
+        response['project_id'] = id
+        if run:
+            run = self._get(f'jobs/{response["id"]}/runs', format='json')[-1]
+            if wait:
+                while run['state'] not in ('completed', 'error'):
+                    time.sleep(5)
+                    run = self._get(f'runs/{run["id"]}', format=json)
+                if cleanup:
+                    self._delete(f'jobs/{response["id"]}', format='response')
+            if show_run:
+                response = run
+        return self._format_response(response, format=format, columns=_J_COLUMNS)
+
+    def job_patch(self, ident, name=None, command=None, schedule=None,
+                  resource_profile=None, variables=None, format=None):
+        id, jrec = self._id('jobs', ident)
+        data = {}
+        if name:
+            data['name'] = name
+        if command:
+            data['command'] = command
+        if schedule:
+            data['schedule'] = schedule
+        if resource_profile:
+            data['resource_profile'] = resource_profile
+        if variables is not None:
+            data['variables'] = variables
+        response = self._patch(f'jobs/{id}', json=data, format='json')
+        return self._format_response(response, format=format, columns=_J_COLUMNS)
 
     def run_list(self, internal=False, format=None):
         return self._get('runs', format=format, columns=_J_COLUMNS)
@@ -783,9 +895,17 @@ class AEUserSession(AESessionBase):
         if id:
             return self._format_response(record, format=format, columns=_J_COLUMNS)
 
-    def run_stop(self, ident):
+    def run_log(self, ident, format=None):
         id, _ = self._id('runs', ident)
-        self._delete(f'runs/{id}', format='response')
+        return self._get(f'runs/{id}/logs', format='json')['job']
+
+    def run_stop(self, ident, format=None):
+        id, _ = self._id('runs', ident)
+        return self._post(f'runs/{id}/stop', format=format, columns=_J_COLUMNS)
+
+    def run_delete(self, ident, format=None):
+        id, _ = self._id('runs', ident)
+        return self._delete(f'runs/{id}', format=format, columns=_J_COLUMNS)
 
 
 class AEAdminSession(AESessionBase):

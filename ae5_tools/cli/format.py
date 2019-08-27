@@ -212,6 +212,8 @@ def print_df(df, header=True, width=0):
 
 
 def print_output(result):
+    if result is None:
+        return
     opts = get_options()
     fmt = opts.get('format')
     if isinstance(result, (list, dict)):

@@ -10,6 +10,7 @@ from ...identifier import Identifier
 @format_options()
 @login_options()
 def revision():
+    '''Commands related to the revisions of a project.'''
     pass
 
 
@@ -32,7 +33,7 @@ def list(project):
 @format_options()
 @login_options()
 def info(revision):
-    '''Get information about a single project revision.
+    '''Retrieve information about a single project revision.
 
        The REVISION identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project. If the revision is not

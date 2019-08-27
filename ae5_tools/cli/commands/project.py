@@ -1,6 +1,6 @@
 import click
 
-from ..utils import add_param
+from ..utils import add_param, ident_filter
 from ..login import login_options, cluster_call
 from ..format import print_output, format_options
 from ...identifier import Identifier
@@ -8,11 +8,12 @@ from .project_collaborator import collaborator
 from .project_revision import revision
 
 
-@click.group(short_help='activity, collaborator, delete, deploy, deployments, info, jobs, list, patch, revision, runs, sessions, status, upload',
+@click.group(short_help='activity, collaborator, delete, deploy, deployments, download, info, jobs, list, patch, revision, run, runs, schedule, sessions, status, upload',
              epilog='Type "ae5 project <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
 def project():
+    '''Commands related to user projects.'''
     pass
 
 
@@ -21,11 +22,11 @@ project.add_command(revision)
 
 
 @project.command()
-@click.argument('project', required=False)
-@click.option('--collaborators', is_flag=True, help='Include the list of collaborators. This adds a separate API call for each project, so for performance reasons it is off by default.')
+@ident_filter('project')
+@click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
 @format_options()
 @login_options()
-def list(project, collaborators):
+def list(collaborators):
     '''List available projects.
 
        By default, lists all projects visible to the authenticated user.
@@ -33,10 +34,7 @@ def list(project, collaborators):
        supplying an optional PROJECT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    result = cluster_call('project_list', collaborators=collaborators, format='dataframe')
-    if project:
-        add_param('filter', Identifier.from_string(project).project_filter())
-    print_output(result)
+    cluster_call('project_list', collaborators=collaborators, cli=True)
 
 
 @project.command()
@@ -44,13 +42,12 @@ def list(project, collaborators):
 @format_options()
 @login_options()
 def info(project):
-    '''Obtain information about a single project.
+    '''Retrieve information about a project.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_info', project, collaborators=True, format='dataframe')
-    print_output(result)
+    cluster_call('project_info', project, cli=True)
 
 
 @project.command()
@@ -58,27 +55,25 @@ def info(project):
 @format_options()
 @login_options()
 def jobs(project):
-    '''Obtain information about a project's jobs.
+    '''Retrieve a list of a project's jobs.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_jobs', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_jobs', project, cli=True)
 
 
-@project.command(short_help='Retrieve the project\'s runs.')
+@project.command()
 @click.argument('project')
 @format_options()
 @login_options()
 def runs(project):
-    '''Obtain information about a project's runs.
+    '''Retrieve a list of a project's runs.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_collaborators', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_runs', project, cli=True)
 
 
 @project.command()
@@ -86,13 +81,12 @@ def runs(project):
 @format_options()
 @login_options()
 def sessions(project):
-    '''Obtain information about a project's sessions.
+    '''Retrieve a list of a project's sessions.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_sessions', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_sessions', project, cli=True)
 
 
 @project.command()
@@ -100,13 +94,12 @@ def sessions(project):
 @format_options()
 @login_options()
 def deployments(project):
-    '''Obtain information about a project's deployments.
+    '''Retrieve a list of a project's deployments.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_deployments', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_deployments', project, cli=True)
 
 
 @project.command()
@@ -124,8 +117,7 @@ def activity(project, limit, all):
        By default, the latest 10 records will be returned. This behavior can be
        adjusted using the --limit or --all options.
     '''
-    result = cluster_call('project_activity', project, limit=0 if all else limit, format='dataframe')
-    print_output(result)
+    cluster_call('project_activity', project, limit=0 if all else limit, cli=True)
 
 
 @project.command()
@@ -141,9 +133,7 @@ def patch(project, **kwargs):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    kwargs['format'] = 'dataframe'
-    result = cluster_call('project_patch', project, **kwargs)
-    print_output(result)
+    cluster_call('project_patch', project, **kwargs, cli=True)
 
 
 @project.command()
@@ -156,8 +146,7 @@ def status(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_activity', project, latest=True, format='dataframe')
-    print_output(result)
+    cluster_call('project_activity', project, latest=True, cli=True)
 
 
 @project.command()
@@ -192,8 +181,7 @@ def upload(filename, name, tag, no_wait):
        the file. This can be overridden by using the --name option. The
        name must not be the same as an existing project.
     '''
-    result = cluster_call('project_upload', filename, name=name, tag=tag, wait=not no_wait, format='dataframe')
-    print_output(result)
+    cluster_call('project_upload', filename, name=name, tag=tag, wait=not no_wait, cli=True)
 
 
 @project.command()
@@ -232,6 +220,54 @@ def deploy(ctx, project, endpoint, command, resource_profile, public, private, w
 
 @project.command()
 @click.argument('project')
+@click.argument('schedule')
+@click.option('--name', type=str, required=False, help="Name for the job. If not supplied, it is autogenerated from the project name.")
+@click.option('--command', help='The command to use for this job.')
+@click.option('--resource-profile', help='The resource profile to use for this job.')
+@click.option('--variable', multiple=True, help='A variable setting in the form <key>=<value>. Multiple --variable options can be supplied.')
+@format_options()
+@login_options()
+@click.pass_context
+def schedule(ctx, project, schedule, command, name, resource_profile, variable):
+    '''Create a run schedule for a project.
+
+    This command is a shortcut for the "ae5 job create" command when the intent is to
+    create a scheduled run for the job. It does not run the job immediately.
+
+    For finer control over job behavior, use "ae5 job create" instead.'''
+    from .job import create as job_create
+    if not schedule:
+        raise click.UsageError('schedule must not be empty')
+    ctx.invoke(job_create, project=project, schedule=schedule, command=command, name=name,
+               resource_profile=resource_profile, variable=variable, run=False,
+               wait=False, show_run=False, cleanup=False)
+
+
+@project.command()
+@click.argument('project')
+@click.option('--name', type=str, required=False, help="Name for the run. If not supplied, it is autogenerated from the project name.")
+@click.option('--command', help='The command to use for this job.')
+@click.option('--resource-profile', help='The resource profile to use for this job.')
+@click.option('--variable', multiple=True, help='A variable setting in the form <key>=<value>. Multiple --variable options can be supplied.')
+@format_options()
+@login_options()
+@click.pass_context
+def run(ctx, project, command, name, resource_profile, variable):
+    '''Execute a project as a run-once job.
+
+    This command is a shortcut for the "ae5 job create" command when the intent is to
+    run a command exactly once. It creates the job record, runs the command exactly once,
+    waits for it to complete, then deletes the job record. The run record is returned.
+
+    For finer control over job behavior, use "ae5 job create" instead.'''
+    from .job import create as job_create
+    ctx.invoke(job_create, project=project, schedule=None, command=command, name=name,
+               resource_profile=resource_profile, variable=variable, run=True,
+               wait=True, show_run=True, cleanup=True)
+
+
+@project.command()
+@click.argument('project')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
 @login_options()
 def delete(project, yes):
@@ -244,9 +280,7 @@ def delete(project, yes):
     '''
     result = cluster_call('project_info', project, format='json')
     ident = Identifier.from_record(result)
-    if not yes:
-        yes = click.confirm(f'Delete project {ident}', err=True)
-    if yes:
-        click.echo(f'Deleting project {ident}...', nl=False, err=True)
-        result = cluster_call('project_delete', result['id'])
-        click.echo('deleted.', err=True)
+    cluster_call('project_delete', result['id'],
+                 confirm=None if yes else f'Delete project {ident}',
+                 prefix=f'Deleting project {ident}...',
+                 postfix='deleted.', cli=True)

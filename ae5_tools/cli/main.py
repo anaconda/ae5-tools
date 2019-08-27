@@ -81,9 +81,11 @@ def logout(admin):
 
 @cli.command()
 @click.argument('path')
+@click.option('--endpoint', help='An endpoint to connect to instead of the default API.' )
+@click.option('--post', is_flag=True, help='Do a POST instead of a GET.')
 @login_options()
 @format_options()
-def call(path):
+def call(path, endpoint, post):
     '''Make a generic API call. This is useful for experimentation with the
        AE5 API. However, it is particularly useful for accessing REST APIs
        delivered as private deployments, because it handles authentication.
@@ -101,15 +103,10 @@ def call(path):
        be compatible with the generic formatting logic. Only GET calls are currently
        supported.
     '''
-    if path.startswith('/'):
-        subdomain = None
-    elif '/' in path:
-        subdomain, path = path.split('/', 1)
-    else:
-        subdomain, path = path, ''
-    format = get_options().get('format')
-    result = cluster_call('_api', 'get', '/' + path.lstrip('/'), format=format, subdomain=subdomain)
-    print_output(result)
+    if endpoint and not path.startswith('/'):
+        path = '/' + path
+    method = 'post' if post else 'get'
+    cluster_call('_api', method, path, subdomain=endpoint, cli=True)
 
 
 cli.add_command(project)

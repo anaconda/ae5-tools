@@ -3,6 +3,8 @@ import click
 from ..config import config
 from ..api import AESessionBase, AEUserSession, AEAdminSession, AEException
 from .utils import param_callback, click_text, get_options, persist_option
+from .format import print_output
+from ..identifier import Identifier
 
 
 def print_login_help(ctx, param, value):
@@ -145,8 +147,49 @@ def cluster(admin=False, retry=True):
 
 
 def cluster_call(method, *args, **kwargs):
+    # Translate the user-supplied identifer string into an ID
+    ident = kwargs.pop('ident', None)
+    if ident:
+        id_class = kwargs.pop('id_class', None)
+        revision = id_class == 'project'
+        if not id_class:
+            id_class = method.split('_', 1)[0]
+        result = cluster_call(id_class + '_info', ident, format='json')
+        ident = Identifier.from_record(result, ignore_revision=not revision)
+        args = (result['id'],) + args
+
+    # Provide a standardized method for providing interactive output
+    # on the cli, including a confirmation prompt, a simple progress
+    # indicator via prefix/postfix strings
+    is_cli = (kwargs.pop('cli', False) or 'confirm' in kwargs
+              or 'prefix' in kwargs or 'postfix' in kwargs)
+    if is_cli:
+        confirm = kwargs.pop('confirm', None) or ''
+        prefix = kwargs.pop('prefix', None) or ''
+        postfix = kwargs.pop('postfix', None) or ''
+        if ident:
+            confirm = confirm.format(ident=ident)
+            prefix = prefix.format(ident=ident)
+            postfix = postfix.format(ident=ident)
+
+        if confirm and not click.confirm(confirm):
+            return
+        if prefix:
+            click.echo(prefix, nl=False, err=True)
+        kwargs.setdefault('format', 'dataframe')
+
+    # Retrieve the proper cluster session object and make the call
     try:
-        c = cluster(admin=kwargs.pop('admin', False))
-        return getattr(c, method)(*args, **kwargs)
+        admin = kwargs.pop('admin', False)
+        c = cluster(admin=admin)
+        result = getattr(c, method)(*args, **kwargs)
     except AEException as e:
         raise click.ClickException(str(e))
+
+    # Finish out the standardized CLI output
+    if is_cli:
+        if postfix or prefix:
+            click.echo(postfix, nl=True, err=True)
+        print_output(result)
+
+    return result

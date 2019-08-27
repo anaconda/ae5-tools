@@ -9,6 +9,7 @@ from ..format import print_output, format_options
 @format_options()
 @login_options()
 def sample():
+    '''Commands related to sample and template projects.'''
     pass
 
 
@@ -31,9 +32,6 @@ def info(project):
 
        The PROJECT identifier must match exactly one name or id of a sample project.
        Wildcards may be included.
-
-       USERID must be an exact match of the user ID of an individual, or the name
-       of a group (e.g., 'everyone').
     '''
     result = cluster_call('sample_info', project, format='dataframe')
     print_output(result)
