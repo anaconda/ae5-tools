@@ -183,11 +183,11 @@ class AESessionBase(object):
             ctype = response.headers['content-type']
             if ctype.endswith('json'):
                 response = response.json()
-            elif format in ('dataframe', 'json'):
+            elif format == 'json':
                 raise AEException(f'Content type {ctype} not compatible with json format')
             else:
                 return response.text
-        if format == 'dataframe' or format is None and columns:
+        if format == 'dataframe':
             return self._format_dataframe(response, columns)
         return response
 
