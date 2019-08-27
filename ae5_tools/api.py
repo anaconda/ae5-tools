@@ -980,7 +980,8 @@ class AEAdminSession(AESessionBase):
         users = list(users.values())
         for urec in users:
             # Give users who have did not have a login event in the
-            # last 100000 events one more dedicated search
+            # last 100000 events one more dedicated search. For those
+            # that did find a login time, convert from numeric
             self._get_last_login(urec)
 
         return self._format_response(users, format=format, columns=_U_COLUMNS)

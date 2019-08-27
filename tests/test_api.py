@@ -4,6 +4,8 @@ import tempfile
 import time
 import os
 
+from datetime import datetime
+
 from ae5_tools.api import AEUserSession, AEAdminSession, AEUnexpectedResponseError
 
 
@@ -199,4 +201,17 @@ def test_deploy(user_session, user_deploy_list):
     assert ldata.strip() == 'Hello Anaconda Enterprise!', ldata
     user_session.deployment_stop(drecs[0]['id'])
     assert not any(r['name'] == 'testdeploy' for r in user_session.deployment_list())
+
+
+def test_login_time(admin_session, user_session):
+    user_list = admin_session.user_list(format='json')
+    urec = next((r for r in user_list if r['username'] == user_session.username), None)
+    assert urec is not None
+    now = datetime.utcnow()
+    assert urec['lastLogin'] < now
+    user_session.disconnect()
+    user_session.authorize()
+    user_list = admin_session.user_list(format='json')
+    urec = admin_session.user_info(urec['id'], format='json')
+    assert urec['lastLogin'] > now
 
