@@ -969,9 +969,10 @@ class AEAdminSession(AESessionBase):
         while len(users) == params['max'] + params['first']:
             params['first'] = len(users)
             users.extend(self._get(f'users', params=params, format='json'))
-
         users = {u['id']: u for u in users}
-        for e in self.user_events(client='anaconda-platform', type='LOGIN', format='json'):
+
+        events = self.user_events(client='anaconda-platform', type='LOGIN', format='json')
+        for e in events:
             if 'response_mode' not in e['details']:
                 urec = users.get(e['userId'])
                 if urec and 'lastLogin' not in urec:
