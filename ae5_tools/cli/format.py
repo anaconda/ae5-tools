@@ -3,10 +3,10 @@ import re
 import sys
 import json
 import click
-import pandas as pd
 
 from fnmatch import fnmatch
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from datetime import datetime
+
 from .utils import param_callback, click_text, get_options
 
 IS_WIN = sys.platform.startswith('win')
@@ -108,19 +108,21 @@ def format_options():
     return apply
 
 
-OPS = {'<': lambda x, y: x < y,
+OPS = {'<' : lambda x, y: x < y,
        '<=': lambda x, y: x <= y,
-       '>': lambda x, y: x > y,
+       '>' : lambda x, y: x > y,
        '>=': lambda x, y: x >= y,
-       '=': lambda x, y: fnmatch(x, y),
+        '=': lambda x, y: fnmatch(x, y),
        '==': lambda x, y: x == y,
        '!=': lambda x, y: not fnmatch(x, y)}
 
 
-def filter_df(df, filter, columns=None):
+def filter_df(records, df_columns, filter, columns=None):
+    if not records:
+        return records
     if columns:
         columns = columns.split(',')
-        missing = '\n  - '.join(set(columns) - set(df.columns))
+        missing = '\n  - '.join(set(columns) - df_columns)
         if missing:
             raise click.UsageError(f'One or more of the requested columns were not found:\n  - {missing}')
     mask0 = None
@@ -135,39 +137,43 @@ def filter_df(df, filter, columns=None):
                     if len(parts) != 3:
                         raise click.UsageError(f'Invalid filter string: {filt4}\n   Required format: <fieldname><op><value>')
                     field, op, value = list(map(str.strip, parts))
-                    if field not in df.columns:
+                    if field not in df_columns:
                         raise click.UsageError(f'Invalid filter field: {field}')
                     op = OPS[op]
-                    mask4 = [op(str(row), value) for row in df[field]]
+                    mask4 = [op(str(rec.get(field,'')), value) for rec in records]
                     mask3 = mask4 if mask3 is None else [m1 and m2 for m1, m2 in zip(mask3, mask4)]
                 mask2 = mask3 if mask2 is None else [m1 or m2 for m1, m2 in zip(mask2, mask3)]
             mask1 = mask2 if mask1 is None else [m1 and m2 for m1, m2 in zip(mask1, mask2)]
         mask0 = mask1 if mask0 is None else [m1 and m2 for m1, m2 in zip(mask0, mask1)]
-    if columns:
-        df = df[columns]
     if mask0:
-        df = df.loc[mask0, :]
-    return df
+        records = [rec for rec, flag in zip(records, mask0) if flag]
+    if columns and records:
+        records = [{key: rec[key] for key in columns if key in rec} for rec in records]
+    return records
 
 
-def sort_df(df, columns):
-    if not columns:
-        for ndx in range(len(df.columns)):
-            if len(df.iloc[:, :ndx + 1].drop_duplicates()) == len(df):
-                columns = list(df.columns[:ndx + 1])
-                break
-        else:
-            return df
-        ascending = [True] * len(columns)
-    else:
-        columns = columns.split(',')
-        ascending = [not c.startswith('-') for c in columns]
-        columns = [c.lstrip('-') for c in columns]
-    df = df.sort_values(by=columns, ascending=ascending)
-    return df
+def sort_df(records, columns):
+    if not records or not columns:
+        return records
+    ndx0 = ndxs = list(range(len(records)))
+    for col in columns.split(',')[::-1]:
+        desc = col.startswith('-')
+        if desc:
+            col = col[1:]
+        ndx2 = sorted(ndx0, key=lambda x: records[ndxs[x]].get(col, ''))
+        if desc:
+            ndx2 = ndx2[::-1]
+        ndxs = [ndxs[x] for x in ndxs2]
+    return [rec[x] for x in ndxs]
 
 
-def print_df(df, header=True, width=0):
+def _str(x):
+    if hasattr(x, 'strftime'):
+        return x.strftime("%m-%d-%Y %H:%M:%S")
+    return str(x)
+
+
+def print_df(records, columns, header=True, width=0):
     if width <= 0:
         # http://granitosaurus.rocks/getting-terminal-size.html
         for i in range(3):
@@ -179,19 +185,19 @@ def print_df(df, header=True, width=0):
         else:
             width = 80
     nwidth = -2
-    for col, val in df.items():
+    records = [{str(k): _str(v) for k, v in rec.items()} for rec in records]
+    for col in columns:
         col = str(col)
-        val = val.astype(str)
-        twid = max(len(col), val.str.len().max())
-        val = val.str.pad(twid, 'right')
+        twid = max(max((len(rec[col]) for rec in records), default=0), len(col))
+        val = [rec[col] + ' ' * (twid - len(rec[col])) for rec in records]
         col = col[:twid]
         col = col + ' ' * (twid - len(col))
         if nwidth < 0:
-            final = val.values
+            final = val
             head = col
             dash = '-' * twid
         else:
-            final = final + '  ' + val.values
+            final = [x + '  ' + y for x, y in zip(final, val)]
             head = head + '  ' + col
             dash = dash + '  ' + '-' * twid
         owidth, nwidth = nwidth, nwidth + twid + 2
@@ -214,39 +220,29 @@ def print_df(df, header=True, width=0):
 def print_output(result):
     if result is None:
         return
-    opts = get_options()
-    fmt = opts.get('format')
-    if isinstance(result, (list, dict)):
-        if fmt == 'text':
-            result = json.dumps(result)
-        elif fmt in ('json', None):
-            result = json.dumps(result, indent=2, sort_keys=False)
-        else:
-            raise click.UsageError(f'Invalid format for json data: {fmt}')
     if isinstance(result, str):
-        print(result)
+        if result:
+            print(result)
         return
-    is_single = isinstance(result, pd.Series)
-    if is_single:
-        result = result.T.reset_index()
-        result.columns = ['field', 'value']
-    if fmt != 'json':
-        result = result.applymap(lambda x: json.dumps(x)
-                                 if isinstance(x, (list, dict)) else str(x))
+    df_columns = set()
+    for rec in result:
+        df_columns.update(rec)
+    opts = get_options()
     if opts.get('filter') or opts.get('columns'):
-        result = filter_df(result, opts.get('filter'), opts.get('columns'))
+        result = filter_df(result, df_columns, opts.get('filter'), opts.get('columns'))
     if not is_single and 'sort' in opts:
         result = sort_df(result, opts.get('sort'))
+    fmt = opts.get('format')
     if fmt == 'csv':
-        print(result.to_csv(index=False, header=opts.get('header', True)))
+        if not result and not columns:
+            columns = opts.get('columns', [])
+        if opts.get('header', True):
+            print(','.join(columns))
+        for rec in result:
+            print(','.join(str(row[col]) for col in columns))
     elif fmt == 'json':
-        if is_single:
-            result = result.set_index('field').value
-            orient = 'index'
-        else:
-            orient = 'records'
-        result = json.loads(result.to_json(orient=orient, date_format='iso'))
         print(json.dumps(result, indent=2))
     else:
+        columns = list(result[0])
         width = 99999999 if opts.get('wide') else opts.get('width') or 0
-        print_df(result, opts.get('header', True), width)
+        print_df(result, columns, opts.get('header', True), width)

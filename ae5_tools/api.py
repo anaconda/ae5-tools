@@ -37,7 +37,8 @@ _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_i
 _R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
 _ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
-           'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s'}
+           'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s',
+           'lastLogin': 'timestamp/ms'}
 
 
 class AEException(RuntimeError):
@@ -154,33 +155,36 @@ class AESessionBase(object):
     def _format_kwargs(self, kwargs):
         return kwargs.pop('format', None), kwargs.pop('columns', None)
 
-    def _format_dataframe(self, response, columns):
+    def _format_table(self, response, columns):
         if isinstance(response, dict):
             is_series = True
+            response = [response]
         elif isinstance(response, list) and all(isinstance(x, dict) for x in response):
             is_series = False
         else:
-            raise RuntimeError('Not a dataframe-compatible output')
-        df = pd.DataFrame([response] if is_series else response)
-        if len(df) == 0 and columns:
-            df = pd.DataFrame(columns=columns)
+            raise RuntimeError('Not a table-compatible output')
+        clist = list(columns)
+        cset = set(columns)
+        result = []
+        for rec in response:
+            clist.extend(c for c in rec if c not in cset)
+            result.append({c: rec[c] for c in clist if c in rec})
+            cset.update(rec)
         for col, dtype in _DTYPES.items():
-            if col in df:
+            if col in cset:
                 if dtype == 'datetime':
-                    df[col] = pd.to_datetime(df[col])
+                    for rec in result:
+                        if col in rec and isinstance(rec[col], str):
+                            rec[col] = datetime.fromisoformat(rec[col])
                 elif dtype.startswith('timestamp'):
-                    df[col] = pd.to_datetime(df[col], unit=dtype.rsplit('/', 1)[-1])
-                else:
-                    df[col] = df[col].astype(dtype)
-        if columns:
-            cols = ([c for c in columns if c in df.columns] +
-                    [c for c in df.columns if c not in columns])
-            if cols:
-                df = df[cols]
+                    incr = dtype.rsplit('/', 1)[1]
+                    fact = 1000.0 if incr == 'ms' else 1.0
+                    for rec in result:
+                        if col in rec:
+                            rec[col] = datetime.fromtimestamp(rec[col] / fact)
         if is_series:
-            df = df.iloc[0]
-            df.name = None
-        return df
+            result =  [{'field': k, 'value': v} for k, v in result[0].items()]
+        return result
 
     def _format_response(self, response, format, columns):
         if isinstance(response, requests.models.Response):
@@ -195,12 +199,23 @@ class AESessionBase(object):
             ctype = response.headers['content-type']
             if ctype.endswith('json'):
                 response = response.json()
-            elif format == 'json':
+            elif format in ('json', 'table'):
                 raise AEException(f'Content type {ctype} not compatible with json format')
             else:
                 return response.text
+        if format == 'json':
+            return response
+        response = self._format_table(response, columns)
         if format == 'dataframe':
-            return self._format_dataframe(response, columns)
+            try:
+                import pandas as pd
+            except ImportError:
+                raise ImportError('Pandas must be installed in order to use format="dataframe"')
+            if not response:
+                return pd.DataFrame([], columns=columns)
+            else:
+                columns = list(response[0])
+                return pd.DataFrame(response)[columns]
         return response
 
     def _api(self, method, endpoint, **kwargs):
@@ -1025,7 +1040,6 @@ class AEAdminSession(AESessionBase):
 
     def user_list(self, internal=False, format=None):
         users = self._get_paginated('users')
-
         if not internal:
             users = {u['id']: u for u in users}
             events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
@@ -1034,11 +1048,7 @@ class AEAdminSession(AESessionBase):
                     urec = users.get(e['userId'])
                     if urec and 'lastLogin' not in urec:
                         urec['lastLogin'] = e['time']
-
             users = list(users.values())
-            for urec in users:
-                urec['lastLogin'] = datetime.utcfromtimestamp(urec.get('lastLogin', 0) / 1000.0)
-
         return self._format_response(users, format=format, columns=_U_COLUMNS)
 
     def user_info(self, user_or_id, internal=False, format=None, quiet=False):
@@ -1056,6 +1066,11 @@ class AEAdminSession(AESessionBase):
                 response['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
         elif not quiet:
             raise ValueError(f'Could not find user {user_or_id}')
+        response = response[0]
+        if not internal:
+            events = self.user_events(client='anaconda-platform', type='LOGIN', user=response['id'], format='json')
+            response['lastLogin'] = next((e['time'] for e in events
+                                         if 'response_mode' not in e['details']), 0)
         return self._format_response(response, format, _U_COLUMNS)
 
     def impersonate(self, user_or_id):
