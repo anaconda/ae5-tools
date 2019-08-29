@@ -954,15 +954,14 @@ class AEAdminSession(AESessionBase):
         with open(self._filename, 'w') as fp:
             json.dump(self._sdata, fp)
 
-    def _get_last_login(self, urec):
-        time = urec.get('lastLogin', 0)
-        if time == 0:
-            params = {'type': 'LOGIN', 'user': urec['id'],
-                      'client': 'anaconda-platform'}
-            events = self._get('events', params=params, format='json')
-            time = next((e['time'] for e in events
-                         if 'response_mode' not in e['details']), 0)
-        urec['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
+    def user_events(self, format=None, **kwargs):
+        events = []
+        params = {'max':1000, 'first':-1000}
+        params.update(kwargs)
+        while len(events) == params['max'] + params['first']:
+            params['first'] = len(events)
+            events.extend(self._get('events', params=params, format='json'))
+        return self._format_response(events, format=format, columns=_U_COLUMNS)
 
     def user_list(self, internal=False, format=None):
         users = []
@@ -971,16 +970,8 @@ class AEAdminSession(AESessionBase):
             params['first'] = len(users)
             users.extend(self._get(f'users', params=params, format='json'))
 
-        events = []
-        params = {'type':'LOGIN', 
-                  'max':1000, 'first':-1000,
-                  'client':'anaconda-platform'}
-        while len(events) == params['max'] + params['first']:
-            params['first'] = len(events)
-            events.extend(self._get('events', params=params, format='json'))
-
         users = {u['id']: u for u in users}
-        for e in events:
+        for e in self.user_events(client='anaconda-platform', type='LOGIN', format='json'):
             if 'response_mode' not in e['details']:
                 urec = users.get(e['userId'])
                 if urec and 'lastLogin' not in urec:
@@ -988,10 +979,7 @@ class AEAdminSession(AESessionBase):
 
         users = list(users.values())
         for urec in users:
-            # Give users who have did not have a login event in the
-            # last 100000 events one more dedicated search. For those
-            # that did find a login time, convert from numeric
-            self._get_last_login(urec)
+            urec['lastLogin'] = datetime.utcfromtimestamp(urec.get('lastLogin', 0) / 1000.0)
 
         return self._format_response(users, format=format, columns=_U_COLUMNS)
 
@@ -1004,7 +992,10 @@ class AEAdminSession(AESessionBase):
             raise ValueError(f'Could not find user {user_or_id}')
         response = response[0]
         if not internal:
-            self._get_last_login(response)
+            events = self.user_events(client='anaconda-platform', type='LOGIN', user=response['id'], format='json')
+            time = next((e['time'] for e in events
+                         if 'response_mode' not in e['details']), 0)
+            response['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
         return self._format_response(response, format, _U_COLUMNS)
 
     def impersonate(self, user_or_id):

@@ -23,10 +23,9 @@ def user():
 @login_options()
 def list(username):
     '''List all users.'''
-    result = cluster_call('user_list', format='dataframe', admin=True)
     if username:
         add_param('filter', f'username={username}')
-    print_output(result)
+    cluster_call('user_list', cli=True, admin=True)
 
 
 @user.command()
@@ -37,5 +36,4 @@ def info(username):
     '''Retrieve information about a single user.
 
     USERNAME must exactly match either one username or one KeyCloak user ID.'''
-    result = cluster_call('user_info', username, format='dataframe', admin=True)
-    print_output(result)
+    cluster_call('user_info', username, cli=True, admin=True)
