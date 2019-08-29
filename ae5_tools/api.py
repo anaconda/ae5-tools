@@ -965,12 +965,21 @@ class AEAdminSession(AESessionBase):
         urec['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
 
     def user_list(self, internal=False, format=None):
-        users = self._get(f'users', format='json')
-        users = {u['id']: u for u in users}
+        users = []
+        params = {'max':1000, 'first':-1000}
+        while len(users) == params['max'] + params['first']:
+            params['first'] = len(users)
+            users.extend(self._get(f'users', params=params, format='json'))
 
-        params = {'type':'LOGIN', 'max':100000,
+        events = []
+        params = {'type':'LOGIN', 
+                  'max':1000, 'first':-1000,
                   'client':'anaconda-platform'}
-        events = self._get('events', params=params, format='json')
+        while len(events) == params['max'] + params['first']:
+            params['first'] = len(events)
+            events.extend(self._get('events', params=params, format='json'))
+
+        users = {u['id']: u for u in users}
         for e in events:
             if 'response_mode' not in e['details']:
                 urec = users.get(e['userId'])
