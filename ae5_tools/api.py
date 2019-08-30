@@ -43,12 +43,15 @@ class AEException(RuntimeError):
 
 class AEUnexpectedResponseError(AEException):
     def __init__(self, response, method, url, **kwargs):
-        msg = [f'Unexpected response: {response.status_code} {response.reason}',
-               f'  {method.upper()} {url}']
-        if response.headers:
-            msg.append(f'  headers: {response.headers}')
-        if response.text:
-            msg.append(f'  text: {response.text}')
+        if isinstance(response, str):
+            msg = f'Unexpected response: {response}'
+        else:
+            msg = [f'Unexpected response: {response.status_code} {response.reason}',
+                   f'  {method.upper()} {url}']
+            if response.headers:
+                msg.append(f'  headers: {response.headers}')
+            if response.text:
+                msg.append(f'  text: {response.text}')
         if 'params' in kwargs:
             msg.append(f'  params: {kwargs["params"]}')
         if 'data' in kwargs:
@@ -211,10 +214,16 @@ class AESessionBase(object):
         url = f'https://{subdomain}{self.hostname}/{endpoint}'
         kwargs.update((('verify', False), ('allow_redirects', True)))
         if self.connected:
-            response = getattr(self.session, method)(url, **kwargs)
+            try:
+                response = getattr(self.session, method)(url, **kwargs)
+            except requests.exceptions.TooManyRedirects as exc:
+                raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
         if not self.connected or response.status_code == 401 or self._is_login(response):
             self.authorize()
-            response = getattr(self.session, method)(url, **kwargs)
+            try:
+                response = getattr(self.session, method)(url, **kwargs)
+            except requests.exceptions.TooManyRedirects as exc:
+                raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
         if 400 <= response.status_code:
             raise AEUnexpectedResponseError(response, method, url, **kwargs)
         return self._format_response(response, fmt, cols)
@@ -538,9 +547,9 @@ class AEUserSession(AESessionBase):
         with open(filename, 'wb') as fp:
             fp.write(response)
 
-    def project_delete(self, ident):
+    def project_delete(self, ident, format=None):
         id, _ = self._id('projects', ident)
-        self._delete(f'projects/{id}', format='response')
+        return self._delete(f'projects/{id}', format=format or 'response')
 
     def _wait(self, id, status):
         index = 0

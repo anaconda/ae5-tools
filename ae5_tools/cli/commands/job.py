@@ -195,6 +195,7 @@ def run(job):
 @job.command()
 @click.argument('job')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@format_options()
 @login_options()
 def delete(job, yes):
     '''Deletes a job.
