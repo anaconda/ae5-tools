@@ -46,6 +46,7 @@ def info(revision):
 @revision.command()
 @click.argument('revision')
 @click.option('--filename', default='', help='Filename')
+@format_options()
 @login_options()
 def download(revision, filename):
     '''Download a project revision.

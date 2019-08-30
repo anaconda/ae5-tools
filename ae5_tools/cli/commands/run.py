@@ -62,6 +62,7 @@ def log(run):
 @run.command()
 @click.argument('run')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@format_options()
 @login_options()
 def stop(run, yes):
     '''Stop a run.
@@ -80,6 +81,7 @@ def stop(run, yes):
 @run.command()
 @click.argument('run')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@format_options()
 @login_options()
 def delete(run, yes):
     '''Delete a run record.

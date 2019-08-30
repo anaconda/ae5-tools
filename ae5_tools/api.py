@@ -538,9 +538,9 @@ class AEUserSession(AESessionBase):
         with open(filename, 'wb') as fp:
             fp.write(response)
 
-    def project_delete(self, ident):
+    def project_delete(self, ident, format=None):
         id, _ = self._id('projects', ident)
-        self._delete(f'projects/{id}', format='response')
+        return self._delete(f'projects/{id}', format=format or 'response')
 
     def _wait(self, id, status):
         index = 0

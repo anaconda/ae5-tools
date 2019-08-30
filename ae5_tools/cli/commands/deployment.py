@@ -122,13 +122,14 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
                 raise click.ClickException(f'Endpoint {endpoint} is claimed by user {e["owner"]}')
             elif e['project_id'] and e['project_id'] != prec['id']:
                 raise click.ClickException(f'Endpoint {endpoint} is claimed by project {e["project_name"]}')
-    endpoint_s = f' {endpoint}' if endpoint else ''
+    name_s = f' {name}' if name else ''
+    endpoint_s = f' at endpoint {endpoint}' if endpoint else ''
     response = cluster_call('deployment_start', ident=project, id_class='project',
                             name=name if name else None,
                             endpoint=endpoint, command=command,
                             resource_profile=resource_profile, public=public,
                             wait=wait or open,
-                            prefix=f'Starting deployment{endpoint_s} for {{ident}}...',
+                            prefix=f'Starting deployment{name_s}{endpoint_s} for {{ident}}...',
                             postfix='started.')
     if open:
         _open(response, frame)
@@ -160,6 +161,7 @@ def restart(ctx, deployment, wait, open, frame):
 @deployment.command(short_help='Stop a deployment.')
 @click.argument('deployment')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@format_options()
 @login_options()
 def stop(deployment, yes):
     '''Stop a deployment.
@@ -168,7 +170,7 @@ def stop(deployment, yes):
        wildcards. But it must match exactly one project.
     '''
     cluster_call('deployment_stop', ident=deployment,
-                 confirm='Stop deployment {ident}',
+                 confirm=None if yes else 'Stop deployment {ident}',
                  prefix='Stopping {ident}...',
                  postfix='stopped.')
 
@@ -176,6 +178,7 @@ def stop(deployment, yes):
 @deployment.command(short_help='Open a deployment in a browser.')
 @click.argument('deployment')
 @click.option('--frame/--no-frame', default=False, help='Include the AE banner.')
+@format_options()
 @login_options()
 def open(deployment, frame):
     '''Opens a deployment in the default browser.

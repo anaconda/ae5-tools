@@ -91,6 +91,7 @@ def start(ctx, project, editor, resource_profile, wait, open, frame):
 @session.command(short_help='Stop a session.')
 @click.argument('session')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@format_options()
 @login_options()
 def stop(session, yes):
     '''Stop a session.
@@ -107,6 +108,7 @@ def stop(session, yes):
 @session.command(short_help='Open an existing session in a browser.')
 @click.argument('session')
 @click.option('--frame/--no-frame', default=True, help='Include the AE banner.')
+@format_options()
 @login_options()
 def open(session, frame):
     '''Opens a session in the default browser.
