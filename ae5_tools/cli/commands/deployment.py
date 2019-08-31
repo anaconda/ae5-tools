@@ -23,9 +23,10 @@ deployment.add_command(collaborator)
 
 @deployment.command()
 @ident_filter('deployment')
+@click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
 @format_options()
 @login_options()
-def list():
+def list(collaborators):
     '''List available deployments.
 
        By default, lists all deployments visible to the authenticated user.
@@ -33,7 +34,7 @@ def list():
        supplying an optional DEPLOYMENT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    cluster_call('deployment_list', cli=True)
+    cluster_call('deployment_list', collaborators=collaborators, cli=True)
 
 
 @deployment.command()
@@ -112,7 +113,7 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
         endpoints = cluster_call('endpoint_list', format='json')
         if not re.match(r'[A-Za-z0-9-]+', endpoint):
             click.ClickException(f'Invalid endpoint: {endpoint}')
-        prec = cluster_call('project_info', project, format='json')
+        prec = cluster_call('project_info', project, collaborators=False, format='json')
         for e in endpoints:
             if e['id'] != endpoint:
                 continue

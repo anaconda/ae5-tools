@@ -154,7 +154,7 @@ def cluster_call(method, *args, **kwargs):
         revision = id_class == 'project'
         if not id_class:
             id_class = method.split('_', 1)[0]
-        result = cluster_call(id_class + '_info', ident, format='json')
+        result = cluster_call(id_class + '_info', ident, internal=True, format='json')
         ident = Identifier.from_record(result, ignore_revision=not revision)
         args = (result['id'],) + args
 
