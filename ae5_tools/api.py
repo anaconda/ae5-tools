@@ -215,15 +215,17 @@ class AESessionBase(object):
         do_save = False
         if not self.connected:
             self.authorize()
-        retries = 0
-        for redirect in range(30):
+        retries = redirects = 0
+        while True:
             try:
                 response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
+                retries = 0
             except requests.exceptions.ConnectionError:
                 if retries == 3:
                     raise AEUnexpectedResponseError('Unable to connect', method, url, **kwargs)
                 retries += 1
                 time.sleep(2)
+                continue
             except requests.exceptions.Timeout:
                 raise AEUnexpectedResponseError('Connection timeout', method, url, **kwargs)
             if 300 <= response.status_code < 400:
@@ -241,23 +243,27 @@ class AESessionBase(object):
                     # on the same endpoint. So we are blocking for up to a minute here
                     # to wait for the endpoint to be established. If we let requests
                     # handle the redirect it would quickly reach its redirect limit.
+                    if redirects == 30:
+                        raise AEUnexpectedResponseError('Too many self-redirects', method, url, **kwargs)
+                    redirects += 1
                     time.sleep(2)
                 else:
                     # In this case we are likely being redirected to auth to retrieve
                     # a cookie for the endpoint session itself. We will want to save
-                    # this to avoid having to retrieve it every time.
+                    # this to avoid having to retrieve it every time. No need to sleep
+                    # here since this is not an identical redirect
                     do_save = True
+                    redirects = 0
                 url = url2
             elif response.status_code == 401 or self._is_login(response):
                 self.authorize()
+                redirects = 0
             elif response.status_code >= 400:
                 raise AEUnexpectedResponseError(response, method, url, **kwargs)
             else:
                 if do_save and self.persist:
                     self._save()
                 return self._format_response(response, fmt, cols)
-        else:
-            raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
 
     def _get(self, endpoint, **kwargs):
         return self._api('get', endpoint, **kwargs)
