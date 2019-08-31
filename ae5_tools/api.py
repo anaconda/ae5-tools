@@ -44,7 +44,7 @@ class AEException(RuntimeError):
 class AEUnexpectedResponseError(AEException):
     def __init__(self, response, method, url, **kwargs):
         if isinstance(response, str):
-            msg = f'Unexpected response: {response}'
+            msg = [f'Unexpected response: {response}']
         else:
             msg = [f'Unexpected response: {response.status_code} {response.reason}',
                    f'  {method.upper()} {url}']
@@ -212,18 +212,37 @@ class AESessionBase(object):
         if not isabs:
             endpoint = f'{self.prefix}/{endpoint}'
         url = f'https://{subdomain}{self.hostname}/{endpoint}'
-        kwargs.update((('verify', False), ('allow_redirects', True)))
-        if self.connected:
-            try:
-                response = getattr(self.session, method)(url, **kwargs)
-            except requests.exceptions.TooManyRedirects as exc:
-                raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
-        if not self.connected or response.status_code == 401 or self._is_login(response):
-            self.authorize()
-            try:
-                response = getattr(self.session, method)(url, **kwargs)
-            except requests.exceptions.TooManyRedirects as exc:
-                raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
+        need_auth = not self.connected
+        for attempt in range(1 - need_auth, 2):
+            if need_auth:
+                self.authorize()
+                need_auth = False
+            t_url = url
+            for redirect in range(30):
+                response = getattr(self.session, method)(t_url, allow_redirects=False, **kwargs)
+                if 300 <= response.status_code < 400:
+                    # Redirection here happens for two reasons:
+                    # - If a deployment is not ready, it will often self-redirect.
+                    #   Treat this like a blocking mechanism, and poll for 60 seconds
+                    # - The first time a deployment is accessed from a session, it
+                    #   will redirect to the authentication mechanism. This should
+                    #   be relatively immediate.
+                    url2 = response.headers['location'].rstrip()
+                    if url2.startswith('/'):
+                        url2 = f'https://{subdomain}{self.hostname}{url2}'
+                    if url2 == t_url:
+                        time.sleep(2)
+                    t_url = url2
+                else:
+                    if response.status_code == 401 or self._is_login(response):
+                        need_auth = True
+                    break
+            else:
+                raise AEUnexpectedResponseError('Timeout exceeded', method, url, **kwargs)
+            if not need_auth:
+                break
+        else:
+            raise AEUnexpectedResponseError('Unexpected error', method, url, **kwargs)
         if 400 <= response.status_code:
             raise AEUnexpectedResponseError(response, method, url, **kwargs)
         return self._format_response(response, fmt, cols)
