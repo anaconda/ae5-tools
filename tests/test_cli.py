@@ -212,10 +212,10 @@ def test_login_time(admin_session, user_session):
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
     now = datetime.utcnow()
-    assert datetime.fromisoformat(urec['lastLogin']) < now
+    assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") < now
     _cmd('logout', table=False)
     _cmd('login', table=False)
     urec = _cmd(f'user info {urec["id"]}')
-    assert datetime.fromisoformat(urec['lastLogin']) > now
+    assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") > now
 
 

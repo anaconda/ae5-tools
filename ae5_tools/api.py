@@ -215,11 +215,15 @@ class AESessionBase(object):
         do_save = False
         if not self.connected:
             self.authorize()
+        retries = 0
         for redirect in range(30):
             try:
                 response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
             except requests.exceptions.ConnectionError:
-                raise AEUnexpectedResponseError('Unable to connect', method, url, **kwargs)
+                if retries == 3:
+                    raise AEUnexpectedResponseError('Unable to connect', method, url, **kwargs)
+                retries += 1
+                time.sleep(2)
             except requests.exceptions.Timeout:
                 raise AEUnexpectedResponseError('Connection timeout', method, url, **kwargs)
             if 300 <= response.status_code < 400:
