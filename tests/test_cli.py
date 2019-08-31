@@ -219,3 +219,11 @@ def test_login_time(admin_session, user_session):
     assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") > now
 
 
+def test_impersonate(admin_session, user_session):
+    _cmd('logout', table=False)
+    _cmd('login --impersonate', table=False)
+    recs1 = _cmd('project list')
+    _cmd('logout', table=False)
+    _cmd('login', table=False)
+    recs2 = _cmd('project list')
+    assert recs1 == recs2
