@@ -44,7 +44,7 @@ class AEException(RuntimeError):
 class AEUnexpectedResponseError(AEException):
     def __init__(self, response, method, url, **kwargs):
         if isinstance(response, str):
-            msg = f'Unexpected response: {response}'
+            msg = [f'Unexpected response: {response}']
         else:
             msg = [f'Unexpected response: {response.status_code} {response.reason}',
                    f'  {method.upper()} {url}']
@@ -212,21 +212,52 @@ class AESessionBase(object):
         if not isabs:
             endpoint = f'{self.prefix}/{endpoint}'
         url = f'https://{subdomain}{self.hostname}/{endpoint}'
-        kwargs.update((('verify', False), ('allow_redirects', True)))
-        if self.connected:
-            try:
-                response = getattr(self.session, method)(url, **kwargs)
-            except requests.exceptions.TooManyRedirects as exc:
-                raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
-        if not self.connected or response.status_code == 401 or self._is_login(response):
+        do_save = False
+        if not self.connected:
             self.authorize()
+        retries = 0
+        for redirect in range(30):
             try:
-                response = getattr(self.session, method)(url, **kwargs)
-            except requests.exceptions.TooManyRedirects as exc:
-                raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
-        if 400 <= response.status_code:
-            raise AEUnexpectedResponseError(response, method, url, **kwargs)
-        return self._format_response(response, fmt, cols)
+                response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
+            except requests.exceptions.ConnectionError:
+                if retries == 3:
+                    raise AEUnexpectedResponseError('Unable to connect', method, url, **kwargs)
+                retries += 1
+                time.sleep(2)
+            except requests.exceptions.Timeout:
+                raise AEUnexpectedResponseError('Connection timeout', method, url, **kwargs)
+            if 300 <= response.status_code < 400:
+                # Redirection here happens for two reasons, described below. We
+                # handle them ourselves to provide better behavior than requests.
+                url2 = response.headers['location'].rstrip()
+                if url2.startswith('/'):
+                    url2 = f'https://{subdomain}{self.hostname}{url2}'
+                if url2 == url:
+                    # Self-redirects happen sometimes when the deployment is not
+                    # fully ready. If the application code isn't ready, we usually
+                    # get a 502 response, though, so I think this has to do with the
+                    # preparation of the static endpoint. As evidence for this, they
+                    # seem to occur after a rapid deploy->stop->deploy combination
+                    # on the same endpoint. So we are blocking for up to a minute here
+                    # to wait for the endpoint to be established. If we let requests
+                    # handle the redirect it would quickly reach its redirect limit.
+                    time.sleep(2)
+                else:
+                    # In this case we are likely being redirected to auth to retrieve
+                    # a cookie for the endpoint session itself. We will want to save
+                    # this to avoid having to retrieve it every time.
+                    do_save = True
+                url = url2
+            elif response.status_code == 401 or self._is_login(response):
+                self.authorize()
+            elif response.status_code >= 400:
+                raise AEUnexpectedResponseError(response, method, url, **kwargs)
+            else:
+                if do_save and self.persist:
+                    self._save()
+                return self._format_response(response, fmt, cols)
+        else:
+            raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
 
     def _get(self, endpoint, **kwargs):
         return self._api('get', endpoint, **kwargs)
@@ -396,14 +427,13 @@ class AEUserSession(AESessionBase):
 
     def project_list(self, collaborators=False, internal=False, format=None):
         records = self._get('projects', format='json')
-        if not internal:
-            if collaborators:
-                self._join_collaborators('projects', records)
+        if collaborators and not internal:
+            self._join_collaborators('projects', records)
         return self._format_response(records, format=format, columns=_P_COLUMNS)
 
-    def project_info(self, ident, collaborators=True, format=None, quiet=False):
+    def project_info(self, ident, collaborators=True, internal=False, format=None, quiet=False):
         id, record = self._id('projects', ident, quiet=quiet)
-        if collaborators:
+        if record and (collaborators and not internal):
             self._join_collaborators('projects', record)
         return self._format_response(record, format=format, columns=_P_COLUMNS)
 
@@ -419,8 +449,8 @@ class AEUserSession(AESessionBase):
                 profile['gpu'] = 0
         return self._format_response(profiles, format=format, columns=_R_COLUMNS)
 
-    def resource_profile_info(self, name, format=None):
-        id, rec = self._id_or_name('resource_profile', name)
+    def resource_profile_info(self, name, internal=False, format=None, quiet=False):
+        id, rec = self._id_or_name('resource_profile', name, quiet=quiet)
         return self._format_response(rec, format=format, columns=_R_COLUMNS)
 
     def editor_list(self, internal=False, format=None):
@@ -430,7 +460,7 @@ class AEUserSession(AESessionBase):
             rec['packages'] = ' '.join(rec['packages'])
         return self._format_response(editors, format=format, columns=_ED_COLUMNS)
 
-    def editor_info(self, name, format=None):
+    def editor_info(self, name, internal=False, format=None, quiet=False):
         id, rec = self._id_or_name('editor', name)
         return self._format_response(rec, format=format, columns=_ED_COLUMNS)
 
@@ -444,7 +474,7 @@ class AEUserSession(AESessionBase):
             result.append(sample)
         return self._format_response(result, format=format, columns=_T_COLUMNS)
 
-    def sample_info(self, ident, format=None, quiet=False):
+    def sample_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id_or_name('sample', ident, quiet=quiet)
         return self._format_response(record, format=format, columns=_T_COLUMNS)
 
@@ -452,12 +482,12 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('projects', ident)
         return self._get(f'projects/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
-    def project_collaborator_info(self, ident, userid, format=None):
+    def project_collaborator_info(self, ident, userid, internal=False, format=None, quiet=False):
         collabs = self.project_collaborator_list(ident, format='json')
         for c in collabs:
             if userid == c['id']:
                 return self._format_response(c, format=format, columns=_C_COLUMNS)
-        else:
+        if not quiet:
             raise AEException(f'Collaborator not found: {userid}')
 
     def project_collaborator_list_set(self, ident, collabs, format=None):
@@ -533,11 +563,11 @@ class AEUserSession(AESessionBase):
             rec['project_id'] = 'a0-' + rec['url'].rsplit('/', 3)[-3]
         return self._format_response(response, format=format, columns=_R_COLUMNS)
 
-    def revision_info(self, ident, format=None, quiet=False):
+    def revision_info(self, ident, internal=False, format=None, quiet=False):
         id, rev, prec, rrec = self._revision(ident, quiet=quiet)
-        if id:
+        if rrec:
             rrec['project_id'] = prec['id']
-            return self._format_response(rrec, format=format, columns=_R_COLUMNS)
+        return self._format_response(rrec, format=format, columns=_R_COLUMNS)
 
     def project_download(self, ident, filename=None):
         id, rev, _, _ = self._revision(ident)
@@ -636,11 +666,11 @@ class AEUserSession(AESessionBase):
         self._join_projects(response, 'session')
         return self._format_response(response, format, _S_COLUMNS)
 
-    def session_info(self, ident, format=None, quiet=False):
+    def session_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id('sessions', ident, quiet=quiet)
-        if id:
+        if record:
             self._join_projects(record, 'session')
-            return self._format_response(record, format, columns=_S_COLUMNS)
+        return self._format_response(record, format, columns=_S_COLUMNS)
 
     def session_start(self, ident, wait=True, format=None):
         id, _ = self._id('projects', ident)
@@ -667,21 +697,22 @@ class AEUserSession(AESessionBase):
                 self._fix_endpoints(response)
         return self._format_response(response, format, _D_COLUMNS)
 
-    def deployment_info(self, ident, collaborators=True, format=None, quiet=False):
+    def deployment_info(self, ident, collaborators=True, internal=False, format=None, quiet=False):
         id, record = self._id('deployments', ident, quiet=quiet)
-        self._join_projects(record)
-        if collaborators:
-            self._join_collaborators('deployments', record)
-        if record.get('url'):
-            record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
+        if record:
+            self._join_projects(record)
+            if collaborators and not internal:
+                self._join_collaborators('deployments', record)
+            if record.get('url'):
+                record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
         return self._format_response(record, format, _D_COLUMNS)
 
     def endpoint_list(self, format=None, internal=False):
         response = self._get('/platform/deploy/api/v1/apps/static-endpoints', format='json')
         response = response['data']
-        deps = self.deployment_list()
+        deps = self.deployment_list(internal=True)
         dmap = {drec['endpoint']: drec for drec in deps if drec['endpoint']}
-        pnames = {prec['id']: prec['name'] for prec in self.project_list()}
+        pnames = {prec['id']: prec['name'] for prec in self.project_list(internal=True)}
         good_records = []
         for rec in response:
             drec = dmap.get(rec['id'])
@@ -696,7 +727,7 @@ class AEUserSession(AESessionBase):
                 rec['project_name'] = pnames.get(rec['project_id'], '')
         return self._format_response(response, format=format, columns=_E_COLUMNS)
 
-    def endpoint_info(self, ident, quiet=False, format=None):
+    def endpoint_info(self, ident, internal=False, format=None, quiet=False):
         id, rec = self._id_or_name('endpoint', ident, quiet=quiet)
         return self._format_response(rec, format=format, columns=_E_COLUMNS)
 
@@ -708,12 +739,12 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('deployments', ident)
         return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
 
-    def deployment_collaborator_info(self, ident, userid, format=None):
+    def deployment_collaborator_info(self, ident, userid, internal=False, format=None, quiet=False):
         collabs = self.deployment_collaborator_list(ident, format='json')
         for c in collabs:
             if userid == c['id']:
                 return self._format_response(c, format=format, columns=_C_COLUMNS)
-        else:
+        if not quiet:
             raise AEException(f'Collaborator not found: {userid}')
 
     def deployment_collaborator_list_set(self, ident, collabs, format=None):
@@ -804,10 +835,9 @@ class AEUserSession(AESessionBase):
         response = self._get('jobs', format='json')
         return self._format_response(response, format=format, columns=_J_COLUMNS)
 
-    def job_info(self, ident, format=None, quiet=False):
+    def job_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id('jobs', ident, quiet=quiet)
-        if id:
-            return self._format_response(record, format=format, columns=_J_COLUMNS)
+        return self._format_response(record, format=format, columns=_J_COLUMNS)
 
     def job_runs(self, ident, format=None):
         id, record = self._id('jobs', ident)
@@ -900,10 +930,9 @@ class AEUserSession(AESessionBase):
     def run_list(self, internal=False, format=None):
         return self._get('runs', format=format, columns=_J_COLUMNS)
 
-    def run_info(self, ident, format=None, quiet=False):
+    def run_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id('runs', ident, quiet=quiet)
-        if id:
-            return self._format_response(record, format=format, columns=_J_COLUMNS)
+        return self._format_response(record, format=format, columns=_J_COLUMNS)
 
     def run_log(self, ident, format=None):
         id, _ = self._id('runs', ident)
@@ -993,19 +1022,20 @@ class AEAdminSession(AESessionBase):
 
         return self._format_response(users, format=format, columns=_U_COLUMNS)
 
-    def user_info(self, user_or_id, internal=False, format=None):
+    def user_info(self, user_or_id, internal=False, format=None, quiet=False):
         if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
             response = [self._get(f'users/{user_or_id}', format='json')]
         else:
             response = self._get(f'users?username={user_or_id}', format='json')
-        if len(response) == 0:
+        if response:
+            response = response[0]
+            if not internal:
+                events = self.user_events(client='anaconda-platform', type='LOGIN', user=response['id'], format='json')
+                time = next((e['time'] for e in events
+                             if 'response_mode' not in e['details']), 0)
+                response['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
+        elif not quiet:
             raise ValueError(f'Could not find user {user_or_id}')
-        response = response[0]
-        if not internal:
-            events = self.user_events(client='anaconda-platform', type='LOGIN', user=response['id'], format='json')
-            time = next((e['time'] for e in events
-                         if 'response_mode' not in e['details']), 0)
-            response['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
         return self._format_response(response, format, _U_COLUMNS)
 
     def impersonate(self, user_or_id):

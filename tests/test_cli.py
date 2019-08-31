@@ -133,7 +133,7 @@ def test_project_collaborators(user_session, project_set):
 def test_project_activity(user_session, project_set):
     for rec0 in project_set:
         activity = _cmd('project activity testproj3')
-        assert all(rec0['owner'] == rec1['owner'] for rec1 in activity)
+        assert any(rec0['owner'] == rec1['owner'] for rec1 in activity)
         assert activity[-1]['type'] in ('create_action', 'deploy_action')
         assert activity[-1]['done']
 
@@ -212,10 +212,10 @@ def test_login_time(admin_session, user_session):
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
     now = datetime.utcnow()
-    assert datetime.fromisoformat(urec['lastLogin']) < now
+    assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") < now
     _cmd('logout', table=False)
     _cmd('login', table=False)
     urec = _cmd(f'user info {urec["id"]}')
-    assert datetime.fromisoformat(urec['lastLogin']) > now
+    assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") > now
 
 
