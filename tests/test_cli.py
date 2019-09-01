@@ -133,11 +133,8 @@ def test_project_collaborators(user_session, project_set):
 
 
 def test_project_activity(user_session, project_set):
-    for rec0 in project_set:
-        activity = _cmd('project activity testproj3')
-        assert any(rec0['owner'] == rec1['owner'] for rec1 in activity)
-        assert activity[-1]['type'] in ('create_action', 'deploy_action')
-        assert activity[-1]['done']
+    activity = _cmd('project activity testproj3')
+    assert activity[-1]['done']
 
 
 def test_project_download_upload_delete(user_session, project_set, user_project_list):
