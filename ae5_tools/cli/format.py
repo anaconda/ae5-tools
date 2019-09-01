@@ -231,14 +231,8 @@ def print_output(result):
         result = result.T.reset_index()
         result.columns = ['field', 'value']
     if fmt != 'json':
-        for col, val in result.items():
-            if val.dtype == object:
-                result[col] = val.apply(lambda x: json.dumps(x)
-                                        if isinstance(x, (list, dict)) else str(x))
-            elif is_datetime(val):
-                result[col] = val.dt.strftime("%F %T")
-            else:
-                result[col] = val.astype(str)
+        result = result.applymap(lambda x: json.dumps(x)
+                                 if isinstance(x, (list, dict)) else str(x))
     if opts.get('filter') or opts.get('columns'):
         result = filter_df(result, opts.get('filter'), opts.get('columns'))
     if not is_single and 'sort' in opts:

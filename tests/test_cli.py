@@ -213,8 +213,6 @@ def test_login_time(admin_session, user_session):
     user_list = _cmd('user list')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
-    # Need to re-grab the record because the list form truncates the time
-    urec = _cmd(f'user info {urec["id"]}')
     ltm1 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
     now = datetime.utcnow()
     # The last login time should be before the present
