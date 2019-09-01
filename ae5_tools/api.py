@@ -959,7 +959,7 @@ class AEUserSession(AESessionBase):
 class AEAdminSession(AESessionBase):
     def __init__(self, hostname, username, password=None, persist=True):
         self._sdata = None
-        self._login_url = f'https://{hostname}/auth/realms/master/protocol/openid-connect/token'
+        self._login_base = f'https://{hostname}/auth/realms/master/protocol/openid-connect'
         super(AEAdminSession, self).__init__(hostname, username, password,
                                              prefix='auth/admin/realms/AnacondaPlatform',
                                              persist=persist)
@@ -970,7 +970,7 @@ class AEAdminSession(AESessionBase):
             with open(self._filename, 'r') as fp:
                 sdata = json.load(fp)
             if isinstance(sdata, dict) and 'refresh_token' in sdata:
-                resp = self.session.post(self._login_url,
+                resp = self.session.post(self._login_base + '/token',
                                          data={'refresh_token': sdata['refresh_token'],
                                                'grant_type': 'refresh_token',
                                                'client_id': 'admin-cli'})
@@ -984,7 +984,7 @@ class AEAdminSession(AESessionBase):
         self.session.headers['Authorization'] = f'Bearer {self._sdata["access_token"]}'
 
     def _connect(self, password):
-        resp = self.session.post(self._login_url,
+        resp = self.session.post(self._login_base + '/token',
                                  data={'username': self.username,
                                        'password': password,
                                        'grant_type': 'password',
@@ -992,17 +992,20 @@ class AEAdminSession(AESessionBase):
         self._sdata = {} if resp.status_code == 401 else resp.json()
 
     def _disconnect(self):
-        # There is currently no way to truly end an active admin session, but we
-        # can clear all knowledge of it to force reauthentication.
-        self._sdata.clear()
+        if self._sdata:
+            self.session.post(self._login_base + '/logout',
+                              data={'refresh_token': self._sdata['refresh_token'],
+                                    'client_id': 'admin-cli'})
+            self._sdata.clear()
 
     def _save(self):
         os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)
         with open(self._filename, 'w') as fp:
             json.dump(self._sdata, fp)
 
-    def _get_paginated(self, path, limit=sys.maxsize, **kwargs):
+    def _get_paginated(self, path, **kwargs):
         records = []
+        limit = kwargs.pop('limit', sys.maxsize)
         kwargs.setdefault('first', 0)
         while True:
             kwargs['max'] = min(KEYCLOAK_PAGE_MAX, limit)
@@ -1017,7 +1020,7 @@ class AEAdminSession(AESessionBase):
     def user_events(self, format=None, **kwargs):
         first = kwargs.pop('first', 0)
         limit = kwargs.pop('limit', sys.maxsize)
-        records = self._get_paginated('events', first, limit, **kwargs)
+        records = self._get_paginated('events', limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=_U_COLUMNS)
 
     def user_list(self, internal=False, format=None):

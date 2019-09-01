@@ -6,107 +6,11 @@ import os
 
 from datetime import datetime
 
-from ae5_tools.api import AEUserSession, AEAdminSession, AEUnexpectedResponseError
+from ae5_tools.api import AEUserSession, AEUnexpectedResponseError
 
 
-def _get_vars(*vars):
-    missing = [v for v in vars if not os.environ.get(v)]
-    if missing:
-        raise RuntimeError('The following environment variables must be set: {}'.format(' '.join(missing)))
-    result = tuple(os.environ[v] for v in vars)
-    return result[0] if len(result) == 1 else result
-
-
-@pytest.fixture
-def user_session():
-    hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
-    return AEUserSession(hostname, username, password)
-
-
-@pytest.fixture
-def admin_session():
-    hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_ADMIN_USERNAME', 'AE5_ADMIN_PASSWORD')
-    return AEAdminSession(hostname, username, password)
-
-
-@pytest.fixture
-def impersonate_session(admin_session):
-    username = _get_vars('AE5_USERNAME')
-    return AEUserSession(admin_session.hostname, username, admin_session)
-
-
-@pytest.fixture()
-def user_project_list(user_session):
-    project_list = user_session.project_list(collaborators=True)
-    for r in project_list:
-        if r['name'] == 'test_upload':
-            user_session.project_delete(r['id'])
-    return [r for r in project_list if r['name'] != 'test_upload']
-
-
-@pytest.fixture()
-def user_run_list(user_session):
-    job_list = user_session.run_list()
-    for r in job_list:
-        if r['name'].startswith('testjob'):
-            user_session.run_delete(r['id'])
-    return [r for r in job_list if not r['name'].startswith('testjob')]
-
-
-@pytest.fixture()
-def user_job_list(user_session, user_run_list):
-    job_list = user_session.job_list()
-    for r in job_list:
-        if r['name'].startswith('testjob'):
-            user_session.job_delete(r['id'])
-    return [r for r in job_list if not r['name'].startswith('testjob')]
-
-
-@pytest.fixture()
-def user_deploy_list(user_session):
-    deploy_list = user_session.deployment_list()
-    for r in deploy_list:
-        if r['name'] == 'testdeploy':
-            user_session.deployment_stop(r['id'])
-    return [r for r in deploy_list if not r['name'] == 'testdeploy']
-
-
-@pytest.fixture()
-def user_project_list_imp(impersonate_session):
-    project_list = impersonate_session.project_list(collaborators=True)
-    for r in project_list:
-        if r['name'] == 'test_upload':
-            impersonate_session.project_delete(r['id'])
-    return [r for r in project_list if r['name'] != 'test_upload']
-
-
-@pytest.fixture()
-def project_set(user_project_list):
-    return [r for r in user_project_list if r['name'] in {'testproj1', 'testproj2', 'testproj3'}]
-
-
-# Expectations: the user AE5_USERNAME should have at least three projects:
-# - project names: testproj1, testproj2, testproj3
-# - all three editors should be represented
-# - the projects should have 0, 1, and 2 collaborators
-# - there is no project named 'test_upload'
-def test_project_list(user_session, project_set):
-    assert len(project_set) == 3
-    assert all(r['owner'] == user_session.username for r in project_set)
-    editors = set(r['editor'] for r in project_set)
-    assert editors == {'notebook', 'jupyterlab', 'zeppelin'}
-    collabs = set(len(r['collaborators'].split(', ')) if r['collaborators'] else 0
-                  for r in project_set)
-    assert collabs == {0, 1, 2}
-
-
-def test_project_list_imp(project_set, user_project_list_imp):
-    for r1 in project_set:
-        assert any(r1 == r2 for r2 in user_project_list_imp)
-
-
-def test_project_info(user_session, project_set):
-    for rec0 in project_set:
+def test_project_info(user_session, project_list):
+    for rec0 in project_list:
         id = rec0['id']
         pair = '{}/{}'.format(rec0['owner'], rec0['name'])
         rec1 = user_session.project_info(id, collaborators=True)
@@ -117,8 +21,8 @@ def test_project_info(user_session, project_set):
         assert rec2 == rec3
 
 
-def test_project_collaborators(user_session, project_set):
-    for rec0 in project_set:
+def test_project_collaborators(user_session, project_list):
+    for rec0 in project_list:
         collabs = rec0['collaborators']
         collabs = set(collabs.split(', ')) if collabs else set()
         collab2 = user_session.project_collaborator_list(rec0['id'])
@@ -126,19 +30,21 @@ def test_project_collaborators(user_session, project_set):
         assert collabs == collab3, collab2
 
 
-def test_project_activity(user_session, project_set):
+def test_project_activity(user_session):
     activity = user_session.project_activity('testproj3')
     assert activity[-1]['done']
 
 
-def test_project_download_upload_delete(user_session, project_set, user_project_list):
-    assert not any(r['name'] == 'test_upload' for r in user_project_list)
+def test_project_download_upload_delete(user_session):
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob')
         fname2 = os.path.join(tempd, 'blob2')
-        user_session.project_download(project_set[0]['id'], filename=fname)
+        user_session.project_download('testproj1', filename=fname)
         prec = user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
-        user_session.project_download(prec['id'], filename=fname2)
+        rrec = user_session.revision_list('test_upload')
+        assert len(rrec) == 1
+        assert rrec[0]['name'] == '1.2.3'
+        user_session.project_download('test_upload:1.2.3', filename=fname2)
         for r in user_session.project_list():
             if r['name'] == 'test_upload':
                 user_session.project_delete(r['id'])
@@ -148,7 +54,7 @@ def test_project_download_upload_delete(user_session, project_set, user_project_
     assert not any(r['name'] == 'test_upload' for r in user_session.project_list())
 
 
-def test_job_run1(user_session, user_job_list, user_run_list):
+def test_job_run1(user_session):
     user_session.job_create('testproj3', name='testjob1', command='run', run=True, wait=True)
     jrecs = [r for r in user_session.job_list(format='json') if r['name'] == 'testjob1']
     assert len(jrecs) == 1, jrecs
@@ -162,7 +68,7 @@ def test_job_run1(user_session, user_job_list, user_run_list):
     assert not any(r['name'] != 'testjob1' for r in user_session.run_list())
 
 
-def test_job_run2(user_session, user_job_list, user_run_list):
+def test_job_run2(user_session):
     # Test cleanup mode and variables in jobs
     variables = {'INTEGRATION_TEST_KEY_1': 'value1', 'INTEGRATION_TEST_KEY_2': 'value2'}
     user_session.job_create('testproj3', name='testjob2', command='run_with_env_vars',
@@ -181,8 +87,7 @@ def test_job_run2(user_session, user_job_list, user_run_list):
     assert not any(r['name'] == 'testjob2' for r in user_session.run_list())
 
 
-def test_deploy(user_session, user_deploy_list):
-    assert not any(r['name'] == 'testdeploy' for r in user_session.deployment_list())
+def test_deploy(user_session):
     user_session.deployment_start('testproj3', name='testdeploy', endpoint='testendpoint',
                                   command='default', public=False, wait=True)
     drecs = [r for r in user_session.deployment_list(format='json') if r['name'] == 'testdeploy']
@@ -202,26 +107,37 @@ def test_deploy(user_session, user_deploy_list):
 
 
 def test_login_time(admin_session, user_session):
+    # The current session should already be authenticated
+    now = datetime.utcnow()
     user_list = admin_session.user_list(format='json')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
     ltm1 = urec['lastLogin']
-    now = datetime.utcnow()
-    # The last login time should be before the present
     assert ltm1 < now
-    user_session.disconnect()
-    imp_session = AEUserSession(admin_session.hostname, user_session.username, admin_session)
-    plist1 = imp_session.project_list()
+
+    # Create new login session. This should change lastLogin
+    password = os.environ.get('AE5_PASSWORD')
+    user_sess2 = AEUserSession(user_session.hostname, user_session.username, password, persist=False)
+    plist1 = user_sess2.project_list()
     urec = admin_session.user_info(urec['id'], format='json')
     ltm2 = urec['lastLogin']
-    # The impersonation login should not affect the login time
-    assert ltm1 == ltm2
-    imp_session.disconnect()
-    plist2 = user_session.project_list()
+    assert ltm2 > ltm1
+    user_sess2.disconnect()
+
+    # Create new impersonation session. This should not change lastLogin
+    user_sess3 = AEUserSession(admin_session.hostname, user_session.username, admin_session, persist=False)
+    plist2 = user_sess3.project_list()
     urec = admin_session.user_info(urec['id'], format='json')
     ltm3 = urec['lastLogin']
-    # The second login should come after the first
-    assert ltm3 > ltm2
+    assert ltm3 == ltm2
+    user_sess3.disconnect()
     # Confirm the impersonation worked by checking the project lists are the same
     assert plist1 == plist2
+
+    # Access the original login session. It should not reauthenticate
+    plist3 = user_session.project_list()
+    urec = admin_session.user_info(urec['id'], format='json')
+    ltm4 = urec['lastLogin']
+    assert ltm4 == ltm3
+    assert plist1 == plist3
 
