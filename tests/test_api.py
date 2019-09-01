@@ -127,11 +127,8 @@ def test_project_collaborators(user_session, project_set):
 
 
 def test_project_activity(user_session, project_set):
-    for rec0 in project_set:
-        activity = user_session.project_activity('testproj3')
-        assert any(rec0['owner'] == rec1['owner'] for rec1 in activity)
-        assert activity[-1]['type'] in ('create_action', 'deploy_action')
-        assert activity[-1]['done']
+    activity = user_session.project_activity('testproj3')
+    assert activity[-1]['done']
 
 
 def test_project_download_upload_delete(user_session, project_set, user_project_list):
@@ -208,11 +205,23 @@ def test_login_time(admin_session, user_session):
     user_list = admin_session.user_list(format='json')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
+    ltm1 = urec['lastLogin']
     now = datetime.utcnow()
-    assert urec['lastLogin'] < now
+    # The last login time should be before the present
+    assert ltm1 < now
     user_session.disconnect()
-    user_session.authorize()
-    user_list = admin_session.user_list(format='json')
+    imp_session = AEUserSession(admin_session.hostname, user_session.username, admin_session)
+    plist1 = imp_session.project_list()
     urec = admin_session.user_info(urec['id'], format='json')
-    assert urec['lastLogin'] > now
+    ltm2 = urec['lastLogin']
+    # The impersonation login should not affect the login time
+    assert ltm1 == ltm2
+    imp_session.disconnect()
+    plist2 = user_session.project_list()
+    urec = admin_session.user_info(urec['id'], format='json')
+    ltm3 = urec['lastLogin']
+    # The second login should come after the first
+    assert ltm3 > ltm2
+    # Confirm the impersonation worked by checking the project lists are the same
+    assert plist1 == plist2
 

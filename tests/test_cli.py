@@ -44,12 +44,14 @@ def _cmd(cmd, table=True):
 @pytest.fixture
 def user_session():
     hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
+    _cmd('login', table=False)
     return Session(hostname, username)
 
 
 @pytest.fixture
 def admin_session():
     hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_ADMIN_USERNAME', 'AE5_ADMIN_PASSWORD')
+    _cmd('login --admin', table=False)
     return Session(hostname, username)
 
 
@@ -131,11 +133,8 @@ def test_project_collaborators(user_session, project_set):
 
 
 def test_project_activity(user_session, project_set):
-    for rec0 in project_set:
-        activity = _cmd('project activity testproj3')
-        assert any(rec0['owner'] == rec1['owner'] for rec1 in activity)
-        assert activity[-1]['type'] in ('create_action', 'deploy_action')
-        assert activity[-1]['done']
+    activity = _cmd('project activity testproj3')
+    assert activity[-1]['done']
 
 
 def test_project_download_upload_delete(user_session, project_set, user_project_list):
@@ -211,11 +210,21 @@ def test_login_time(admin_session, user_session):
     user_list = _cmd('user list')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
+    ltm1 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
     now = datetime.utcnow()
-    assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") < now
+    # The last login time should be before the present
+    assert ltm1 < now
     _cmd('logout', table=False)
-    _cmd('login', table=False)
+    plist1 = _cmd('project list --impersonate')
     urec = _cmd(f'user info {urec["id"]}')
-    assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") > now
-
-
+    ltm2 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
+    # The impersonation login should not affect the login time
+    assert ltm1 == ltm2
+    _cmd('logout', table=False)
+    plist2 = _cmd('project list')
+    urec = _cmd(f'user info {urec["id"]}')
+    ltm3 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
+    # The second login should come after the first
+    assert ltm3 > ltm2
+    # Confirm the impersonation worked by checking the project lists are the same
+    assert plist1 == plist2

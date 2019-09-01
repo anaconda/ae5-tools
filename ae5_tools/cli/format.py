@@ -6,7 +6,7 @@ import click
 import pandas as pd
 
 from fnmatch import fnmatch
-
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from .utils import param_callback, click_text, get_options
 
 IS_WIN = sys.platform.startswith('win')
@@ -231,7 +231,8 @@ def print_output(result):
         result = result.T.reset_index()
         result.columns = ['field', 'value']
     if fmt != 'json':
-        result = result.applymap(lambda x: json.dumps(x) if isinstance(x, (list, dict)) else str(x))
+        result = result.applymap(lambda x: json.dumps(x)
+                                 if isinstance(x, (list, dict)) else str(x))
     if opts.get('filter') or opts.get('columns'):
         result = filter_df(result, opts.get('filter'), opts.get('columns'))
     if not is_single and 'sort' in opts:

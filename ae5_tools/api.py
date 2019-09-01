@@ -20,6 +20,9 @@ from http.cookiejar import LWPCookieJar
 
 requests.packages.urllib3.disable_warnings()
 
+# Maximum page size in keycloak
+KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
+
 
 _P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                                    'id',               'created', 'updated', 'url']  # noqa: E241, E201
 _R_COLUMNS = [            'name', 'owner', 'commands',                                                        'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
@@ -27,7 +30,7 @@ _S_COLUMNS = [            'name', 'owner',             'resource_profile',      
 _D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
-_U_COLUMNS = ['username', 'email', 'lastLogin', 'firstName', 'lastName', 'id']
+_U_COLUMNS = ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id']
 _T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
@@ -215,15 +218,17 @@ class AESessionBase(object):
         do_save = False
         if not self.connected:
             self.authorize()
-        retries = 0
-        for redirect in range(30):
+        retries = redirects = 0
+        while True:
             try:
                 response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
+                retries = 0
             except requests.exceptions.ConnectionError:
                 if retries == 3:
                     raise AEUnexpectedResponseError('Unable to connect', method, url, **kwargs)
                 retries += 1
                 time.sleep(2)
+                continue
             except requests.exceptions.Timeout:
                 raise AEUnexpectedResponseError('Connection timeout', method, url, **kwargs)
             if 300 <= response.status_code < 400:
@@ -241,23 +246,27 @@ class AESessionBase(object):
                     # on the same endpoint. So we are blocking for up to a minute here
                     # to wait for the endpoint to be established. If we let requests
                     # handle the redirect it would quickly reach its redirect limit.
+                    if redirects == 30:
+                        raise AEUnexpectedResponseError('Too many self-redirects', method, url, **kwargs)
+                    redirects += 1
                     time.sleep(2)
                 else:
                     # In this case we are likely being redirected to auth to retrieve
                     # a cookie for the endpoint session itself. We will want to save
-                    # this to avoid having to retrieve it every time.
+                    # this to avoid having to retrieve it every time. No need to sleep
+                    # here since this is not an identical redirect
                     do_save = True
+                    redirects = 0
                 url = url2
             elif response.status_code == 401 or self._is_login(response):
                 self.authorize()
+                redirects = 0
             elif response.status_code >= 400:
                 raise AEUnexpectedResponseError(response, method, url, **kwargs)
             else:
                 if do_save and self.persist:
                     self._save()
                 return self._format_response(response, fmt, cols)
-        else:
-            raise AEUnexpectedResponseError('Too many redirects', method, url, **kwargs)
 
     def _get(self, endpoint, **kwargs):
         return self._api('get', endpoint, **kwargs)
@@ -992,33 +1001,40 @@ class AEAdminSession(AESessionBase):
         with open(self._filename, 'w') as fp:
             json.dump(self._sdata, fp)
 
+    def _get_paginated(self, path, limit=sys.maxsize, **kwargs):
+        records = []
+        kwargs.setdefault('first', 0)
+        while True:
+            kwargs['max'] = min(KEYCLOAK_PAGE_MAX, limit)
+            t_records = self._get(path, params=kwargs, format='json')
+            records.extend(t_records)
+            n_records = len(t_records)
+            if n_records < kwargs['max'] or n_records == limit:
+                return records
+            kwargs['first'] += n_records
+            limit -= n_records
+
     def user_events(self, format=None, **kwargs):
-        events = []
-        params = {'max':1000, 'first':-1000}
-        params.update(kwargs)
-        while len(events) == params['max'] + params['first']:
-            params['first'] = len(events)
-            events.extend(self._get('events', params=params, format='json'))
-        return self._format_response(events, format=format, columns=_U_COLUMNS)
+        first = kwargs.pop('first', 0)
+        limit = kwargs.pop('limit', sys.maxsize)
+        records = self._get_paginated('events', first, limit, **kwargs)
+        return self._format_response(records, format=format, columns=_U_COLUMNS)
 
     def user_list(self, internal=False, format=None):
-        users = []
-        params = {'max':1000, 'first':-1000}
-        while len(users) == params['max'] + params['first']:
-            params['first'] = len(users)
-            users.extend(self._get(f'users', params=params, format='json'))
-        users = {u['id']: u for u in users}
+        users = self._get_paginated('users')
 
-        events = self.user_events(client='anaconda-platform', type='LOGIN', format='json')
-        for e in events:
-            if 'response_mode' not in e['details']:
-                urec = users.get(e['userId'])
-                if urec and 'lastLogin' not in urec:
-                    urec['lastLogin'] = e['time']
+        if not internal:
+            users = {u['id']: u for u in users}
+            events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
+            for e in events:
+                if 'response_mode' not in e['details']:
+                    urec = users.get(e['userId'])
+                    if urec and 'lastLogin' not in urec:
+                        urec['lastLogin'] = e['time']
 
-        users = list(users.values())
-        for urec in users:
-            urec['lastLogin'] = datetime.utcfromtimestamp(urec.get('lastLogin', 0) / 1000.0)
+            users = list(users.values())
+            for urec in users:
+                urec['lastLogin'] = datetime.utcfromtimestamp(urec.get('lastLogin', 0) / 1000.0)
 
         return self._format_response(users, format=format, columns=_U_COLUMNS)
 
@@ -1030,7 +1046,8 @@ class AEAdminSession(AESessionBase):
         if response:
             response = response[0]
             if not internal:
-                events = self.user_events(client='anaconda-platform', type='LOGIN', user=response['id'], format='json')
+                events = self._get_paginated('events', client='anaconda-platform',
+                                              type='LOGIN', user=response['id'])
                 time = next((e['time'] for e in events
                              if 'response_mode' not in e['details']), 0)
                 response['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
