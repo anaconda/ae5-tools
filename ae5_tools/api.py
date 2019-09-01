@@ -994,7 +994,8 @@ class AEAdminSession(AESessionBase):
     def _disconnect(self):
         # There is currently no way to truly end an active admin session, but we
         # can clear all knowledge of it to force reauthentication.
-        self._sdata.clear()
+        if self._sdata:
+            self._sdata.clear()
 
     def _save(self):
         os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)

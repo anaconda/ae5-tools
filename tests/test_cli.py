@@ -8,23 +8,13 @@ import os
 import json
 import shlex
 import pandas as pd
+import pprint
 
 from io import BytesIO
 from datetime import datetime
 from collections import namedtuple
 
-from ae5_tools.api import AEUserSession, AEAdminSession, AEUnexpectedResponseError
-
 Session = namedtuple('Session', 'hostname username')
-
-
-def _get_vars(*vars):
-    missing = [v for v in vars if not os.environ.get(v)]
-    if missing:
-        raise RuntimeError('The following environment variables must be set: {}'.format(' '.join(missing)))
-    result = tuple(os.environ[v] for v in vars)
-    return result[0] if len(result) == 1 else result
-
 
 def _cmd(cmd, table=True):
     # We go through Pandas to CSV to JSON instead of directly to JSON to improve coverage
@@ -42,89 +32,24 @@ def _cmd(cmd, table=True):
 
 
 @pytest.fixture
-def user_session():
-    hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
-    _cmd('login', table=False)
-    return Session(hostname, username)
+def project_list_cli(user_session):
+    return _cmd('project list --collaborators')
 
 
-@pytest.fixture
-def admin_session():
-    hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_ADMIN_USERNAME', 'AE5_ADMIN_PASSWORD')
-    _cmd('login --admin', table=False)
-    return Session(hostname, username)
-
-
-@pytest.fixture()
-def user_project_list(user_session):
-    project_list = _cmd('project list --collaborators')
-    for r in project_list:
-        if r['name'] == 'test_upload':
-            _cmd(f'project delete {r["id"]} --yes', table=False)
-    return [r for r in project_list if r['name'] != 'test_upload']
-
-
-@pytest.fixture()
-def user_run_list(user_session):
-    job_list = _cmd('run list')
-    for r in job_list:
-        if r['name'].startswith('testjob'):
-            _cmd(f'run delete {r["id"]} --yes', table=False)
-    return [r for r in job_list if not r['name'].startswith('testjob')]
-
-
-@pytest.fixture()
-def user_job_list(user_session, user_run_list):
-    job_list = _cmd('job list')
-    for r in job_list:
-        if r['name'].startswith('testjob'):
-            _cmd(f'job delete {r["id"]} --yes', table=False)
-    return [r for r in job_list if not r['name'].startswith('testjob')]
-
-
-@pytest.fixture()
-def user_deploy_list(user_session):
-    deploy_list = _cmd('deployment list')
-    for r in deploy_list:
-        if r['name'] == 'testdeploy':
-            _cmd(f'deployment stop {r["id"]} --yes', table=False)
-    return [r for r in deploy_list if not r['name'] == 'testdeploy']
-
-
-@pytest.fixture()
-def project_set(user_session, user_project_list):
-    return [r for r in user_project_list if r['name'] in {'testproj1', 'testproj2', 'testproj3'}]
-
-
-# Expectations: the user AE5_USERNAME should have at least three projects:
-# - project names: testproj1, testproj2, testproj3
-# - all three editors should be represented
-# - the projects should have 0, 1, and 2 collaborators
-# - there is no project named 'test_upload'
-def test_project_list(user_session, project_set):
-    assert len(project_set) == 3
-    assert all(r['owner'] == user_session.username for r in project_set)
-    editors = set(r['editor'] for r in project_set)
-    assert editors == {'notebook', 'jupyterlab', 'zeppelin'}
-    collabs = set(len(r['collaborators'].split(', ')) if r['collaborators'] else 0
-                  for r in project_set)
-    assert collabs == {0, 1, 2}
-
-
-def test_project_info(user_session, project_set):
-    for rec0 in project_set:
+def test_project_info(project_list_cli):
+    for rec0 in project_list_cli:
         id = rec0['id']
         pair = '{}/{}'.format(rec0['owner'], rec0['name'])
         rec1 = _cmd(f'project info {id}')
         rec2 = _cmd(f'project info {pair}')
         rec3 = _cmd(f'project info {pair}/{id}')
-        assert all(rec0[k] == v for k, v in rec2.items()), (rec0, rec2)
-        assert all(rec1[k] == v for k, v in rec2.items()), (rec1, rec2)
+        assert all(rec0[k] == v for k, v in rec2.items()), pprint.pformat((rec0, rec2))
+        assert all(rec1[k] == v for k, v in rec2.items()), pprint.pformat((rec1, rec2))
         assert rec2 == rec3
 
 
-def test_project_collaborators(user_session, project_set):
-    for rec0 in project_set:
+def test_project_collaborators(project_list_cli):
+    for rec0 in project_list_cli:
         collabs = rec0['collaborators']
         collabs = set(collabs.split(', ')) if collabs else set()
         collab2 = _cmd(f'project collaborator list {rec0["id"]}')
@@ -132,19 +57,21 @@ def test_project_collaborators(user_session, project_set):
         assert collabs == collab3, collab2
 
 
-def test_project_activity(user_session, project_set):
+def test_project_activity(user_session):
     activity = _cmd('project activity testproj3')
     assert activity[-1]['done']
 
 
-def test_project_download_upload_delete(user_session, project_set, user_project_list):
-    assert not any(r['name'] == 'test_upload' for r in user_project_list)
+def test_project_download_upload_delete(user_session):
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob')
         fname2 = os.path.join(tempd, 'blob2')
-        _cmd(f'project download {project_set[0]["id"]} --filename {fname}', table=False)
+        _cmd(f'project download testproj1 --filename {fname}', table=False)
         prec = _cmd(f'project upload {fname} --name test_upload --tag 1.2.3')
-        _cmd(f'project download {prec["id"]} --filename {fname2}', table=False)
+        rrec = _cmd(f'project revision list test_upload')
+        assert len(rrec) == 1
+        assert rrec[0]['name'] == '1.2.3'
+        _cmd(f'project download test_upload --filename {fname2}', table=False)
         for r in _cmd('project list'):
             if r['name'] == 'test_upload':
                 _cmd(f'project delete {r["id"]} --yes', table=False)
@@ -154,7 +81,7 @@ def test_project_download_upload_delete(user_session, project_set, user_project_
     assert not any(r['name'] == 'test_upload' for r in _cmd('project list'))
 
 
-def test_job_run1(user_session, user_job_list, user_run_list):
+def test_job_run1(user_session):
     _cmd('job create testproj3 --name testjob1 --command run --run --wait')
     jrecs = [r for r in _cmd('job list') if r['name'] == 'testjob1']
     assert len(jrecs) == 1, jrecs
@@ -168,7 +95,7 @@ def test_job_run1(user_session, user_job_list, user_run_list):
     assert not any(r['name'] != 'testjob1' for r in _cmd('run list'))
 
 
-def test_job_run2(user_session, user_job_list, user_run_list):
+def test_job_run2(user_session):
     # Test cleanup mode and variables in jobs
     variables = {'INTEGRATION_TEST_KEY_1': 'value1', 'INTEGRATION_TEST_KEY_2': 'value2'}
     vars = ' '.join(f'--variable {k}={v}' for k, v in variables.items())
@@ -187,7 +114,7 @@ def test_job_run2(user_session, user_job_list, user_run_list):
     assert not any(r['name'] == 'testjob2' for r in _cmd('run list'))
 
 
-def test_deploy(user_session, user_deploy_list):
+def test_deploy(user_session):
     assert not any(r['name'] == 'testdeploy' for r in _cmd('deployment list'))
     _cmd('project deploy testproj3 --name testdeploy --endpoint testendpoint --command default --private --wait --no-open', table=False)
     drecs = [r for r in _cmd('deployment list') if r['name'] == 'testdeploy']
@@ -207,24 +134,11 @@ def test_deploy(user_session, user_deploy_list):
 
 
 def test_login_time(admin_session, user_session):
+    # The current login time should be before the present
+    now = datetime.utcnow()
     user_list = _cmd('user list')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
     ltm1 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
-    now = datetime.utcnow()
-    # The last login time should be before the present
     assert ltm1 < now
-    _cmd('logout', table=False)
-    plist1 = _cmd('project list --impersonate')
-    urec = _cmd(f'user info {urec["id"]}')
-    ltm2 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
-    # The impersonation login should not affect the login time
-    assert ltm1 == ltm2
-    _cmd('logout', table=False)
-    plist2 = _cmd('project list')
-    urec = _cmd(f'user info {urec["id"]}')
-    ltm3 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
-    # The second login should come after the first
-    assert ltm3 > ltm2
-    # Confirm the impersonation worked by checking the project lists are the same
-    assert plist1 == plist2
+    # No more testing here, because we want to preserve the existing sessions
