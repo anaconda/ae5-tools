@@ -208,11 +208,23 @@ def test_login_time(admin_session, user_session):
     user_list = admin_session.user_list(format='json')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
+    ltm1 = urec['lastLogin']
     now = datetime.utcnow()
-    assert urec['lastLogin'] < now
+    # The last login time should be before the present
+    assert ltm1 < now
     user_session.disconnect()
-    user_session.authorize()
-    user_list = admin_session.user_list(format='json')
+    imp_session = AEUserSession(admin_session.hostname, user_session.username, admin_session)
+    plist1 = imp_session.project_list()
     urec = admin_session.user_info(urec['id'], format='json')
-    assert urec['lastLogin'] > now
+    ltm2 = urec['lastLogin']
+    # The impersonation login should not affect the login time
+    assert ltm1 == ltm2
+    imp_session.disconnect()
+    plist2 = user_session.project_list()
+    urec = admin_session.user_info(urec['id'], format='json')
+    ltm3 = urec['lastLogin']
+    # The second login should come after the first
+    assert ltm3 > ltm2
+    # Confirm the impersonation worked by checking the project lists are the same
+    assert plist1 == plist2
 

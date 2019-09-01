@@ -1,3 +1,4 @@
+import sys
 import click
 
 from ..login import cluster_call, login_options
@@ -37,3 +38,19 @@ def info(username):
 
     USERNAME must exactly match either one username or one KeyCloak user ID.'''
     cluster_call('user_info', username, cli=True, admin=True)
+
+
+@user.command()
+@click.argument('param', nargs=-1)
+@click.option('--limit', type=click.IntRange(1), default=sys.maxsize, help='The maximum number of events to return.')
+@click.option('--first', type=click.IntRange(0), default=0, help='The index of the first element to return.')
+@format_options()
+@login_options()
+def events(param, limit, first):
+    '''Retrieve KeyCloak events.
+
+    Each PARAM argument must be of the form <key>=<value>.
+    '''
+    param = [z.split('=', 1) for z in param]
+    param = dict((x.rstrip(), y.lstrip()) for x, y in param)
+    cluster_call('user_events', limit=limit, first=first, **param, cli=True, admin=True)

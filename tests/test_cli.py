@@ -44,12 +44,14 @@ def _cmd(cmd, table=True):
 @pytest.fixture
 def user_session():
     hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
+    _cmd('login', table=False)
     return Session(hostname, username)
 
 
 @pytest.fixture
 def admin_session():
     hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_ADMIN_USERNAME', 'AE5_ADMIN_PASSWORD')
+    _cmd('login --admin', table=False)
     return Session(hostname, username)
 
 
@@ -211,19 +213,23 @@ def test_login_time(admin_session, user_session):
     user_list = _cmd('user list')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
-    now = datetime.utcnow()
-    assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") < now
-    _cmd('logout', table=False)
-    _cmd('login', table=False)
+    # Need to re-grab the record because the list form truncates the time
     urec = _cmd(f'user info {urec["id"]}')
-    assert datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f") > now
-
-
-def test_impersonate(admin_session, user_session):
+    ltm1 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
+    now = datetime.utcnow()
+    # The last login time should be before the present
+    assert ltm1 < now
     _cmd('logout', table=False)
-    _cmd('login --impersonate', table=False)
-    recs1 = _cmd('project list')
+    plist1 = _cmd('project list --impersonate')
+    urec = _cmd(f'user info {urec["id"]}')
+    ltm2 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
+    # The impersonation login should not affect the login time
+    assert ltm1 == ltm2
     _cmd('logout', table=False)
-    _cmd('login', table=False)
-    recs2 = _cmd('project list')
-    assert recs1 == recs2
+    plist2 = _cmd('project list')
+    urec = _cmd(f'user info {urec["id"]}')
+    ltm3 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
+    # The second login should come after the first
+    assert ltm3 > ltm2
+    # Confirm the impersonation worked by checking the project lists are the same
+    assert plist1 == plist2

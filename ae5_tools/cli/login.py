@@ -121,9 +121,10 @@ def cluster_connect(hostname, username, admin):
                 conn = AEAdminSession(hostname, username, opts.get('admin_password'),
                                       persist=session_save)
             else:
-                password = opts.get('password')
-                if not password and opts.get('impersonate', False):
+                if opts.get('impersonate'):
                     password = cluster(True)
+                else:
+                    password = opts.get('password')
                 conn = AEUserSession(hostname, username, password,
                                      persist=session_save)
             SESSIONS[key] = conn
