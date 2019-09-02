@@ -178,7 +178,7 @@ def cluster_call(method, *args, **kwargs):
         if prefix:
             click.echo(prefix, nl=False, err=True)
         format = get_options().get('format') or 'table'
-        kwargs.setdefault('format', format)
+        kwargs.setdefault('format', 'table' if format in ('json', 'csv') else 'table')
 
     # Retrieve the proper cluster session object and make the call
     try:

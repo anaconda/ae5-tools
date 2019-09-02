@@ -24,11 +24,11 @@ requests.packages.urllib3.disable_warnings()
 KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
 
 
-_P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                                    'id',               'created', 'updated', 'url']  # noqa: E241, E201
-_R_COLUMNS = [            'name', 'owner', 'commands',                                                        'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
-_S_COLUMNS = [            'name', 'owner',             'resource_profile',                           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
-_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
-_J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated', 'url']  # noqa: E241, E201
+_P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                                    'id',               'created', 'updated', 'project_create_status', 'url']  # noqa: E241, E201
+_R_COLUMNS = [            'name', 'owner', 'commands',                                                        'id', 'project_id', 'created', 'updated',                          'url']  # noqa: E241, E201
+_S_COLUMNS = [            'name', 'owner',             'resource_profile',                           'state', 'id', 'project_id', 'created', 'updated',                          'url']  # noqa: E241, E201
+_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated',                          'url']  # noqa: E241, E201
+_J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated',                          'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
 _U_COLUMNS = ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id']
 _T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
@@ -38,7 +38,7 @@ _R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
 _ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s',
-           'lastLogin': 'timestamp/ms'}
+           'lastLogin': 'timestamp/ms', 'time': 'timestamp/ms'}
 
 
 class AEException(RuntimeError):
@@ -155,16 +155,16 @@ class AESessionBase(object):
     def _format_kwargs(self, kwargs):
         return kwargs.pop('format', None), kwargs.pop('columns', None)
 
-    def _format_table(self, response, columns):
+    def _format_table(self, response, columns, raw=False):
         if isinstance(response, dict):
             is_series = True
             response = [response]
         elif isinstance(response, list) and all(isinstance(x, dict) for x in response):
             is_series = False
         else:
-            raise RuntimeError('Not a table-compatible output')
-        clist = list(columns)
-        cset = set(columns)
+            return response, None
+        clist = list(columns or ())
+        cset = set(clist)
         result = []
         for rec in response:
             clist.extend(c for c in rec if c not in cset)
@@ -183,8 +183,8 @@ class AESessionBase(object):
                         if col in rec:
                             rec[col] = datetime.fromtimestamp(rec[col] / fact)
         if is_series:
-            result =  [{'field': k, 'value': v} for k, v in result[0].items()]
-        return result
+            result = result[0]
+        return (result, clist)
 
     def _format_response(self, response, format, columns):
         if isinstance(response, requests.models.Response):
@@ -205,18 +205,14 @@ class AESessionBase(object):
                 return response.text
         if format == 'json':
             return response
-        response = self._format_table(response, columns)
+        records, columns = self._format_table(response, columns)
         if format == 'dataframe':
             try:
                 import pandas as pd
             except ImportError:
                 raise ImportError('Pandas must be installed in order to use format="dataframe"')
-            if not response:
-                return pd.DataFrame([], columns=columns)
-            else:
-                columns = list(response[0])
-                return pd.DataFrame(response)[columns]
-        return response
+            return pd.DataFrame(records, columns=columns)
+        return records, columns
 
     def _api(self, method, endpoint, **kwargs):
         fmt, cols = self._format_kwargs(kwargs)
@@ -1036,7 +1032,7 @@ class AEAdminSession(AESessionBase):
         first = kwargs.pop('first', 0)
         limit = kwargs.pop('limit', sys.maxsize)
         records = self._get_paginated('events', limit=limit, first=first, **kwargs)
-        return self._format_response(records, format=format, columns=_U_COLUMNS)
+        return self._format_response(records, format=format, columns=[])
 
     def user_list(self, internal=False, format=None):
         users = self._get_paginated('users')
@@ -1049,6 +1045,8 @@ class AEAdminSession(AESessionBase):
                     if urec and 'lastLogin' not in urec:
                         urec['lastLogin'] = e['time']
             users = list(users.values())
+            for urec in users:
+                urec.setdefault('lastLogin', 0)
         return self._format_response(users, format=format, columns=_U_COLUMNS)
 
     def user_info(self, user_or_id, internal=False, format=None, quiet=False):

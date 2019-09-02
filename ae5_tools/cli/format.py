@@ -119,10 +119,10 @@ OPS = {'<' : lambda x, y: x < y,
 
 def filter_df(records, df_columns, filter, columns=None):
     if not records:
-        return records
+        return records, df_columns
     if columns:
         columns = columns.split(',')
-        missing = '\n  - '.join(set(columns) - df_columns)
+        missing = '\n  - '.join(set(columns) - set(df_columns))
         if missing:
             raise click.UsageError(f'One or more of the requested columns were not found:\n  - {missing}')
     mask0 = None
@@ -149,7 +149,8 @@ def filter_df(records, df_columns, filter, columns=None):
         records = [rec for rec, flag in zip(records, mask0) if flag]
     if columns and records:
         records = [{key: rec[key] for key in columns if key in rec} for rec in records]
-    return records
+        df_columns = columns
+    return records, df_columns
 
 
 def sort_df(records, columns):
@@ -167,10 +168,17 @@ def sort_df(records, columns):
     return [rec[x] for x in ndxs]
 
 
-def _str(x):
-    if hasattr(x, 'strftime'):
+def _str(x, isodate=False):
+    if isinstance(x, datetime):
+        if isodate:
+            return x.isoformat()
         return x.strftime("%m-%d-%Y %H:%M:%S")
     return str(x)
+
+
+def json_datetime(o):
+    if isinstance(o, datetime):
+        return o.isoformat()
 
 
 def print_df(records, columns, header=True, width=0):
@@ -188,9 +196,11 @@ def print_df(records, columns, header=True, width=0):
     records = [{str(k): _str(v) for k, v in rec.items()} for rec in records]
     for col in columns:
         col = str(col)
-        twid = max(max((len(rec[col]) for rec in records), default=0), len(col))
-        val = [rec[col] + ' ' * (twid - len(rec[col])) for rec in records]
-        col = col[:twid]
+        val = [rec.get(col, '') for rec in records]
+        twid = max(len(col), max((len(v) for v in val), default=len(col)))
+        val = [v + ' ' * (twid - len(v)) for v in val]
+        if len(col) > twid:
+            col = col[:twid-1] + '.'
         col = col + ' ' * (twid - len(col))
         if nwidth < 0:
             final = val
@@ -220,29 +230,38 @@ def print_df(records, columns, header=True, width=0):
 def print_output(result):
     if result is None:
         return
-    if isinstance(result, str):
+    elif isinstance(result, str):
         if result:
             print(result)
         return
-    df_columns = set()
-    for rec in result:
-        df_columns.update(rec)
+    elif isinstance(result, (list, dict)):
+        print(json.dumps(result, indent=2, default=json_datetime))
+        return
+    elif not isinstance(result, tuple):
+        raise NotImplementedError(f'Not prepared to print an object of type {type(result)}')
+    result, columns = result
+    is_series = isinstance(result, dict)
+    if is_series:
+        result = [result]
     opts = get_options()
     if opts.get('filter') or opts.get('columns'):
-        result = filter_df(result, df_columns, opts.get('filter'), opts.get('columns'))
-    if not is_single and 'sort' in opts:
+        result, columns = filter_df(result, columns, opts.get('filter'), opts.get('columns'))
+    if not is_series and 'sort' in opts:
         result = sort_df(result, opts.get('sort'))
+    if is_series:
+        result = result[0]
     fmt = opts.get('format')
+    if fmt == 'json':
+        print(json.dumps(result, indent=2, default=json_datetime))
+        return
+    if isinstance(result, dict):
+        columns = ['field', 'value']
+        result = [{'field': k, 'value': v} for k, v in result[0].items()]
     if fmt == 'csv':
-        if not result and not columns:
-            columns = opts.get('columns', [])
         if opts.get('header', True):
             print(','.join(columns))
         for rec in result:
-            print(','.join(str(row[col]) for col in columns))
-    elif fmt == 'json':
-        print(json.dumps(result, indent=2))
+            print(','.join(_str(rec[col], True) for col in columns))
     else:
-        columns = list(result[0])
         width = 99999999 if opts.get('wide') else opts.get('width') or 0
         print_df(result, columns, opts.get('header', True), width)
