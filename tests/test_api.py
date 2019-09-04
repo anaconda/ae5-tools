@@ -75,7 +75,7 @@ def test_job_run2(user_session):
                             variables=variables, run=True, wait=True, cleanup=True)
     # The job record should have already been deleted
     assert not any(r['name'] == 'testjob2' for r in user_session.job_list())
-    rrecs = [r for r in user_session.run_list(format='json') if r['name'] == 'testjob2']
+    rrecs = [r for r in user_session.run_list() if r['name'] == 'testjob2']
     assert len(rrecs) == 1, rrecs
     ldata2 = user_session.run_log(rrecs[0]['id'], format='text')
     # Confirm that the environment variables were passed through
@@ -109,35 +109,37 @@ def test_deploy(user_session):
 def test_login_time(admin_session, user_session):
     # The current session should already be authenticated
     now = datetime.utcnow()
-    user_list = admin_session.user_list(format='json')
+    plist0 = user_session.project_list()
+    user_list = admin_session.user_list()
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
-    ltm1 = urec['lastLogin']
+    ltm1 = datetime.fromtimestamp(urec['lastLogin']/1000.0)
     assert ltm1 < now
 
     # Create new login session. This should change lastLogin
     password = os.environ.get('AE5_PASSWORD')
     user_sess2 = AEUserSession(user_session.hostname, user_session.username, password, persist=False)
     plist1 = user_sess2.project_list()
-    urec = admin_session.user_info(urec['id'], format='json')
-    ltm2 = urec['lastLogin']
+    urec = admin_session.user_info(urec['id'])
+    ltm2 = datetime.fromtimestamp(urec['lastLogin']/1000.0)
     assert ltm2 > ltm1
     user_sess2.disconnect()
+    assert plist1 == plist0
 
     # Create new impersonation session. This should not change lastLogin
     user_sess3 = AEUserSession(admin_session.hostname, user_session.username, admin_session, persist=False)
     plist2 = user_sess3.project_list()
-    urec = admin_session.user_info(urec['id'], format='json')
-    ltm3 = urec['lastLogin']
+    urec = admin_session.user_info(urec['id'])
+    ltm3 = datetime.fromtimestamp(urec['lastLogin']/1000.0)
     assert ltm3 == ltm2
     user_sess3.disconnect()
     # Confirm the impersonation worked by checking the project lists are the same
-    assert plist1 == plist2
+    assert plist2 == plist0
 
     # Access the original login session. It should not reauthenticate
     plist3 = user_session.project_list()
-    urec = admin_session.user_info(urec['id'], format='json')
-    ltm4 = urec['lastLogin']
+    urec = admin_session.user_info(urec['id'])
+    ltm4 = datetime.fromtimestamp(urec['lastLogin']/1000.0)
     assert ltm4 == ltm3
-    assert plist1 == plist3
+    assert plist3 == plist0
 

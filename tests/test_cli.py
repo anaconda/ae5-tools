@@ -13,8 +13,11 @@ import pprint
 from io import BytesIO
 from datetime import datetime
 from collections import namedtuple
+from ae5_tools.api import AEUnexpectedResponseError
+
 
 Session = namedtuple('Session', 'hostname username')
+
 
 def _cmd(cmd, table=True):
     # We go through Pandas to CSV to JSON instead of directly to JSON to improve coverage
@@ -136,6 +139,7 @@ def test_deploy(user_session):
 def test_login_time(admin_session, user_session):
     # The current login time should be before the present
     now = datetime.utcnow()
+    prrec = _cmd('project list')
     user_list = _cmd('user list')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None

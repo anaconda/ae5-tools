@@ -1,5 +1,6 @@
 import os
 import re
+import csv
 import sys
 import json
 import click
@@ -117,12 +118,10 @@ OPS = {'<' : lambda x, y: x < y,
        '!=': lambda x, y: not fnmatch(x, y)}
 
 
-def filter_df(records, df_columns, filter, columns=None):
-    if not records:
-        return records, df_columns
+def filter_df(records, _columns, filter, columns=None):
     if columns:
         columns = columns.split(',')
-        missing = '\n  - '.join(set(columns) - set(df_columns))
+        missing = '\n  - '.join(set(columns) - set(_columns))
         if missing:
             raise click.UsageError(f'One or more of the requested columns were not found:\n  - {missing}')
     mask0 = None
@@ -137,10 +136,12 @@ def filter_df(records, df_columns, filter, columns=None):
                     if len(parts) != 3:
                         raise click.UsageError(f'Invalid filter string: {filt4}\n   Required format: <fieldname><op><value>')
                     field, op, value = list(map(str.strip, parts))
-                    if field not in df_columns:
+                    try:
+                        ndx = _columns.index(field)
+                    except ValueError:
                         raise click.UsageError(f'Invalid filter field: {field}')
                     op = OPS[op]
-                    mask4 = [op(str(rec.get(field,'')), value) for rec in records]
+                    mask4 = [op(_str(rec[ndx]), value) for rec in records]
                     mask3 = mask4 if mask3 is None else [m1 and m2 for m1, m2 in zip(mask3, mask4)]
                 mask2 = mask3 if mask2 is None else [m1 or m2 for m1, m2 in zip(mask2, mask3)]
             mask1 = mask2 if mask1 is None else [m1 and m2 for m1, m2 in zip(mask1, mask2)]
@@ -148,32 +149,47 @@ def filter_df(records, df_columns, filter, columns=None):
     if mask0:
         records = [rec for rec, flag in zip(records, mask0) if flag]
     if columns and records:
-        records = [{key: rec[key] for key in columns if key in rec} for rec in records]
-        df_columns = columns
-    return records, df_columns
+        ndxs = [_columns.index(col) for col in columns]
+        records = [[rec[ndx] for ndx in ndxs] for rec in records]
+        _columns = columns
+    return records, _columns
 
 
-def sort_df(records, columns):
+def _strsort(x):
+    if isinstance(x, str):
+        return x.lower()
+    else:
+        return x
+
+
+def sort_df(records, columns, s_columns):
     if not records or not columns:
         return records
-    ndx0 = ndxs = list(range(len(records)))
-    for col in columns.split(',')[::-1]:
+    ndxs = list(range(len(records)))
+    ndx0 = list(ndxs)
+    for col in s_columns.split(',')[::-1]:
         desc = col.startswith('-')
         if desc:
             col = col[1:]
-        ndx2 = sorted(ndx0, key=lambda x: records[ndxs[x]].get(col, ''))
-        if desc:
-            ndx2 = ndx2[::-1]
-        ndxs = [ndxs[x] for x in ndxs2]
-    return [rec[x] for x in ndxs]
+        try:
+            ndxc = columns.index(col)
+        except ValueError:
+            raise click.UsageError(f'Invalid sort field: {col}')
+        vals = [_strsort(records[x][ndxc]) for x in ndxs]
+        ndx2 = sorted(ndx0, key=lambda x: vals[x], reverse=desc)
+        ndxs = [ndxs[x] for x in ndx2]
+    return [records[x] for x in ndxs]
 
 
 def _str(x, isodate=False):
-    if isinstance(x, datetime):
+    if x is None:
+        return ''
+    elif isinstance(x, datetime):
         if isodate:
             return x.isoformat()
         return x.strftime("%m-%d-%Y %H:%M:%S")
-    return str(x)
+    else:
+        return str(x)
 
 
 def json_datetime(o):
@@ -181,7 +197,23 @@ def json_datetime(o):
         return o.isoformat()
 
 
-def print_df(records, columns, header=True, width=0):
+def print_json(records, columns):
+    if columns == ['field', 'value']:
+        result = dict((k, v) for k, v in records if v is not None)
+    else:
+        result = [{k: v for k, v in zip(columns, rec) if v is not None} for rec in records]
+    print(json.dumps(result, indent=2, default=json_datetime))
+
+
+def print_csv(records, columns, header):
+    cw = csv.writer(sys.stdout)
+    if header:
+        cw.writerow(columns)
+    for rec in records:
+        cw.writerow(rec)
+
+
+def print_table(records, columns, header=True, width=0):
     if width <= 0:
         # http://granitosaurus.rocks/getting-terminal-size.html
         for i in range(3):
@@ -193,10 +225,9 @@ def print_df(records, columns, header=True, width=0):
         else:
             width = 80
     nwidth = -2
-    records = [{str(k): _str(v) for k, v in rec.items()} for rec in records]
-    for col in columns:
+    for ndx, col in enumerate(columns):
         col = str(col)
-        val = [rec.get(col, '') for rec in records]
+        val = [_str(rec[ndx]) for rec in records]
         twid = max(len(col), max((len(v) for v in val), default=len(col)))
         val = [v + ' ' * (twid - len(v)) for v in val]
         if len(col) > twid:
@@ -234,34 +265,19 @@ def print_output(result):
         if result:
             print(result)
         return
-    elif isinstance(result, (list, dict)):
-        print(json.dumps(result, indent=2, default=json_datetime))
-        return
     elif not isinstance(result, tuple):
         raise NotImplementedError(f'Not prepared to print an object of type {type(result)}')
     result, columns = result
-    is_series = isinstance(result, dict)
-    if is_series:
-        result = [result]
     opts = get_options()
+    if opts.get('sort'):
+        result = sort_df(result, columns, opts.get('sort'))
     if opts.get('filter') or opts.get('columns'):
         result, columns = filter_df(result, columns, opts.get('filter'), opts.get('columns'))
-    if not is_series and 'sort' in opts:
-        result = sort_df(result, opts.get('sort'))
-    if is_series:
-        result = result[0]
     fmt = opts.get('format')
     if fmt == 'json':
-        print(json.dumps(result, indent=2, default=json_datetime))
-        return
-    if isinstance(result, dict):
-        columns = ['field', 'value']
-        result = [{'field': k, 'value': v} for k, v in result[0].items()]
-    if fmt == 'csv':
-        if opts.get('header', True):
-            print(','.join(columns))
-        for rec in result:
-            print(','.join(_str(rec[col], True) for col in columns))
+        print_json(result, columns)
+    elif fmt == 'csv':
+        print_csv(result, columns, opts.get('header', True))
     else:
-        width = 99999999 if opts.get('wide') else opts.get('width') or 0
-        print_df(result, columns, opts.get('header', True), width)
+        width = sys.maxsize if opts.get('wide') else opts.get('width') or 0
+        print_table(result, columns, opts.get('header', True), width)

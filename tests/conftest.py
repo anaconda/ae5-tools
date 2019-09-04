@@ -25,7 +25,7 @@ def user_setup():
     for job in s.job_list():
         s.job_delete(job['id'])
     for dep in s.deployment_list():
-        s.deployment_delete(dep['id'])
+        s.deployment_stop(dep['id'])
     for sess in s.session_list():
         s.session_stop(sess['id'])
     plist = s.project_list(collaborators=True)

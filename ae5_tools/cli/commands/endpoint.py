@@ -19,8 +19,7 @@ def endpoint():
 def list():
     '''List the static endpoints on this cluster.
     '''
-    result = cluster_call('endpoint_list', format='dataframe')
-    print_output(result)
+    cluster_call('endpoint_list', cli=True)
 
 
 @endpoint.command()
@@ -33,5 +32,4 @@ def info(endpoint):
        The ENDPOINT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one endpoint name or ID.
     '''
-    result = cluster_call('endpoint_info', endpoint, format='dataframe')
-    print_output(result)
+    cluster_call('endpoint_info', endpoint, cli=True)

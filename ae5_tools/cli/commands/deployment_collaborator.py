@@ -27,8 +27,7 @@ def list(deployment):
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one deployment.
     '''
-    result = cluster_call('deployment_collaborator_list', deployment, format='dataframe')
-    print_output(result)
+    cluster_call('deployment_collaborator_list', deployment, cli=True)
 
 
 @collaborator.command()
@@ -45,8 +44,7 @@ def info(deployment, userid):
        USERID must be an exact match of the user ID of an individual, or the name
        of a group (e.g., 'everyone').
     '''
-    result = cluster_call('deployment_collaborator_info', deployment, userid, format='dataframe')
-    print_output(result)
+    cluster_call('deployment_collaborator_info', deployment, userid, cli=True)
 
 
 @collaborator.command()
@@ -65,8 +63,7 @@ def add(deployment, userid, group):
        of a group (e.g., 'everyone'). It is not an error if this matches an existing
        collaborator, so this can be used to change the read-only status.
     '''
-    result = cluster_call('deployment_collaborator_add', deployment, userid, group, format='dataframe')
-    print_output(result)
+    cluster_call('deployment_collaborator_add', deployment, userid, group, cli=True)
 
 
 @collaborator.command()
@@ -84,5 +81,4 @@ def remove(deployment, userid):
        of a group (e.g., 'everyone'). If the user ID is not among the current list
        of collaborators, an error is raised.
     '''
-    result = cluster_call('deployment_collaborator_remove', deployment, userid, format='dataframe')
-    print_output(result)
+    cluster_call('deployment_collaborator_remove', deployment, userid, cli=True)
