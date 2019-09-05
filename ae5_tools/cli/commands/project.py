@@ -3,7 +3,6 @@ import click
 from ..utils import ident_filter
 from ..login import login_options, cluster_call
 from ..format import format_options
-from ...identifier import Identifier
 from .project_collaborator import collaborator
 from .project_revision import revision
 
@@ -281,9 +280,7 @@ def delete(project, yes):
 
        This command will currently fail if the project has an active session.
     '''
-    result = cluster_call('project_info', project, format='json')
-    ident = Identifier.from_record(result)
-    cluster_call('project_delete', result['id'],
-                 confirm=None if yes else f'Delete project {ident}',
-                 prefix=f'Deleting project {ident}...',
+    cluster_call('project_delete', ident=project,
+                 confirm=None if yes else 'Delete project {ident}',
+                 prefix='Deleting project {ident}...',
                  postfix='deleted.', cli=True)
