@@ -28,4 +28,3 @@ def _cmd(cmd, table=True):
     if tuple(csv.columns) == ('field', 'value'):
         return csv.set_index('field').T.iloc[0].to_dict()
     return json.loads(csv.to_json(index=False, orient='table'))['data']
-

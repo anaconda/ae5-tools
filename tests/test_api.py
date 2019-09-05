@@ -1,5 +1,3 @@
-import pytest
-
 import tempfile
 import time
 import os
@@ -44,7 +42,7 @@ def test_project_download_upload_delete(user_session):
         fname = os.path.join(tempd, 'blob')
         fname2 = os.path.join(tempd, 'blob2')
         user_session.project_download(f'{uname}/testproj1', filename=fname)
-        prec = user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
+        user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
         rrec = user_session.revision_list('test_upload')
         assert len(rrec) == 1
         assert rrec[0]['name'] == '1.2.3'
@@ -121,7 +119,7 @@ def test_login_time(admin_session, user_session):
     user_list = admin_session.user_list()
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
-    ltm1 = datetime.fromtimestamp(urec['lastLogin']/1000.0)
+    ltm1 = datetime.fromtimestamp(urec['lastLogin'] / 1000.0)
     assert ltm1 < now
 
     # Create new login session. This should change lastLogin
@@ -129,7 +127,7 @@ def test_login_time(admin_session, user_session):
     user_sess2 = AEUserSession(user_session.hostname, user_session.username, password, persist=False)
     plist1 = user_sess2.project_list()
     urec = admin_session.user_info(urec['id'])
-    ltm2 = datetime.fromtimestamp(urec['lastLogin']/1000.0)
+    ltm2 = datetime.fromtimestamp(urec['lastLogin'] / 1000.0)
     assert ltm2 > ltm1
     user_sess2.disconnect()
     assert plist1 == plist0
@@ -138,7 +136,7 @@ def test_login_time(admin_session, user_session):
     user_sess3 = AEUserSession(admin_session.hostname, user_session.username, admin_session, persist=False)
     plist2 = user_sess3.project_list()
     urec = admin_session.user_info(urec['id'])
-    ltm3 = datetime.fromtimestamp(urec['lastLogin']/1000.0)
+    ltm3 = datetime.fromtimestamp(urec['lastLogin'] / 1000.0)
     assert ltm3 == ltm2
     user_sess3.disconnect()
     # Confirm the impersonation worked by checking the project lists are the same
@@ -147,7 +145,6 @@ def test_login_time(admin_session, user_session):
     # Access the original login session. It should not reauthenticate
     plist3 = user_session.project_list()
     urec = admin_session.user_info(urec['id'])
-    ltm4 = datetime.fromtimestamp(urec['lastLogin']/1000.0)
+    ltm4 = datetime.fromtimestamp(urec['lastLogin'] / 1000.0)
     assert ltm4 == ltm3
     assert plist3 == plist0
-

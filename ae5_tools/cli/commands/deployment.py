@@ -3,9 +3,8 @@ import webbrowser
 import re
 
 from ..login import cluster_call, login_options
-from ..utils import add_param, ident_filter, get_options
+from ..utils import ident_filter
 from ..format import print_output, format_options
-from ...identifier import Identifier
 from .deployment_collaborator import collaborator
 
 
@@ -151,12 +150,12 @@ def restart(ctx, deployment, wait, open, frame):
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('deployment_restart', ident=deployment,
-                 wait=wait or open,
-                 prefix='Restarting deployment {ident}...', 
-                 postfix='restarted.')
+    result = cluster_call('deployment_restart', ident=deployment,
+                          wait=wait or open,
+                          prefix='Restarting deployment {ident}...',
+                          postfix='restarted.')
     if open:
-        _open(response, frame)
+        _open(result, frame)
 
 
 @deployment.command(short_help='Stop a deployment.')

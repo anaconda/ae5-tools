@@ -1,7 +1,7 @@
 import click
 
 from ..login import login_options, cluster_call
-from ..format import print_output, format_options
+from ..format import format_options
 
 
 @click.group(short_help='Subcommands: add, info, list, remove',

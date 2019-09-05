@@ -2,7 +2,7 @@ import click
 
 from ..login import cluster_call, login_options
 from ..utils import add_param
-from ..format import print_output, format_options
+from ..format import format_options
 from ...identifier import Identifier
 
 
@@ -93,4 +93,3 @@ def delete(run, yes):
                  confirm=None if yes else 'Delete run {ident}',
                  prefix='Deleting run {ident}...',
                  postfix='deleted.', cli=True)
-

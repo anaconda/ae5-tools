@@ -1,6 +1,4 @@
-import os
 import pytest
-import pandas as pd
 
 from ae5_tools.api import AEUserSession, AEAdminSession
 

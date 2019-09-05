@@ -34,4 +34,3 @@ def test_session_help():
 
 def test_deployment_help():
     _cmd('deployment --help')
-

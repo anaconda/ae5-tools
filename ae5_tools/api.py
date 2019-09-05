@@ -704,8 +704,14 @@ class AEUserSession(AESessionBase):
             self._join_projects(record, 'session')
         return self._format_response(record, format, columns=_S_COLUMNS)
 
-    def session_start(self, ident, wait=True, format=None):
-        id, _ = self._id('projects', ident)
+    def session_start(self, ident, editor=None, resource_profile=None, wait=True, format=None):
+        id, record = self._id('projects', ident)
+        patches = {}
+        for key, value in (('editor', editor), ('resource_profile', resource_profile)):
+            if value and record.get(key) != value:
+                patches[key] = value
+        if patches:
+            self._patch(f'projects/{id}', json=patches)
         response = self._post(f'projects/{id}/sessions')
         if response.get('error'):
             raise RuntimeError('Error starting project: {}'.format(response['error']['message']))

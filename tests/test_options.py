@@ -1,5 +1,3 @@
-import pytest
-
 from .utils import _cmd
 
 
@@ -16,8 +14,7 @@ def test_owner(user_session, project_list_cli):
             assert plist == first_list
 
 
-def test_name(user_session, project_dup_names):
-    uname = user_session.username
+def test_name(project_dup_names):
     pname = project_dup_names[0]
     first_list = None
     for cmd in (f'project list {pname}',
@@ -30,6 +27,7 @@ def test_name(user_session, project_dup_names):
             first_list = plist
         else:
             assert plist == first_list
+
 
 def test_owner_name(user_session, project_dup_names):
     uname = user_session.username
@@ -137,11 +135,8 @@ def test_filter_comparison(project_list_cli):
     assert plist1 == plist2
     plist3 = _cmd(f'project list --sort owner,name --filter "owner>={owners[1]}"')
     plist4 = _cmd(f'project list --sort owner,name --filter "owner>{owners[0]}"')
-    plist5 = _cmd(f'project list --sort owner,name --filter "owner!={owners[0]}"') 
+    plist5 = _cmd(f'project list --sort owner,name --filter "owner!={owners[0]}"')
     assert plist3 == plist4
     assert plist3 == plist5
     plist6 = _cmd(f'project list --sort owner,name')
     assert plist1 + plist3 == plist6
-
-
-

@@ -1,13 +1,8 @@
 import pytest
 
 import tempfile
-import subprocess
 import time
-import pandas
 import os
-import json
-import shlex
-import pandas as pd
 import pprint
 
 from datetime import datetime
@@ -60,7 +55,7 @@ def test_project_download_upload_delete(user_session):
         fname = os.path.join(tempd, 'blob')
         fname2 = os.path.join(tempd, 'blob2')
         _cmd(f'project download {uname}/testproj1 --filename {fname}', table=False)
-        prec = _cmd(f'project upload {fname} --name test_upload --tag 1.2.3')
+        _cmd(f'project upload {fname} --name test_upload --tag 1.2.3')
         rrec = _cmd(f'project revision list test_upload')
         assert len(rrec) == 1
         assert rrec[0]['name'] == '1.2.3'
@@ -71,7 +66,7 @@ def test_project_download_upload_delete(user_session):
                 break
         else:
             assert False, 'Uploaded project could not be found'
-    assert not any(r['name'] == 'test_upload' and r['owner'] == uname 
+    assert not any(r['name'] == 'test_upload' and r['owner'] == uname
                    for r in _cmd('project list'))
 
 
@@ -133,7 +128,7 @@ def test_deploy(user_session):
 def test_login_time(admin_session, user_session):
     # The current login time should be before the present
     now = datetime.utcnow()
-    prrec = _cmd('project list')
+    _cmd('project list')
     user_list = _cmd('user list')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None

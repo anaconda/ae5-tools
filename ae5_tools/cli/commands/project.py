@@ -1,8 +1,8 @@
 import click
 
-from ..utils import add_param, ident_filter
+from ..utils import ident_filter
 from ..login import login_options, cluster_call
-from ..format import print_output, format_options
+from ..format import format_options
 from ...identifier import Identifier
 from .project_collaborator import collaborator
 from .project_revision import revision

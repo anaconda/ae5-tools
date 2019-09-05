@@ -1,7 +1,7 @@
 import click
 
 from ..login import cluster_call, login_options
-from ..format import print_output, format_options
+from ..format import format_options
 from ...identifier import Identifier
 
 
