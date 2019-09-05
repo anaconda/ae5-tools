@@ -6,10 +6,10 @@ from ..identifier import Identifier
 def add_param(param, value):
     ctx = click.get_current_context()
     obj = ctx.ensure_object(dict)
+    options = obj.setdefault('options', {})
     if param == 'filter' and not isinstance(value, tuple):
         value = tuple(value.split(','))
-    options = obj.setdefault('options', {})
-    if param in obj:
+    if param in options:
         ovalue = options[param]
         if param == 'filter':
             value = ovalue + value
@@ -51,7 +51,8 @@ def param_callback(ctx, param, value):
 def ident_callback(ctx, param, value):
     if value in (None, '', ()):
         return
-    add_param('filter', Identifier.from_string(value).project_filter())
+    filter = Identifier.from_string(value).project_filter()
+    add_param('filter', filter)
 
 
 def ident_filter(name):
