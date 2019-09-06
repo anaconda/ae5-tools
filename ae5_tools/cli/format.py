@@ -109,11 +109,11 @@ def format_options():
     return apply
 
 
-OPS = {'<' : lambda x, y: x < y,
+OPS = {'<': lambda x, y: x < y,
+       '>': lambda x, y: x > y,
+       '=': lambda x, y: fnmatch(x, y),
        '<=': lambda x, y: x <= y,
-       '>' : lambda x, y: x > y,
        '>=': lambda x, y: x >= y,
-        '=': lambda x, y: fnmatch(x, y),
        '==': lambda x, y: x == y,
        '!=': lambda x, y: not fnmatch(x, y)}
 
@@ -231,7 +231,7 @@ def print_table(records, columns, header=True, width=0):
         twid = max(len(col), max((len(v) for v in val), default=len(col)))
         val = [v + ' ' * (twid - len(v)) for v in val]
         if len(col) > twid:
-            col = col[:twid-1] + '.'
+            col = col[:twid - 1] + '.'
         col = col + ' ' * (twid - len(col))
         if nwidth < 0:
             final = val
