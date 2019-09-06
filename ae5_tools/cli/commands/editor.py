@@ -1,7 +1,7 @@
 import click
 
 from ..login import login_options, cluster_call
-from ..format import print_output, format_options
+from ..format import format_options
 
 
 @click.group(short_help='info, list',
@@ -19,8 +19,7 @@ def editor():
 def list():
     '''List the available editors.
     '''
-    result = cluster_call('editor_list', format='dataframe')
-    print_output(result)
+    cluster_call('editor_list', cli=True)
 
 
 @editor.command()
@@ -33,5 +32,4 @@ def info(name):
        The NAME identifier must match exactly one name of an editor.
        Wildcards may be included.
     '''
-    result = cluster_call('editor_info', name, format='dataframe')
-    print_output(result)
+    cluster_call('editor_info', name, cli=True)

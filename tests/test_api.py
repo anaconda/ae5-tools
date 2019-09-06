@@ -1,5 +1,3 @@
-import pytest
-
 import tempfile
 import time
 import os
@@ -15,7 +13,7 @@ def test_project_info(user_session, project_list):
         pair = '{}/{}'.format(rec0['owner'], rec0['name'])
         rec1 = user_session.project_info(id, collaborators=True)
         rec2 = user_session.project_info(pair)
-        rec3 = user_session.project_info('{}/{}'.format(pair, id))
+        rec3 = user_session.project_info(f'{pair}/{id}')
         assert all(rec0[k] == v for k, v in rec2.items())
         assert all(rec1[k] == v for k, v in rec2.items())
         assert rec2 == rec3
@@ -30,17 +28,21 @@ def test_project_collaborators(user_session, project_list):
         assert collabs == collab3, collab2
 
 
-def test_project_activity(user_session):
-    activity = user_session.project_activity('testproj3')
-    assert activity[-1]['done']
+def test_project_activity(user_session, project_list):
+    for rec0 in project_list:
+        activity = user_session.project_activity(f'{rec0["owner"]}/{rec0["name"]}', limit=-1)
+        assert activity[-1]['status'] == 'created'
+        assert activity[-1]['done']
+        assert activity[-1]['owner'] == rec0['owner']
 
 
 def test_project_download_upload_delete(user_session):
+    uname = user_session.username
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob')
         fname2 = os.path.join(tempd, 'blob2')
-        user_session.project_download('testproj1', filename=fname)
-        prec = user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
+        user_session.project_download(f'{uname}/testproj1', filename=fname)
+        user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
         rrec = user_session.revision_list('test_upload')
         assert len(rrec) == 1
         assert rrec[0]['name'] == '1.2.3'
@@ -51,11 +53,13 @@ def test_project_download_upload_delete(user_session):
                 break
         else:
             assert False, 'Uploaded project could not be found'
-    assert not any(r['name'] == 'test_upload' for r in user_session.project_list())
+    assert not any(r['name'] == 'test_upload' and r['owner'] == uname
+                   for r in user_session.project_list())
 
 
 def test_job_run1(user_session):
-    user_session.job_create('testproj3', name='testjob1', command='run', run=True, wait=True)
+    uname = user_session.username
+    user_session.job_create(f'{uname}/testproj3', name='testjob1', command='run', run=True, wait=True)
     jrecs = [r for r in user_session.job_list(format='json') if r['name'] == 'testjob1']
     assert len(jrecs) == 1, jrecs
     rrecs = [r for r in user_session.run_list(format='json') if r['name'] == 'testjob1']
@@ -69,13 +73,14 @@ def test_job_run1(user_session):
 
 
 def test_job_run2(user_session):
+    uname = user_session.username
     # Test cleanup mode and variables in jobs
     variables = {'INTEGRATION_TEST_KEY_1': 'value1', 'INTEGRATION_TEST_KEY_2': 'value2'}
-    user_session.job_create('testproj3', name='testjob2', command='run_with_env_vars',
+    user_session.job_create(f'{uname}/testproj3', name='testjob2', command='run_with_env_vars',
                             variables=variables, run=True, wait=True, cleanup=True)
     # The job record should have already been deleted
     assert not any(r['name'] == 'testjob2' for r in user_session.job_list())
-    rrecs = [r for r in user_session.run_list(format='json') if r['name'] == 'testjob2']
+    rrecs = [r for r in user_session.run_list() if r['name'] == 'testjob2']
     assert len(rrecs) == 1, rrecs
     ldata2 = user_session.run_log(rrecs[0]['id'], format='text')
     # Confirm that the environment variables were passed through
@@ -88,9 +93,10 @@ def test_job_run2(user_session):
 
 
 def test_deploy(user_session):
-    user_session.deployment_start('testproj3', name='testdeploy', endpoint='testendpoint',
+    uname = user_session.username
+    user_session.deployment_start(f'{uname}/testproj3', name='testdeploy', endpoint='testendpoint',
                                   command='default', public=False, wait=True)
-    drecs = [r for r in user_session.deployment_list(format='json') if r['name'] == 'testdeploy']
+    drecs = [r for r in user_session.deployment_list() if r['name'] == 'testdeploy']
     assert len(drecs) == 1, drecs
     for attempt in range(3):
         try:
@@ -109,35 +115,36 @@ def test_deploy(user_session):
 def test_login_time(admin_session, user_session):
     # The current session should already be authenticated
     now = datetime.utcnow()
-    user_list = admin_session.user_list(format='json')
+    plist0 = user_session.project_list()
+    user_list = admin_session.user_list()
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None
-    ltm1 = urec['lastLogin']
+    ltm1 = datetime.fromtimestamp(urec['lastLogin'] / 1000.0)
     assert ltm1 < now
 
     # Create new login session. This should change lastLogin
     password = os.environ.get('AE5_PASSWORD')
     user_sess2 = AEUserSession(user_session.hostname, user_session.username, password, persist=False)
     plist1 = user_sess2.project_list()
-    urec = admin_session.user_info(urec['id'], format='json')
-    ltm2 = urec['lastLogin']
+    urec = admin_session.user_info(urec['id'])
+    ltm2 = datetime.fromtimestamp(urec['lastLogin'] / 1000.0)
     assert ltm2 > ltm1
     user_sess2.disconnect()
+    assert plist1 == plist0
 
     # Create new impersonation session. This should not change lastLogin
     user_sess3 = AEUserSession(admin_session.hostname, user_session.username, admin_session, persist=False)
     plist2 = user_sess3.project_list()
-    urec = admin_session.user_info(urec['id'], format='json')
-    ltm3 = urec['lastLogin']
+    urec = admin_session.user_info(urec['id'])
+    ltm3 = datetime.fromtimestamp(urec['lastLogin'] / 1000.0)
     assert ltm3 == ltm2
     user_sess3.disconnect()
     # Confirm the impersonation worked by checking the project lists are the same
-    assert plist1 == plist2
+    assert plist2 == plist0
 
     # Access the original login session. It should not reauthenticate
     plist3 = user_session.project_list()
-    urec = admin_session.user_info(urec['id'], format='json')
-    ltm4 = urec['lastLogin']
+    urec = admin_session.user_info(urec['id'])
+    ltm4 = datetime.fromtimestamp(urec['lastLogin'] / 1000.0)
     assert ltm4 == ltm3
-    assert plist1 == plist3
-
+    assert plist3 == plist0

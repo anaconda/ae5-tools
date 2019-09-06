@@ -1,7 +1,7 @@
 import click
 
 from ..login import login_options, cluster_call
-from ..format import print_output, format_options
+from ..format import format_options
 
 
 @click.group(short_help='Subcommands: add, info, list, remove',
@@ -23,8 +23,7 @@ def list(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('project_collaborator_list', project, format='dataframe')
-    print_output(result)
+    cluster_call('project_collaborator_list', project, cli=True)
 
 
 @collaborator.command()
@@ -41,8 +40,7 @@ def info(project, userid):
        USERID must be an exact match of the user ID of an individual, or the name
        of a group (e.g., 'everyone').
     '''
-    result = cluster_call('project_collaborator_info', project, userid, format='dataframe')
-    print_output(result)
+    cluster_call('project_collaborator_info', project, userid, cli=True)
 
 
 @collaborator.command()
@@ -65,8 +63,7 @@ def add(project, userid, group, read_only, read_write):
     '''
     if read_only and read_write:
         raise click.ClickException('Cannot specify both --read-only and --read-write')
-    result = cluster_call('project_collaborator_add', project, userid, group, read_only, format='dataframe')
-    print_output(result)
+    cluster_call('project_collaborator_add', project, userid, group, read_only, cli=True)
 
 
 @collaborator.command()
@@ -84,5 +81,4 @@ def remove(project, userid):
        of a group (e.g., 'everyone'). If the user ID is not among the current list
        of collaborators, an error is raised.
     '''
-    result = cluster_call('project_collaborator_remove', project, userid, format='dataframe')
-    print_output(result)
+    cluster_call('project_collaborator_remove', project, userid, cli=True)

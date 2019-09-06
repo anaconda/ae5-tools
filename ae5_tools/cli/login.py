@@ -177,7 +177,14 @@ def cluster_call(method, *args, **kwargs):
             return
         if prefix:
             click.echo(prefix, nl=False, err=True)
-        kwargs.setdefault('format', 'dataframe')
+        format = get_options().get('format')
+        if format is None:
+            # This is a special format that passes tabular json data
+            # without error, but converts json data to a table
+            format = 'tableif'
+        elif format in ('json', 'csv'):
+            format = 'table'
+        kwargs.setdefault('format', format)
 
     # Retrieve the proper cluster session object and make the call
     try:

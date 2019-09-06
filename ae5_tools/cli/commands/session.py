@@ -2,9 +2,8 @@ import click
 import webbrowser
 
 from ..login import cluster_call, login_options
-from ..utils import add_param, ident_filter
-from ..format import print_output, format_options
-from ...identifier import Identifier
+from ..utils import ident_filter
+from ..format import format_options
 
 
 @click.group(short_help='info, list, open, start, stop',
@@ -75,13 +74,8 @@ def start(ctx, project, editor, resource_profile, wait, open, frame):
     '''
     if not wait and open:
         raise click.UsageError('Options --no-wait and --open confict')
-    patches = {}
-    for key, value in (('editor', editor), ('resource_profile', resource_profile)):
-        if value and result.get(key) != value:
-            patches[key] = value
-    if patches:
-        cluster_call('project_patch', project, **patches)
     response = cluster_call('session_start', ident=project, id_class='project', wait=wait,
+                            editor=editor, resource_profile=resource_profile,
                             prefix='Starting session for {ident}...',
                             postfix='started.', cli=True)
     if open:

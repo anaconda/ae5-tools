@@ -1,7 +1,7 @@
 import click
 
 from ..login import login_options, cluster_call
-from ..format import print_output, format_options
+from ..format import format_options
 
 
 @click.group(short_help='info, list',
@@ -19,8 +19,7 @@ def sample():
 def list():
     '''List the sample projects.
     '''
-    result = cluster_call('sample_list', format='dataframe')
-    print_output(result)
+    cluster_call('sample_list', cli=True)
 
 
 @sample.command()
@@ -33,5 +32,4 @@ def info(project):
        The PROJECT identifier must match exactly one name or id of a sample project.
        Wildcards may be included.
     '''
-    result = cluster_call('sample_info', project, format='dataframe')
-    print_output(result)
+    cluster_call('sample_info', project, cli=True)

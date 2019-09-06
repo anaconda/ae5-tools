@@ -1,34 +1,18 @@
 import pytest
 
 import tempfile
-import subprocess
 import time
-import pandas
 import os
-import json
-import shlex
-import pandas as pd
 import pprint
 
-from io import BytesIO
 from datetime import datetime
 from collections import namedtuple
+from ae5_tools.api import AEUnexpectedResponseError
+
+from .utils import _cmd
+
 
 Session = namedtuple('Session', 'hostname username')
-
-def _cmd(cmd, table=True):
-    # We go through Pandas to CSV to JSON instead of directly to JSON to improve coverage
-    cmd = 'ae5 ' + cmd
-    if table:
-        cmd += f' --format csv'
-    print(f'Executing: {cmd}')
-    text = subprocess.check_output(shlex.split(cmd), stdin=open(os.devnull))
-    if not table or not text.strip():
-        return text.decode()
-    csv = pd.read_csv(BytesIO(text)).fillna('').astype(str)
-    if tuple(csv.columns) == ('field', 'value'):
-        return csv.set_index('field').T.iloc[0].to_dict()
-    return json.loads(csv.to_json(index=False, orient='table'))['data']
 
 
 @pytest.fixture
@@ -57,17 +41,21 @@ def test_project_collaborators(project_list_cli):
         assert collabs == collab3, collab2
 
 
-def test_project_activity(user_session):
-    activity = _cmd('project activity testproj3')
-    assert activity[-1]['done']
+def test_project_activity(project_list_cli):
+    for rec0 in project_list_cli:
+        activity = _cmd(f'project activity --limit -1 {rec0["owner"]}/{rec0["name"]}')
+        assert activity[-1]['status'] == 'created'
+        assert activity[-1]['done'] == 'True'
+        assert activity[-1]['owner'] == rec0['owner']
 
 
 def test_project_download_upload_delete(user_session):
+    uname = user_session.username
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob')
         fname2 = os.path.join(tempd, 'blob2')
-        _cmd(f'project download testproj1 --filename {fname}', table=False)
-        prec = _cmd(f'project upload {fname} --name test_upload --tag 1.2.3')
+        _cmd(f'project download {uname}/testproj1 --filename {fname}', table=False)
+        _cmd(f'project upload {fname} --name test_upload --tag 1.2.3')
         rrec = _cmd(f'project revision list test_upload')
         assert len(rrec) == 1
         assert rrec[0]['name'] == '1.2.3'
@@ -78,11 +66,13 @@ def test_project_download_upload_delete(user_session):
                 break
         else:
             assert False, 'Uploaded project could not be found'
-    assert not any(r['name'] == 'test_upload' for r in _cmd('project list'))
+    assert not any(r['name'] == 'test_upload' and r['owner'] == uname
+                   for r in _cmd('project list'))
 
 
 def test_job_run1(user_session):
-    _cmd('job create testproj3 --name testjob1 --command run --run --wait')
+    uname = user_session.username
+    _cmd(f'job create {uname}/testproj3 --name testjob1 --command run --run --wait')
     jrecs = [r for r in _cmd('job list') if r['name'] == 'testjob1']
     assert len(jrecs) == 1, jrecs
     rrecs = [r for r in _cmd('run list') if r['name'] == 'testjob1']
@@ -96,10 +86,11 @@ def test_job_run1(user_session):
 
 
 def test_job_run2(user_session):
+    uname = user_session.username
     # Test cleanup mode and variables in jobs
     variables = {'INTEGRATION_TEST_KEY_1': 'value1', 'INTEGRATION_TEST_KEY_2': 'value2'}
     vars = ' '.join(f'--variable {k}={v}' for k, v in variables.items())
-    _cmd('project run testproj3 --command run_with_env_vars --name testjob2 ' + vars)
+    _cmd(f'project run {uname}/testproj3 --command run_with_env_vars --name testjob2 {vars}')
     # The job record should have already been deleted
     assert not any(r['name'] == 'testjob2' for r in _cmd('job list'))
     rrecs = [r for r in _cmd('run list') if r['name'] == 'testjob2']
@@ -115,8 +106,9 @@ def test_job_run2(user_session):
 
 
 def test_deploy(user_session):
+    uname = user_session.username
     assert not any(r['name'] == 'testdeploy' for r in _cmd('deployment list'))
-    _cmd('project deploy testproj3 --name testdeploy --endpoint testendpoint --command default --private --wait --no-open', table=False)
+    _cmd(f'project deploy {uname}/testproj3 --name testdeploy --endpoint testendpoint --command default --private --wait --no-open', table=False)
     drecs = [r for r in _cmd('deployment list') if r['name'] == 'testdeploy']
     assert len(drecs) == 1, drecs
     for attempt in range(3):
@@ -136,6 +128,7 @@ def test_deploy(user_session):
 def test_login_time(admin_session, user_session):
     # The current login time should be before the present
     now = datetime.utcnow()
+    _cmd('project list')
     user_list = _cmd('user list')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
     assert urec is not None

@@ -1,9 +1,8 @@
 import click
 
 from ..login import cluster_call, login_options
-from ..utils import add_param, ident_filter
-from ..format import print_output, format_options
-from ...identifier import Identifier
+from ..utils import ident_filter
+from ..format import format_options
 
 
 @click.group(short_help='create, delete, info, list, patch, pause, run, runs, unpause',
@@ -151,7 +150,7 @@ def create(project, schedule, command, name, resource_profile, variable, run, wa
 
        For scheduled jobs, supply a standard cron timing specification; e.g.,
        to run a job once a day at 03:30, use "30 3 * * *". A useful site for
-       understanding crontab specifications is https://crontab.guru. 
+       understanding crontab specifications is https://crontab.guru.
 
        When using a step value, the step must evenly divide that section's
        total. For example, "*/10 * * * *" runs a job every 10 minutes; but

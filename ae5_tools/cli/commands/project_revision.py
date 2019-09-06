@@ -1,7 +1,7 @@
 import click
 
 from ..login import cluster_call, login_options
-from ..format import print_output, format_options
+from ..format import format_options
 from ...identifier import Identifier
 
 
@@ -24,8 +24,7 @@ def list(project):
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('revision_list', project, format='dataframe')
-    print_output(result)
+    cluster_call('revision_list', project, cli=True)
 
 
 @revision.command()
@@ -39,8 +38,7 @@ def info(revision):
        wildcards. But it must match exactly one project. If the revision is not
        specified, then the latest will be assumed.
     '''
-    result = cluster_call('revision_info', revision, format='dataframe')
-    print_output(result)
+    cluster_call('revision_info', revision, cli=True)
 
 
 @revision.command()

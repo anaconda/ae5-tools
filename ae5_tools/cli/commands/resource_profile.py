@@ -1,7 +1,7 @@
 import click
 
 from ..login import login_options, cluster_call
-from ..format import print_output, format_options
+from ..format import format_options
 
 
 @click.group(short_help='info, list',
@@ -19,8 +19,7 @@ def resource_profile():
 def list():
     '''List all availables resource profiles.
     '''
-    result = cluster_call('resource_profile_list', format='dataframe')
-    print_output(result)
+    cluster_call('resource_profile_list', cli=True)
 
 
 @resource_profile.command()
@@ -33,5 +32,4 @@ def info(name):
        The NAME identifier must match exactly one name of a resource profile.
        Wildcards may be included.
     '''
-    result = cluster_call('resource_profile_info', name, format='dataframe')
-    print_output(result)
+    cluster_call('resource_profile_info', name, cli=True)
