@@ -26,8 +26,8 @@ from .commands.run import run
 from .commands.user import user
 
 from .login import login_options, cluster_call, cluster_disconnect
-from .format import format_options, print_output
-from .utils import stash_defaults, get_options
+from .format import format_options
+from .utils import stash_defaults
 
 
 @click.group(invoke_without_command=True,
@@ -81,7 +81,7 @@ def logout(admin):
 
 @cli.command()
 @click.argument('path')
-@click.option('--endpoint', help='An endpoint to connect to instead of the default API.' )
+@click.option('--endpoint', help='An endpoint to connect to instead of the default API.')
 @click.option('--post', is_flag=True, help='Do a POST instead of a GET.')
 @login_options()
 @format_options()

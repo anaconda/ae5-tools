@@ -162,8 +162,8 @@ def cluster_call(method, *args, **kwargs):
     # Provide a standardized method for providing interactive output
     # on the cli, including a confirmation prompt, a simple progress
     # indicator via prefix/postfix strings
-    is_cli = (kwargs.pop('cli', False) or 'confirm' in kwargs
-              or 'prefix' in kwargs or 'postfix' in kwargs)
+    is_cli = (kwargs.pop('cli', False) or 'confirm' in kwargs or
+              'prefix' in kwargs or 'postfix' in kwargs)
     if is_cli:
         confirm = kwargs.pop('confirm', None) or ''
         prefix = kwargs.pop('prefix', None) or ''
