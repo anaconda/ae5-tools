@@ -170,7 +170,7 @@ def download(ctx, project, filename):
 @project.command()
 @click.argument('project')
 @click.option('--command', default='', help='Command name to execute.')
-@click.option('--use_anaconda_cloud', is_flag=True, help='Configure Docker image to pull packages from Anaconda Cloud rather than on-premises repository.')
+@click.option('--use-anaconda-cloud', is_flag=True, help='Configure Docker image to pull packages from Anaconda Cloud rather than on-premises repository.')
 @click.option('--dockerfile', default='', help='Path to custom Dockerfile.')
 @click.option('--debug', is_flag=True, help='Show docker image build logs.')
 @login_options()
