@@ -73,16 +73,23 @@ def test_project_download_upload_delete(user_session):
 def test_job_run1(user_session):
     uname = user_session.username
     _cmd(f'job create {uname}/testproj3 --name testjob1 --command run --run --wait')
-    jrecs = [r for r in _cmd('job list') if r['name'] == 'testjob1']
+    jrecs = _cmd('job list')
     assert len(jrecs) == 1, jrecs
-    rrecs = [r for r in _cmd('run list') if r['name'] == 'testjob1']
+    rrecs = _cmd('run list')
     assert len(rrecs) == 1, rrecs
     ldata1 = _cmd(f'run log {rrecs[0]["id"]}', table=False)
     assert ldata1.strip().endswith('Hello Anaconda Enterprise!'), repr(ldata1)
-    _cmd(f'run delete {rrecs[0]["id"]} --yes', table=False)
-    _cmd(f'job delete {jrecs[0]["id"]} --yes', table=False)
-    assert not any(r['name'] != 'testjob1' for r in _cmd('job list'))
-    assert not any(r['name'] != 'testjob1' for r in _cmd('run list'))
+    _cmd(f'job create {uname}/testproj3 --name testjob1 --make-unique --command run --run --wait')
+    jrecs = _cmd('job list')
+    assert len(jrecs) == 2, jrecs
+    rrecs = _cmd('run list')
+    assert len(rrecs) == 2, rrecs
+    for rrec in rrecs:
+        _cmd(f'run delete {rrec["id"]} --yes', table=False)
+    for jrec in jrecs:
+        _cmd(f'job delete {jrec["id"]} --yes', table=False)
+    assert not _cmd('job list')
+    assert not _cmd('run list')
 
 
 def test_job_run2(user_session):
@@ -92,8 +99,8 @@ def test_job_run2(user_session):
     vars = ' '.join(f'--variable {k}={v}' for k, v in variables.items())
     _cmd(f'project run {uname}/testproj3 --command run_with_env_vars --name testjob2 {vars}')
     # The job record should have already been deleted
-    assert not any(r['name'] == 'testjob2' for r in _cmd('job list'))
-    rrecs = [r for r in _cmd('run list') if r['name'] == 'testjob2']
+    assert not _cmd('job list')
+    rrecs = _cmd('run list')
     assert len(rrecs) == 1, rrecs
     ldata2 = _cmd(f'run log {rrecs[0]["id"]}', table=False)
     # Confirm that the environment variables were passed through
@@ -102,7 +109,7 @@ def test_job_run2(user_session):
                    if line.startswith('INTEGRATION_TEST_KEY_'))
     assert variables == outvars, outvars
     _cmd(f'run delete {rrecs[0]["id"]} --yes', table=False)
-    assert not any(r['name'] == 'testjob2' for r in _cmd('run list'))
+    assert not _cmd('run list')
 
 
 def test_deploy(user_session):
