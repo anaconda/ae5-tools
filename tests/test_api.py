@@ -60,16 +60,23 @@ def test_project_download_upload_delete(user_session):
 def test_job_run1(user_session):
     uname = user_session.username
     user_session.job_create(f'{uname}/testproj3', name='testjob1', command='run', run=True, wait=True)
-    jrecs = [r for r in user_session.job_list(format='json') if r['name'] == 'testjob1']
+    jrecs = user_session.job_list()
     assert len(jrecs) == 1, jrecs
-    rrecs = [r for r in user_session.run_list(format='json') if r['name'] == 'testjob1']
+    rrecs = user_session.run_list()
     assert len(rrecs) == 1, rrecs
     ldata1 = user_session.run_log(rrecs[0]['id'], format='text')
     assert ldata1.endswith('Hello Anaconda Enterprise!\n'), repr(ldata1)
-    user_session.run_delete(rrecs[0]['id'])
-    user_session.job_delete(jrecs[0]['id'])
-    assert not any(r['name'] != 'testjob1' for r in user_session.job_list())
-    assert not any(r['name'] != 'testjob1' for r in user_session.run_list())
+    user_session.job_create(f'{uname}/testproj3', name='testjob1', command='run', make_unique=True, run=True, wait=True)
+    jrecs = user_session.job_list()
+    assert len(jrecs) == 2, jrecs
+    rrecs = user_session.run_list()
+    assert len(rrecs) == 2, rrecs
+    for rrec in rrecs:
+        user_session.run_delete(rrec['id'])
+    for jrec in jrecs:
+        user_session.job_delete(jrec['id'])
+    assert not user_session.job_list()
+    assert not user_session.run_list()
 
 
 def test_job_run2(user_session):
@@ -79,8 +86,8 @@ def test_job_run2(user_session):
     user_session.job_create(f'{uname}/testproj3', name='testjob2', command='run_with_env_vars',
                             variables=variables, run=True, wait=True, cleanup=True)
     # The job record should have already been deleted
-    assert not any(r['name'] == 'testjob2' for r in user_session.job_list())
-    rrecs = [r for r in user_session.run_list() if r['name'] == 'testjob2']
+    assert not user_session.job_list()
+    rrecs = user_session.run_list()
     assert len(rrecs) == 1, rrecs
     ldata2 = user_session.run_log(rrecs[0]['id'], format='text')
     # Confirm that the environment variables were passed through
@@ -89,7 +96,7 @@ def test_job_run2(user_session):
                    if line.startswith('INTEGRATION_TEST_KEY_'))
     assert variables == outvars, outvars
     user_session.run_delete(rrecs[0]['id'])
-    assert not any(r['name'] == 'testjob2' for r in user_session.run_list())
+    assert not user_session.run_list()
 
 
 def test_deploy(user_session):

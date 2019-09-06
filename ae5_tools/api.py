@@ -898,7 +898,8 @@ class AEUserSession(AESessionBase):
 
     def job_create(self, ident, schedule=None, name=None, command=None,
                    resource_profile=None, variables=None, run=False,
-                   wait=False, cleanup=False, show_run=False, format=None):
+                   wait=False, cleanup=False, make_unique=None, 
+                   show_run=False, format=None):
         if cleanup and schedule:
             raise ValueError('cannot use cleanup=True with a scheduled job')
         if cleanup and (not run or not wait):
@@ -913,6 +914,9 @@ class AEUserSession(AESessionBase):
         # job that still has run listings causes an error.
         if not name:
             name = f'{command}-{prec["name"]}'
+            if make_unique is None:
+                make_unique = True
+        if make_unique:
             jnames = {j['name'] for j in self._get(f'jobs')}
             jnames.update(j['name'] for j in self._get(f'runs'))
             if name in jnames:
