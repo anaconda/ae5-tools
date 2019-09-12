@@ -178,7 +178,7 @@ class AESessionBase(object):
                             if sys.version_info >= (3, 7, 0):
                                 rec[col] = datetime.fromisoformat(rec[col])
                             else:
-                                rec[col] = datetime.datetime.strptime(rec[col], "%Y-%m-%dT%H:%M:%S.%f")
+                                rec[col] = datetime.datetime.strptime(rec[col], "%Y-%m-%dT%H:%M:%S.%f+00:00")
                 elif dtype.startswith('timestamp'):
                     incr = dtype.rsplit('/', 1)[1]
                     fact = 1000.0 if incr == 'ms' else 1.0
