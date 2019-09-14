@@ -9,6 +9,7 @@ from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
 from datetime import datetime
+from dateutil import parser
 import getpass
 
 from .config import config
@@ -174,7 +175,7 @@ class AESessionBase(object):
                 if dtype == 'datetime':
                     for rec in response:
                         if col in rec:
-                            rec[col] = datetime.fromisoformat(rec[col])
+                            rec[col] = parser.isoparse(rec[col])
                 elif dtype.startswith('timestamp'):
                     incr = dtype.rsplit('/', 1)[1]
                     fact = 1000.0 if incr == 'ms' else 1.0
