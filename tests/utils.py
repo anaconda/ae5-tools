@@ -1,10 +1,10 @@
 import os
+import csv
 import json
 import shlex
 import subprocess
-import pandas as pd
 
-from io import BytesIO
+from io import StringIO
 
 
 def _get_vars(*vars):
@@ -21,10 +21,10 @@ def _cmd(cmd, table=True):
     if table:
         cmd += f' --format csv'
     print(f'Executing: {cmd}')
-    text = subprocess.check_output(shlex.split(cmd), stdin=open(os.devnull))
+    text = subprocess.check_output(shlex.split(cmd), stdin=open(os.devnull)).decode()
     if not table or not text.strip():
-        return text.decode()
-    csv = pd.read_csv(BytesIO(text)).fillna('').astype(str)
-    if tuple(csv.columns) == ('field', 'value'):
-        return csv.set_index('field').T.iloc[0].to_dict()
-    return json.loads(csv.to_json(index=False, orient='table'))['data']
+        return text
+    result = list(csv.DictReader(StringIO(text)))
+    if result and list(result[0].keys()) == ['field', 'value']:
+        return {rec['field']: rec['value'] for rec in result}
+    return result
