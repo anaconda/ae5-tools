@@ -21,6 +21,7 @@ requirements:
     - setuptools
   run:
     - python>=3.6
+    - python-dateutil
     - requests
     - click>=7
     - click-repl
@@ -30,6 +31,7 @@ test:
   source_files:
     - tests
   requires:
+    - python=3.6
     - pytest
     - pytest-cov
     - codecov

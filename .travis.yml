@@ -14,7 +14,7 @@ install:
 - conda install conda conda-build conda-verify anaconda-client --yes
 - conda info -a
 script:
-- conda build conda-recipe
+- conda build conda-recipe --python 3.6
 deploy:
 - provider: script
   skip_cleanup: true

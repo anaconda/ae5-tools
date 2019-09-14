@@ -5,7 +5,6 @@ import re
 import os
 import sys
 import json
-import pandas as pd
 from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
