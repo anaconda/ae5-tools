@@ -832,7 +832,7 @@ class AEUserSession(AESessionBase):
         if response.get('error'):
             raise RuntimeError('Error starting deployment: {}'.format(response['error']['message']))
         if collaborators:
-            self.deployment_set_collaborators(response['id'], collaborators)
+            self.deployment_collaborator_list_set(response['id'], collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
         while wait and response['state'] in ('initial', 'starting'):
             time.sleep(5)
