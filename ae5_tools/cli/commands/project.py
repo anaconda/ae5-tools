@@ -192,9 +192,9 @@ def upload(filename, name, tag, no_wait):
 @click.option('--resource-profile', help='The resource profile to use for this deployment.')
 @click.option('--public', is_flag=True, help='Make the deployment public.')
 @click.option('--private', is_flag=True, help='Make the deployment private (the default).')
-@click.option('--wait/--no-wait', default=True, help='Wait for the deployment to complete initialization before exiting.')
-@click.option('--open/--no-open', default=True, help='Open a browser upon initialization. Implies --wait.')
-@click.option('--frame/--no-frame', default=False, help='Include the AE banner when opening.')
+@click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
+@click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context

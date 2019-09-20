@@ -69,6 +69,8 @@ def patch(deployment, public, private):
 
 
 def _open(record, frame):
+    if isinstance(record, tuple):
+        record = {k: v for k, v in record[0]}
     scheme, _, hostname, _ = record['project_url'].split('/', 3)
     if frame:
         url = f'{scheme}//{hostname}/deployments/detail/{record["id"]}/view'
@@ -133,7 +135,6 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
                             postfix='started.')
     if open:
         _open(response, frame)
-    print_output(response)
 
 
 @deployment.command(short_help='Restart a deployment for a project.')
@@ -177,7 +178,7 @@ def stop(deployment, yes):
 
 @deployment.command(short_help='Open a deployment in a browser.')
 @click.argument('deployment')
-@click.option('--frame/--no-frame', default=False, help='Include the AE banner.')
+@click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 def open(deployment, frame):

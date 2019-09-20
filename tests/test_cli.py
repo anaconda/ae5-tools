@@ -115,7 +115,7 @@ def test_job_run2(user_session):
 def test_deploy(user_session):
     uname = user_session.username
     assert not any(r['name'] == 'testdeploy' for r in _cmd('deployment list'))
-    _cmd(f'project deploy {uname}/testproj3 --name testdeploy --endpoint testendpoint --command default --private --wait --no-open', table=False)
+    _cmd(f'project deploy {uname}/testproj3 --name testdeploy --endpoint testendpoint --command default --private --wait', table=False)
     drecs = [r for r in _cmd('deployment list') if r['name'] == 'testdeploy']
     assert len(drecs) == 1, drecs
     for attempt in range(3):

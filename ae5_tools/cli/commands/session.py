@@ -44,11 +44,13 @@ def info(session):
 
 
 def _open(record, frame):
+    if isinstance(record, tuple):
+        record = {k: v for k, v in record[0]}
     if frame:
-        scheme, _, hostname, *_, project_id = record.project_url.split('/')
+        scheme, _, hostname, *_, project_id = record['project_url'].split('/')
         url = f'{scheme}//{hostname}/projects/detail/a0-{project_id}/view'
     else:
-        scheme, _, hostname, *_, session_id = record.url.split('/')
+        scheme, _, hostname, *_, session_id = record['url'].split('/')
         url = f'{scheme}//{session_id}.{hostname}/'
     webbrowser.open(url, 1, True)
 
@@ -57,8 +59,8 @@ def _open(record, frame):
 @click.argument('project')
 @click.option('--editor', help='The editor to use. If supplied, future sessions will use this editor as well. If not supplied, uses the editor currently selected for the project.')
 @click.option('--resource-profile', help='The resource profile to use. If supplied, future sessions will use this resource profile as well. If not supplied, uses the resource profile currently selected for the project.')
-@click.option('--wait/--no-wait', default=True, help='Wait for the initialization of the session to complete before returning. For --no-wait, the command will exit as soon as AE acknowledges the session is scheduled.')
-@click.option('--open/--no-open', default=False, help='Open a browser upon initialization.')
+@click.option('--wait', is_flag=True, help='Wait for the session to complete initialization before exiting.')
+@click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame/--no-frame', default=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
@@ -99,9 +101,31 @@ def stop(session, yes):
                  postfix='stopped.', cli=True)
 
 
+@session.command(short_help='Restart a session for a project.')
+@click.argument('session')
+@click.option('--wait', is_flag=True, help='Wait for the session to complete initialization before exiting.')
+@click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
+@click.option('--frame/--no-frame', default=True, help='Include the AE banner when opening.')
+@format_options()
+@login_options()
+@click.pass_context
+def restart(ctx, session, wait, open, frame):
+    '''Restart a deployment for a project.
+
+       The DEPLOYMENT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    result = cluster_call('session_restart', ident=session,
+                          wait=wait or open,
+                          prefix='Restarting session {ident}...',
+                          postfix='restarted.')
+    if open:
+        _open(result, frame)
+
+
 @session.command(short_help='Open an existing session in a browser.')
 @click.argument('session')
-@click.option('--frame/--no-frame', default=True, help='Include the AE banner.')
+@click.option('--frame/--no-frame', default=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 def open(session, frame):
