@@ -725,14 +725,21 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('sessions', ident)
         return self._delete(f'sessions/{id}', format=format)
 
+    def session_restart(self, ident, wait=True, format=None):
+        id, record = self._id('sessions', ident)
+        self._delete(f'sessions/{id}')
+        # Unlike deployments I am not copying over the editor and resource profile
+        # settings from the current session. That's because I want to support the use
+        # case where the session settings are patched prior to restart
+        return self.session_start(record['project_id'], wait=wait, format=format)
+
     def deployment_list(self, collaborators=True, endpoints=True, internal=False, format=None):
         response = self._get('deployments')
         self._join_projects(response)
-        if not internal:
-            if collaborators:
-                self._join_collaborators('deployments', response)
-            if endpoints:
-                self._fix_endpoints(response)
+        if not internal and collaborators:
+            self._join_collaborators('deployments', response)
+        if endpoints:
+            self._fix_endpoints(response)
         return self._format_response(response, format, _D_COLUMNS)
 
     def deployment_info(self, ident, collaborators=True, internal=False, format=None, quiet=False):
