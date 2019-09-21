@@ -36,6 +36,7 @@ _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description',
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
 _R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
 _ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
+_CH_COLUMNS = ['path', 'change_type', 'modified', 'conflicted', 'id']
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s',
            'lastLogin': 'timestamp/ms', 'time': 'timestamp/ms'}
@@ -701,6 +702,16 @@ class AEUserSession(AESessionBase):
         if record:
             self._join_projects(record, 'session')
         return self._format_response(record, format, columns=_S_COLUMNS)
+
+    def session_changes(self, ident, format=None):
+        id, _ = self._id('sessions', ident, quiet=quiet)
+        result = self._get(f'sessions/{id}/changes/local/', format='json')
+        return self._format_response(result['files'], format=format, columns=_CH_COLUMNS)
+
+    def session_branches(self, ident, format=None):
+        id, _ = self._id('sessions', ident, quiet=quiet)
+        result = self._get(f'sessions/{id}/changes/master/', format='json')
+        return self._format_response(result['branches'], format=format)
 
     def session_start(self, ident, editor=None, resource_profile=None, wait=True, format=None):
         id, record = self._id('projects', ident)
