@@ -31,6 +31,7 @@ test:
     - tests
   requires:
     - python=3.6
+    - python-dateutil=2.7
     - pytest
     - pytest-cov
     - codecov
