@@ -224,7 +224,12 @@ def print_table(records, columns, header=True, width=0):
                 pass
         else:
             width = 80
+    if not records and not columns:
+        if header:
+            print('-' * width)
+        return
     nwidth = -2
+    head, dash, final = '', '', []
     for ndx, col in enumerate(columns):
         col = str(col)
         val = [_str(rec[ndx]) for rec in records]

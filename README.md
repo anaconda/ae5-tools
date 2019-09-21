@@ -47,7 +47,7 @@ The package has the following particular dependencies:
 
 - Composite commands:
     - `account`: `list`
-    - `deployment`: `info`, `list`, `open`, `patch`, `restart`, `start`, `stop`
+    - `deployment`: `info`, `list`, `logs`, `open`, `patch`, `restart`, `start`, `stop`, `token`
       - `collaborator`: `list`, `info`, `add`, `remove`
     - `editor`: `info`, `list`
     - `endpoint`: `info`, `list`

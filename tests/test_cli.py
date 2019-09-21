@@ -3,7 +3,9 @@ import pytest
 import tempfile
 import time
 import os
+import pytest
 import pprint
+import requests
 
 from datetime import datetime
 from collections import namedtuple
@@ -112,12 +114,25 @@ def test_job_run2(user_session):
     assert not _cmd('run list')
 
 
-def test_deploy(user_session):
+@pytest.fixture(scope='module')
+def cli_deployment(user_session):
     uname = user_session.username
-    assert not any(r['name'] == 'testdeploy' for r in _cmd('deployment list'))
+    dname = 'testdeploy'
+    ename = 'testendpoint'
     _cmd(f'project deploy {uname}/testproj3 --name testdeploy --endpoint testendpoint --command default --private --wait', table=False)
-    drecs = [r for r in _cmd('deployment list') if r['name'] == 'testdeploy']
+    drecs = [r for r in _cmd('deployment list')
+             if r['owner'] == uname and r['name'] == dname]
     assert len(drecs) == 1, drecs
+    yield drecs[0]['id'], ename
+    _cmd(f'deployment stop {drecs[0]["id"]} --yes', table=False)
+    drecs = [r for r in _cmd('deployment list')
+             if r['owner'] == uname and r['name'] == dname
+             or r['id'] == drecs[0]['id']]
+    assert len(drecs) == 0, drecs
+
+
+def test_deploy(user_session, cli_deployment):
+    id, ename = cli_deployment
     for attempt in range(3):
         try:
             ldata = _cmd('call / --endpoint testendpoint', table=False)
@@ -128,8 +143,26 @@ def test_deploy(user_session):
     else:
         raise RuntimeError("Could not get the endpoint to respond")
     assert ldata.strip() == 'Hello Anaconda Enterprise!', ldata
-    _cmd(f'deployment stop {drecs[0]["id"]} --yes', table=False)
-    assert not any(r['name'] == 'testdeploy' for r in _cmd('deployment list'))
+
+
+def test_deploy_token(user_session, cli_deployment):
+    id, ename = cli_deployment
+    token = _cmd(f'deployment token {id}', table=False).strip()
+    resp = requests.get('https://testendpoint.' + user_session.hostname,
+                        headers={'Authorization': f'Bearer {token}'})
+    assert resp.status_code == 200
+    assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
+
+
+def test_deploy_logs(user_session, cli_deployment):
+    id, ename = cli_deployment
+    app_prefix = 'anaconda-app-' + id.rsplit("-", 1)[-1] + '-'
+    app_logs = _cmd(f'deployment logs {id}', table=False)
+    event_logs = _cmd(f'deployment logs {id} --events', table=False)
+    proxy_logs = _cmd(f'deployment logs {id} --proxy', table=False)
+    assert 'The project is ready to run commands.' in app_logs
+    assert app_prefix in event_logs, event_logs
+    assert 'App Proxy is fully operational!' in proxy_logs, proxy_logs
 
 
 def test_login_time(admin_session, user_session):

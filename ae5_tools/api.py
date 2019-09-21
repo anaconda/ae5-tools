@@ -189,7 +189,7 @@ class AESessionBase(object):
             result = [tuple(rec.get(k) for k in clist) for rec in response]
         return (result, clist)
 
-    def _format_response(self, response, format, columns):
+    def _format_response(self, response, format, columns=None):
         if isinstance(response, requests.models.Response):
             if format == 'response':
                 return response
@@ -273,6 +273,7 @@ class AESessionBase(object):
                     do_save = True
                     redirects = 0
                 url = url2
+                method = 'get'
             elif response.status_code == 401 or self._is_login(response):
                 self.authorize()
                 redirects = 0
@@ -871,6 +872,20 @@ class AEUserSession(AESessionBase):
     def deployment_stop(self, ident, format=None):
         id, _ = self._id('deployments', ident)
         return self._delete(f'deployments/{id}', format=format)
+
+    def deployment_logs(self, ident, which=None, format=None):
+        id, _ = self._id('deployments', ident)
+        result = self._get(f'deployments/{id}/logs', format='json')
+        if which is not None:
+            result = result[which]
+        return self._format_response(result, format=format)
+
+    def deployment_token(self, ident, which=None, format=None):
+        id, _ = self._id('deployments', ident)
+        result = self._post(f'deployments/{id}/token', format='json')
+        if isinstance(result, dict) and set(result) == {'token'}:
+            result = result['token']
+        return self._format_response(result, format=format)
 
     def job_list(self, internal=False, format=None):
         return self._get('jobs', format=format, columns=_J_COLUMNS)
