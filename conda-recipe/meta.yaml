@@ -21,7 +21,7 @@ requirements:
     - setuptools
   run:
     - python>=3.6
-    - python-dateutil
+    - python-dateutil>=2.7
     - requests
     - click>=7
     - click-repl
