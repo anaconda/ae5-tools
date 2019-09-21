@@ -96,7 +96,7 @@ def stop(session, yes):
        wildcards. But it must match exactly one session.
     '''
     cluster_call('session_stop', ident=session,
-                 confirm='Stop session {ident}',
+                 confirm=None if yes else 'Stop session {ident}',
                  prefix='Stopping {ident}...',
                  postfix='stopped.', cli=True)
 

@@ -115,6 +115,29 @@ def test_job_run2(user_session):
 
 
 @pytest.fixture(scope='module')
+def cli_session(user_session):
+    uname = user_session.username
+    pname = 'testproj3'
+    _cmd(f'session start {uname}/{pname} --wait', table=False)
+    srecs = [r for r in _cmd('session list')
+             if r['owner'] == uname and r['name'] == pname]
+    assert len(srecs) == 1, srecs
+    yield srecs[0]['id'], pname
+    _cmd(f'session stop {uname}/{pname} --yes', table=False)
+    srecs = [r for r in _cmd('session list')
+             if r['owner'] == uname and r['name'] == dname
+             or r['id'] == srecs[0]['id']]
+    assert len(srecs) == 0, srecs
+
+
+def test_session(user_session, cli_session):
+    id, pname = cli_session
+    endpoint = id.rsplit("-", 1)[-1]
+    sdata = _cmd(f'call / --endpoint={endpoint}', table=False)
+    assert 'Jupyter Notebook requires JavaScript.' in sdata, sdata
+
+
+@pytest.fixture(scope='module')
 def cli_deployment(user_session):
     uname = user_session.username
     dname = 'testdeploy'
