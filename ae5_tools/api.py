@@ -5,7 +5,6 @@ import re
 import os
 import sys
 import json
-from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
 from datetime import datetime
@@ -322,13 +321,11 @@ class AEUserSession(AESessionBase):
     def _connected(self):
         return any(c.name == '_xsrf' for c in self.session.cookies)
 
-    def _is_login(self, response):
-        if response.status_code == 200:
-            ctype = response.headers['content-type']
+    def _is_login(self, resp):
+        if resp.status_code == 200:
+            ctype = resp.headers['content-type']
             if ctype.startswith('text/html'):
-                tree = html.fromstring(response.text)
-                form = tree.xpath("//form[@id='kc-form-login']")
-                return bool(form)
+                return bool(re.search(r'<form id="kc-form-login"', resp.text, re.M))
 
     def _connect(self, password):
         if isinstance(password, AEAdminSession):
@@ -340,13 +337,12 @@ class AEUserSession(AESessionBase):
                       'redirect_uri': f'https://{self.hostname}/login'}
             url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth'
             resp = self.session.get(url, params=params)
-            tree = html.fromstring(resp.text)
-            form = tree.xpath("//form[@id='kc-form-login']")
-            if not form:
+            match = re.search(r'<form id="kc-form-login".*?action="([^"]*)"', resp.text, re.M)
+            if not match:
                 # Already logged in, apparently?
                 return
             data = {'username': self.username, 'password': password}
-            resp = self.session.post(form[0].action, data=data)
+            resp = self.session.post(match.groups()[0].replace('&amp;', '&'), data=data)
             if 'Invalid username or password.' in resp.text:
                 self.session.cookies.clear()
 

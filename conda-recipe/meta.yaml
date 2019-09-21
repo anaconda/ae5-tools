@@ -25,7 +25,6 @@ requirements:
     - requests
     - click>=7
     - click-repl
-    - lxml
 
 test:
   source_files:
