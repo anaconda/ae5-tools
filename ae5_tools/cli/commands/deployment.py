@@ -51,6 +51,37 @@ def info(deployment):
 
 @deployment.command()
 @click.argument('deployment')
+@click.option('--proxy', is_flag=True, help='Return the proxy log instead of the app log.')
+@click.option('--events', is_flag=True, help='Return the event log instead of the app log.')
+@format_options()
+@login_options()
+def logs(deployment, proxy, events):
+    '''Retrieve the logs for a deployment.
+
+       The DEPLOYMENT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    if proxy and events:
+        raise click.ClickException('Cannot specify both --proxy and --events')
+    which = 'proxy' if proxy else ('events' if events else 'app')
+    cluster_call('deployment_logs', deployment, which=which, cli=True)
+
+
+@deployment.command()
+@click.argument('deployment')
+@format_options()
+@login_options()
+def token(deployment):
+    '''Retrieve a bearer token to access a private deployment.
+
+       The DEPLOYMENT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+    '''
+    cluster_call('deployment_token', deployment, cli=True)
+
+
+@deployment.command()
+@click.argument('deployment')
 @click.option('--public', is_flag=True, help='Make the deployment public.')
 @click.option('--private', is_flag=True, help='Make the deployment private.')
 @format_options()

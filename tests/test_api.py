@@ -1,5 +1,7 @@
 import tempfile
+import requests
 import time
+import pytest
 import os
 
 from datetime import datetime
@@ -99,15 +101,29 @@ def test_job_run2(user_session):
     assert not user_session.run_list()
 
 
-def test_deploy(user_session):
+@pytest.fixture(scope='module')
+def api_deployment(user_session):
     uname = user_session.username
-    user_session.deployment_start(f'{uname}/testproj3', name='testdeploy', endpoint='testendpoint',
+    dname = 'testdeploy'
+    ename = 'testendpoint'
+    user_session.deployment_start(f'{uname}/testproj3', name=dname, endpoint=ename,
                                   command='default', public=False, wait=True)
-    drecs = [r for r in user_session.deployment_list() if r['name'] == 'testdeploy']
+    drecs = [r for r in user_session.deployment_list()
+             if r['owner'] == uname and r['name'] == dname]
     assert len(drecs) == 1, drecs
+    yield drecs[0]['id'], ename
+    user_session.deployment_stop(drecs[0]['id'])
+    drecs = [r for r in user_session.deployment_list()
+             if r['owner'] == uname and r['name'] == dname
+             or r['id'] == drecs[0]['id']]
+    assert len(drecs) == 0, drecs
+
+
+def test_deploy(user_session, api_deployment):
+    id, ename = api_deployment
     for attempt in range(3):
         try:
-            ldata = user_session._get('/', subdomain='testendpoint', format='text')
+            ldata = user_session._get('/', subdomain=ename, format='text')
             break
         except AEUnexpectedResponseError:
             time.sleep(attempt * 5)
@@ -115,8 +131,26 @@ def test_deploy(user_session):
     else:
         raise RuntimeError("Could not get the endpoint to respond")
     assert ldata.strip() == 'Hello Anaconda Enterprise!', ldata
-    user_session.deployment_stop(drecs[0]['id'])
-    assert not any(r['name'] == 'testdeploy' for r in user_session.deployment_list())
+
+
+def test_deploy_token(user_session, api_deployment):
+    id, ename = api_deployment
+    token = user_session.deployment_token(id)
+    resp = requests.get('https://testendpoint.' + user_session.hostname,
+                        headers={'Authorization': f'Bearer {token}'})
+    assert resp.status_code == 200
+    assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
+
+
+def test_deploy_logs(user_session, api_deployment):
+    id, ename = api_deployment
+    app_prefix = 'anaconda-app-' + id.rsplit("-", 1)[-1] + '-'
+    logs = user_session.deployment_logs(id, format='json')
+    assert set(logs) == {'app', 'events', 'name', 'proxy'}, logs
+    assert logs['name'].startswith(app_prefix), logs['name']
+    assert 'The project is ready to run commands.' in logs['app'], logs['app']
+    assert app_prefix in logs['events'], logs['events']
+    assert 'App Proxy is fully operational!' in logs['proxy'], logs['proxy']
 
 
 def test_login_time(admin_session, user_session):

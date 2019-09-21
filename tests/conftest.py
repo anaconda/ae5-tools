@@ -12,7 +12,7 @@ from .utils import _get_vars, _cmd
 # Furthermore, there should be a second user satisfying the following:
 # - At least one project shared with this user as a collaborator
 # - At least two of those projects are called testproj1, testproj2, or testproj3
-@pytest.fixture
+@pytest.fixture(scope='session')
 def user_setup():
     hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
     s = AEUserSession(hostname, username, password)
@@ -44,7 +44,7 @@ def user_setup():
     s.disconnect()
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def admin_session():
     hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_ADMIN_USERNAME', 'AE5_ADMIN_PASSWORD')
     s = AEAdminSession(hostname, username, password)
@@ -52,22 +52,22 @@ def admin_session():
     s.disconnect()
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def user_session(user_setup):
     return user_setup[0]
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def project_list(user_setup):
     return user_setup[1]
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def project_list_cli(user_session):
     return _cmd('project list --collaborators')
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def project_dup_names(project_list_cli):
     counts = {}
     for p in project_list_cli:
