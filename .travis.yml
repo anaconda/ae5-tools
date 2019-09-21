@@ -3,7 +3,6 @@ sudo: false
 branches:
   only:
   - master
-  - "/^\\d+\\.\\d+.*$/"
 os:
 - linux
 install:
@@ -19,14 +18,14 @@ deploy:
 - provider: script
   skip_cleanup: true
   on:
-    branch: master
+    all_branches: true
     tags: true
   script: anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $HOME/miniconda/conda-bld/*/*.tar.bz2
     --force
 - provider: script
   skip_cleanup: true
   on:
-    branch: master
+    all_branches: true
     tags: false
   script: anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label
     dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
