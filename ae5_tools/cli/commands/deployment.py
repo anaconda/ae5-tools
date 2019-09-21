@@ -4,7 +4,7 @@ import re
 
 from ..login import cluster_call, login_options
 from ..utils import ident_filter
-from ..format import print_output, format_options
+from ..format import format_options
 from .deployment_collaborator import collaborator
 
 

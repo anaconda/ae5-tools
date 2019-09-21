@@ -16,9 +16,10 @@ from .config import config
 from .identifier import Identifier
 
 from http.cookiejar import LWPCookieJar
+from requests.packages import urllib3
 
 
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Maximum page size in keycloak
 KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
@@ -442,9 +443,9 @@ class AEUserSession(AESessionBase):
             msg = f'{pfx} {tstr}s found matching "{ident}"'
             if matches:
                 if has_id:
-                    matches =[f'{r["id"]}: {r["name"]}' for r in matches]
+                    matches = [f'{r["id"]}: {r["name"]}' for r in matches]
                 else:
-                    matches =[r["name"] for r in matches]
+                    matches = [r["name"] for r in matches]
                 msg += ':\n  - ' + '\n  - '.join(matches)
             raise ValueError(msg)
         return id, rec
@@ -470,7 +471,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(record, format=format, columns=columns)
 
     def resource_profile_list(self, internal=False, format=None):
-        response = self._get('projects/actions', params={'q':'create_action'})
+        response = self._get('projects/actions', params={'q': 'create_action'})
         profiles = response[0]['resource_profiles']
         for profile in profiles:
             profile['description'], params = profile['description'].rsplit(' (', 1)
@@ -486,7 +487,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(rec, format=format, columns=_R_COLUMNS)
 
     def editor_list(self, internal=False, format=None):
-        response = self._get('projects/actions', params={'q':'create_action'})[0]
+        response = self._get('projects/actions', params={'q': 'create_action'})[0]
         editors = response['editors']
         for rec in editors:
             rec['packages'] = ' '.join(rec['packages'])
@@ -758,7 +759,6 @@ class AEUserSession(AESessionBase):
         deps = self.deployment_list(internal=True)
         dmap = {drec['endpoint']: drec for drec in deps if drec['endpoint']}
         pnames = {prec['id']: prec['name'] for prec in self.project_list(internal=True)}
-        good_records = []
         for rec in response:
             drec = dmap.get(rec['id'])
             if drec:
@@ -905,7 +905,7 @@ class AEUserSession(AESessionBase):
 
     def job_create(self, ident, schedule=None, name=None, command=None,
                    resource_profile=None, variables=None, run=False,
-                   wait=False, cleanup=False, make_unique=None, 
+                   wait=False, cleanup=False, make_unique=None,
                    show_run=False, format=None):
         if cleanup and schedule:
             raise ValueError('cannot use cleanup=True with a scheduled job')
@@ -1085,7 +1085,7 @@ class AEAdminSession(AESessionBase):
             response = response[0]
             if not internal:
                 events = self._get_paginated('events', client='anaconda-platform',
-                                              type='LOGIN', user=response['id'])
+                                             type='LOGIN', user=response['id'])
                 time = next((e['time'] for e in events
                              if 'response_mode' not in e['details']), 0)
                 response['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
