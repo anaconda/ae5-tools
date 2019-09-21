@@ -1,12 +1,9 @@
 import json
 import os
-import urllib3
 
 from http.cookiejar import LWPCookieJar
 from datetime import datetime
 from dateutil import tz
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class ConfigManager:

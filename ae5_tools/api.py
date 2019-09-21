@@ -5,7 +5,6 @@ import re
 import os
 import sys
 import json
-from lxml import html
 from os.path import basename
 from fnmatch import fnmatch
 from datetime import datetime
@@ -16,9 +15,10 @@ from .config import config
 from .identifier import Identifier
 
 from http.cookiejar import LWPCookieJar
+from requests.packages import urllib3
 
 
-requests.packages.urllib3.disable_warnings()
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Maximum page size in keycloak
 KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
@@ -321,13 +321,11 @@ class AEUserSession(AESessionBase):
     def _connected(self):
         return any(c.name == '_xsrf' for c in self.session.cookies)
 
-    def _is_login(self, response):
-        if response.status_code == 200:
-            ctype = response.headers['content-type']
+    def _is_login(self, resp):
+        if resp.status_code == 200:
+            ctype = resp.headers['content-type']
             if ctype.startswith('text/html'):
-                tree = html.fromstring(response.text)
-                form = tree.xpath("//form[@id='kc-form-login']")
-                return bool(form)
+                return bool(re.search(r'<form id="kc-form-login"', resp.text, re.M))
 
     def _connect(self, password):
         if isinstance(password, AEAdminSession):
@@ -339,13 +337,12 @@ class AEUserSession(AESessionBase):
                       'redirect_uri': f'https://{self.hostname}/login'}
             url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth'
             resp = self.session.get(url, params=params)
-            tree = html.fromstring(resp.text)
-            form = tree.xpath("//form[@id='kc-form-login']")
-            if not form:
+            match = re.search(r'<form id="kc-form-login".*?action="([^"]*)"', resp.text, re.M)
+            if not match:
                 # Already logged in, apparently?
                 return
             data = {'username': self.username, 'password': password}
-            resp = self.session.post(form[0].action, data=data)
+            resp = self.session.post(match.groups()[0].replace('&amp;', '&'), data=data)
             if 'Invalid username or password.' in resp.text:
                 self.session.cookies.clear()
 
@@ -442,9 +439,9 @@ class AEUserSession(AESessionBase):
             msg = f'{pfx} {tstr}s found matching "{ident}"'
             if matches:
                 if has_id:
-                    matches =[f'{r["id"]}: {r["name"]}' for r in matches]
+                    matches = [f'{r["id"]}: {r["name"]}' for r in matches]
                 else:
-                    matches =[r["name"] for r in matches]
+                    matches = [r["name"] for r in matches]
                 msg += ':\n  - ' + '\n  - '.join(matches)
             raise ValueError(msg)
         return id, rec
@@ -470,7 +467,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(record, format=format, columns=columns)
 
     def resource_profile_list(self, internal=False, format=None):
-        response = self._get('projects/actions', params={'q':'create_action'})
+        response = self._get('projects/actions', params={'q': 'create_action'})
         profiles = response[0]['resource_profiles']
         for profile in profiles:
             profile['description'], params = profile['description'].rsplit(' (', 1)
@@ -486,7 +483,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(rec, format=format, columns=_R_COLUMNS)
 
     def editor_list(self, internal=False, format=None):
-        response = self._get('projects/actions', params={'q':'create_action'})[0]
+        response = self._get('projects/actions', params={'q': 'create_action'})[0]
         editors = response['editors']
         for rec in editors:
             rec['packages'] = ' '.join(rec['packages'])
@@ -758,7 +755,6 @@ class AEUserSession(AESessionBase):
         deps = self.deployment_list(internal=True)
         dmap = {drec['endpoint']: drec for drec in deps if drec['endpoint']}
         pnames = {prec['id']: prec['name'] for prec in self.project_list(internal=True)}
-        good_records = []
         for rec in response:
             drec = dmap.get(rec['id'])
             if drec:
@@ -905,7 +901,7 @@ class AEUserSession(AESessionBase):
 
     def job_create(self, ident, schedule=None, name=None, command=None,
                    resource_profile=None, variables=None, run=False,
-                   wait=False, cleanup=False, make_unique=None, 
+                   wait=False, cleanup=False, make_unique=None,
                    show_run=False, format=None):
         if cleanup and schedule:
             raise ValueError('cannot use cleanup=True with a scheduled job')
@@ -1085,7 +1081,7 @@ class AEAdminSession(AESessionBase):
             response = response[0]
             if not internal:
                 events = self._get_paginated('events', client='anaconda-platform',
-                                              type='LOGIN', user=response['id'])
+                                             type='LOGIN', user=response['id'])
                 time = next((e['time'] for e in events
                              if 'response_mode' not in e['details']), 0)
                 response['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
