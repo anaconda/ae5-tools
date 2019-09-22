@@ -124,6 +124,22 @@ def test_session(user_session, api_session):
     assert 'Jupyter Notebook requires JavaScript.' in sdata, sdata
 
 
+def test_session_branches(user_session, api_session):
+    id, pname = api_session
+    branches = user_session.session_branches(id, format='json')
+    bdict = {r['branch']: r['sha1'] for r in branches}
+    assert set(bdict) == {'local', 'origin/local', 'master'}, branches
+    assert bdict['local'] == bdict['master'], branches
+
+
+def test_session_before_changes(user_session, api_session):
+    id, pname = api_session
+    changes1 = user_session.session_changes(id, format='json')
+    assert changes1 == [], changes1
+    changes2 = user_session.session_changes(id, master=True, format='json')
+    assert changes2 == [], changes2
+
+
 @pytest.fixture(scope='module')
 def api_deployment(user_session):
     uname = user_session.username

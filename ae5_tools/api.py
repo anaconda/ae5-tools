@@ -36,8 +36,9 @@ _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description',
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
 _R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
 _ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
+_BR_COLUMNS = ['branch', 'sha1']
 _CH_COLUMNS = ['path', 'change_type', 'modified', 'conflicted', 'id']
-_DTYPES = {'created': 'datetime', 'updated': 'datetime',
+_DTYPES = {'created': 'datetime', 'updated': 'datetime', 'modified': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s',
            'lastLogin': 'timestamp/ms', 'time': 'timestamp/ms'}
 
@@ -175,13 +176,13 @@ class AESessionBase(object):
             if col in cset:
                 if dtype == 'datetime':
                     for rec in response:
-                        if col in rec:
+                        if rec.get(col):
                             rec[col] = parser.isoparse(rec[col])
                 elif dtype.startswith('timestamp'):
                     incr = dtype.rsplit('/', 1)[1]
                     fact = 1000.0 if incr == 'ms' else 1.0
                     for rec in response:
-                        if col in rec:
+                        if rec.get(col):
                             rec[col] = datetime.fromtimestamp(rec[col] / fact)
         if is_series:
             result = [(k, response[0].get(k)) for k in clist]
@@ -232,8 +233,11 @@ class AESessionBase(object):
             endpoint = f'{self.prefix}/{endpoint}'
         url = f'https://{subdomain}{self.hostname}/{endpoint}'
         do_save = False
+        allow_retry = True
         if not self.connected:
             self.authorize()
+            if self.password is not None:
+                allow_retry = False
         retries = redirects = 0
         while True:
             try:
@@ -275,8 +279,10 @@ class AESessionBase(object):
                     redirects = 0
                 url = url2
                 method = 'get'
-            elif response.status_code == 401 or self._is_login(response):
+            elif allow_retry and (response.status_code == 401 or self._is_login(response)):
                 self.authorize()
+                if self.password is not None:
+                    allow_retry = False
                 redirects = 0
             elif response.status_code >= 400:
                 raise AEUnexpectedResponseError(response, method, url, **kwargs)
@@ -690,28 +696,44 @@ class AEUserSession(AESessionBase):
             for record in response:
                 self._fix_endpoints(record)
 
-    def session_list(self, internal=False, format=None):
+    def _join_changes(self, record):
+        for rec in ([record] if isinstance(record, dict) else record):
+            changes = self.session_changes(rec['id'], format='json')
+            rec['changes'] = ', '.join(r['path'] for r in changes)
+            rec['modified'] = max((r['modified'] or rec['updated'] for r in changes), default='')
+        return _S_COLUMNS[:2] + ['changes', 'modified'] + _S_COLUMNS[2:]
+
+    def session_list(self, internal=False, changes=False, format=None):
         response = self._get('sessions')
         # We need _join_projects even in internal mode to replace
         # the internal session name with the project name
         self._join_projects(response, 'session')
-        return self._format_response(response, format, _S_COLUMNS)
+        headers = _S_COLUMNS
+        if not internal and changes:
+            headers = self._join_changes(response)
+        return self._format_response(response, format, columns=headers)
 
     def session_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id('sessions', ident, quiet=quiet)
         if record:
             self._join_projects(record, 'session')
-        return self._format_response(record, format, columns=_S_COLUMNS)
+        headers = _S_COLUMNS
+        if not internal:
+            headers = self._join_changes(record)
+        return self._format_response(record, format, columns=headers)
 
-    def session_changes(self, ident, format=None):
-        id, _ = self._id('sessions', ident, quiet=quiet)
-        result = self._get(f'sessions/{id}/changes/local/', format='json')
+    def session_changes(self, ident, master=False, format=None):
+        id, _ = self._id('sessions', ident)
+        which = 'master' if master else 'local'
+        result = self._get(f'sessions/{id}/changes/{which}/', format='json')
         return self._format_response(result['files'], format=format, columns=_CH_COLUMNS)
 
     def session_branches(self, ident, format=None):
-        id, _ = self._id('sessions', ident, quiet=quiet)
+        id, _ = self._id('sessions', ident)
+        # Use master because it's more likely to be a smaller result (no changed files)
         result = self._get(f'sessions/{id}/changes/master/', format='json')
-        return self._format_response(result['branches'], format=format)
+        result = [{'branch': k, 'sha1': v} for k, v in result['branches'].items()]
+        return self._format_response(result, format=format, columns=_BR_COLUMNS)
 
     def session_start(self, ident, editor=None, resource_profile=None, wait=True, format=None):
         id, record = self._id('projects', ident)
