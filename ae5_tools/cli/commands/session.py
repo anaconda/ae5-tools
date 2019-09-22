@@ -17,9 +17,10 @@ def session():
 
 @session.command(short_help='List active sessions.')
 @ident_filter('session')
+@click.option('--changes', is_flag=True, help='Include modified/changes columns (requires additional API calls).')
 @format_options()
 @login_options()
-def list():
+def list(changes):
     '''List sessions.
 
        By default, lists all sessions visible to the authenticated user.
@@ -27,10 +28,10 @@ def list():
        can be performed by supplying an optional SESSION argument. Filters
        on other fields may be applied using the --filter option.
     '''
-    cluster_call('session_list', cli=True)
+    cluster_call('session_list', changes=changes, cli=True)
 
 
-@session.command(short_help='Obtain information about a single session.')
+@session.command()
 @click.argument('session')
 @format_options()
 @login_options()
@@ -41,6 +42,33 @@ def info(session):
        wildcards. But it must match exactly one session.
     '''
     cluster_call('session_info', session, cli=True)
+
+
+@session.command()
+@click.argument('session')
+@format_options()
+@login_options()
+def branches(session):
+    '''Retreive information about the git branches for a session.
+
+       The SESSION identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one session.
+    '''
+    cluster_call('session_branches', session, cli=True)
+
+
+@session.command()
+@click.argument('session')
+@click.option('--master', is_flag=True, help='Get changes from upstream/master instead of the local session')
+@format_options()
+@login_options()
+def changes(session, master):
+    '''Retreive information about uncommited files in a session.
+
+       The SESSION identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one session.
+    '''
+    cluster_call('session_changes', session, master, cli=True)
 
 
 def _open(record, frame):
@@ -96,7 +124,7 @@ def stop(session, yes):
        wildcards. But it must match exactly one session.
     '''
     cluster_call('session_stop', ident=session,
-                 confirm='Stop session {ident}',
+                 confirm=None if yes else 'Stop session {ident}',
                  prefix='Stopping {ident}...',
                  postfix='stopped.', cli=True)
 

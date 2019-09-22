@@ -58,7 +58,7 @@ The package has the following particular dependencies:
       - `revision`: `list`, `info`, `download`
     - `sample`: `info`, `list`
     - `run`: `delete`, `info`, `list`, `log`, `stop`
-    - `session`: `info`, `list`, `open`, `start`, `stop`
+    - `session`: `branches`, `changes`, `info`, `list`, `open`, `start`, `stop`
     - `user`: `info`, `list`
 - Simple commands: `call`, `login`, `logout`
 - Login options: `--hostname`, `--username`, `--admin-username`, `--admin-hostname`, `--impersonate`

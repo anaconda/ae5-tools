@@ -115,6 +115,45 @@ def test_job_run2(user_session):
 
 
 @pytest.fixture(scope='module')
+def cli_session(user_session):
+    uname = user_session.username
+    pname = 'testproj3'
+    _cmd(f'session start {uname}/{pname} --wait', table=False)
+    srecs = [r for r in _cmd('session list')
+             if r['owner'] == uname and r['name'] == pname]
+    assert len(srecs) == 1, srecs
+    yield srecs[0]['id'], pname
+    _cmd(f'session stop {uname}/{pname} --yes', table=False)
+    srecs = [r for r in _cmd('session list')
+             if r['owner'] == uname and r['name'] == dname
+             or r['id'] == srecs[0]['id']]
+    assert len(srecs) == 0, srecs
+
+
+def test_session(user_session, cli_session):
+    id, pname = cli_session
+    endpoint = id.rsplit("-", 1)[-1]
+    sdata = _cmd(f'call / --endpoint={endpoint}', table=False)
+    assert 'Jupyter Notebook requires JavaScript.' in sdata, sdata
+
+
+def test_session_branches(user_session, cli_session):
+    id, pname = cli_session
+    branches = _cmd(f'session branches {id}')
+    bdict = {r['branch']: r['sha1'] for r in branches}
+    assert set(bdict) == {'local', 'origin/local', 'master'}, branches
+    assert bdict['local'] == bdict['master'], branches
+
+
+def test_session_before_changes(user_session, cli_session):
+    id, pname = cli_session
+    changes1 = _cmd(f'session changes {id}')
+    assert changes1 == [], changes1
+    changes2 = _cmd(f'session changes --master {id}')
+    assert changes2 == [], changes2
+
+
+@pytest.fixture(scope='module')
 def cli_deployment(user_session):
     uname = user_session.username
     dname = 'testdeploy'

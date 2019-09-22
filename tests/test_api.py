@@ -102,6 +102,45 @@ def test_job_run2(user_session):
 
 
 @pytest.fixture(scope='module')
+def api_session(user_session):
+    uname = user_session.username
+    pname = 'testproj3'
+    user_session.session_start(f'{uname}/{pname}', wait=True)
+    srecs = [r for r in user_session.session_list()
+             if r['owner'] == uname and r['name'] == pname]
+    assert len(srecs) == 1, srecs
+    yield srecs[0]['id'], pname
+    user_session.session_stop(srecs[0]['id'])
+    srecs = [r for r in user_session.session_list()
+             if r['owner'] == uname and r['name'] == dname
+             or r['id'] == srecs[0]['id']]
+    assert len(srecs) == 0, srecs
+
+
+def test_session(user_session, api_session):
+    id, pname = api_session
+    endpoint = id.rsplit("-", 1)[-1]
+    sdata = user_session._get('/', subdomain=endpoint, format='text')
+    assert 'Jupyter Notebook requires JavaScript.' in sdata, sdata
+
+
+def test_session_branches(user_session, api_session):
+    id, pname = api_session
+    branches = user_session.session_branches(id, format='json')
+    bdict = {r['branch']: r['sha1'] for r in branches}
+    assert set(bdict) == {'local', 'origin/local', 'master'}, branches
+    assert bdict['local'] == bdict['master'], branches
+
+
+def test_session_before_changes(user_session, api_session):
+    id, pname = api_session
+    changes1 = user_session.session_changes(id, format='json')
+    assert changes1 == [], changes1
+    changes2 = user_session.session_changes(id, master=True, format='json')
+    assert changes2 == [], changes2
+
+
+@pytest.fixture(scope='module')
 def api_deployment(user_session):
     uname = user_session.username
     dname = 'testdeploy'

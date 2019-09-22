@@ -37,6 +37,8 @@ def user_setup():
     assert len(set(p['name'] for p in powned).intersection(p['name'] for p in pother)) >= 2
     # Make sure all three editors are represented
     assert len(set(p['editor'] for p in powned)) == 3
+    # Make sure testproj3 is using the Jupyter editor
+    assert any(p['editor'] == 'notebook' and p['name'] == 'testproj3' for p in powned)
     # Make sure we have 0, 1, and 2 collaborators represented
     assert set(len(p['collaborators'].split(', ')) if p['collaborators'] else 0
                for p in powned).issuperset((0, 1, 2))
