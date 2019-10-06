@@ -5,11 +5,12 @@ import re
 import os
 import sys
 import json
-from os.path import basename
+from os.path import basename, abspath, isfile, isdir, join
 from fnmatch import fnmatch
 from datetime import datetime
 from dateutil import parser
 import getpass
+import tarfile
 
 from .config import config
 from .identifier import Identifier
@@ -634,13 +635,22 @@ class AEUserSession(AESessionBase):
         if not name:
             if type(project_archive) == bytes:
                 raise RuntimeError('Project name must be supplied for binary input')
-            name = basename(project_archive).split('.', 1)[0]
+            name = basename(abspath(project_archive)).split('.', 1)[0]
         try:
             f = None
             if type(project_archive) == bytes:
                 f = io.BytesIO(project_archive)
-            else:
+            elif not os.path.exists(project_archive):
+                raise RuntimeError(f'File/directory not found: {project_archive}')
+            elif not isdir(project_archive):
                 f = open(project_archive, 'rb')
+            elif not isfile(join(project_archive, 'anaconda-project.yml')):
+                raise RuntimeError(f'Project directory must include anaconda-project.yml')
+            else:
+                f = io.BytesIO()
+                with tarfile.open(fileobj=f, mode='w|gz') as tf:
+                    tf.add(project_archive, arcname='project', recursive=True)
+                f.seek(0)
             data = {'name': name}
             if tag:
                 data['tag'] = tag

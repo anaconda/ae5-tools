@@ -3,6 +3,8 @@ import requests
 import time
 import pytest
 import os
+import tarfile
+import glob
 
 from datetime import datetime
 
@@ -38,25 +40,46 @@ def test_project_activity(user_session, project_list):
         assert activity[-1]['owner'] == rec0['owner']
 
 
-def test_project_download_upload_delete(user_session):
+@pytest.fixture(scope='module')
+def downloaded_project(user_session):
     uname = user_session.username
     with tempfile.TemporaryDirectory() as tempd:
-        fname = os.path.join(tempd, 'blob')
-        fname2 = os.path.join(tempd, 'blob2')
+        fname = os.path.join(tempd, 'blob.tar.gz')
+        fname2 = os.path.join(tempd, 'blob2.tar.gz')
         user_session.project_download(f'{uname}/testproj1', filename=fname)
-        user_session.project_upload(fname, 'test_upload', '1.2.3', wait=True)
-        rrec = user_session.revision_list('test_upload')
-        assert len(rrec) == 1
-        assert rrec[0]['name'] == '1.2.3'
-        user_session.project_download('test_upload:1.2.3', filename=fname2)
-        for r in user_session.project_list():
-            if r['name'] == 'test_upload':
-                user_session.project_delete(r['id'])
-                break
-        else:
-            assert False, 'Uploaded project could not be found'
-    assert not any(r['name'] == 'test_upload' and r['owner'] == uname
+        with tarfile.open(fname, 'r') as tf:
+            tf.extractall(path=tempd)
+        dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
+        assert len(dnames) == 1
+        dname = os.path.dirname(dnames[0])
+        yield fname, fname2, dname
+    for r in user_session.project_list():
+        if r['owner'] == uname and r['name'].startswith('test_upload'):
+            user_session.project_delete(r['id'])
+    assert not any(r['owner'] == uname and r['name'].startswith('test_upload')
                    for r in user_session.project_list())
+
+
+def test_project_download(downloaded_project):
+    pass
+
+
+def test_project_upload(user_session, downloaded_project):
+    fname, fname2, dname = downloaded_project
+    user_session.project_upload(fname, 'test_upload1', '1.2.3', wait=True)
+    rrec = user_session.revision_list('test_upload1')
+    assert len(rrec) == 1
+    assert rrec[0]['name'] == '1.2.3'
+    user_session.project_download('test_upload1:1.2.3', filename=fname2)
+
+
+def test_project_upload_as_directory(user_session, downloaded_project):
+    fname, fname2, dname = downloaded_project
+    user_session.project_upload(dname, 'test_upload2', '1.3.4', wait=True)
+    rrec = user_session.revision_list('test_upload2')
+    assert len(rrec) == 1
+    assert rrec[0]['name'] == '1.3.4'
+    user_session.project_download('test_upload2:1.3.4', filename=fname2)
 
 
 def test_job_run1(user_session):
