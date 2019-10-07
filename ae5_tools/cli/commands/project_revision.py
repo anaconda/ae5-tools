@@ -5,7 +5,7 @@ from ..format import format_options
 from ...identifier import Identifier
 
 
-@click.group(short_help='Subcommands: download, info, list',
+@click.group(short_help='Subcommands: download, image, info, list',
              epilog='Type "ae5 project revision <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
@@ -64,3 +64,22 @@ def download(revision, filename):
         filename = f'{name}{revdash}.tar.gz'
     cluster_call('project_download', f'{pid}:{rev}', filename=filename)
     print(f'File {filename} downloaded.')
+
+
+@revision.command()
+@click.argument('revision')
+@click.option('--command', default='', help='Command name to execute.')
+@click.option('--condarc', default='', help='Path to custom condarc file.')
+@click.option('--dockerfile', default='', help='Path to custom Dockerfile.')
+@click.option('--debug', is_flag=True, help='debug logs')
+@format_options()
+@login_options()
+def image(revision, command, condarc, dockerfile, debug):
+    ident = Identifier.from_string(revision)
+    record = cluster_call('revision_info', ident, format='json')
+    _, pid, _, rev = record['url'].rsplit('/', 3)
+    pid = 'a0-' + pid
+    cluster_call('project_image', f'{pid}:{rev}', command=command,
+                 condarc_path=condarc, dockerfile_path=dockerfile,
+                 debug=debug, cli=True)
+

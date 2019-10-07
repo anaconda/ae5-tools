@@ -10,10 +10,13 @@ from fnmatch import fnmatch
 from datetime import datetime
 from dateutil import parser
 import getpass
+from tempfile import TemporaryDirectory
 import tarfile
 
 from .config import config
 from .identifier import Identifier
+from .docker import get_dockerfile, get_condarc
+from .docker import build_image
 
 from http.cookiejar import LWPCookieJar
 from requests.packages import urllib3
@@ -614,6 +617,48 @@ class AEUserSession(AESessionBase):
             return response
         with open(filename, 'wb') as fp:
             fp.write(response)
+
+    def project_image(self, ident, command=None, condarc_path=None, dockerfile_path=None, debug=False, format=None):
+        '''Build docker image'''
+        _, rev, _, rrec = self._revision(ident)
+        info = self.project_info(ident, format='response')
+        name = info['name'].replace(' ','').lower()
+        owner = info['owner'].replace('@','_at_')
+        tag = f'{owner}/{name}:{rev}'
+
+        dockerfile = get_dockerfile(dockerfile_path)
+        condarc = get_condarc(condarc_path)
+
+        if command:
+            commands = [c['id'] for c in rrec['commands']]
+            if not commands:
+                print('There are no configured commands in this project.')
+                print('Remove the --command option to build the container anyway.')
+                return
+            if command in commands:
+                dockerfile = re.sub('(CMD anaconda-project run)(.*?)$', f'\g<1> {command}', dockerfile)
+            else:
+                print(f'The command {command} is not one of the configured commands.')
+                print('Available commands are:')
+                for c in rrec['commands']:
+                    default = c.get('default', False)
+                    if default:
+                        print(f'  {c["id"]:15s} (default)')
+                    else:
+                        print(f'  {c["id"]:15s}')
+                return
+
+        with TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, 'Dockerfile'), 'w') as f:
+                f.write(dockerfile)
+
+            with open(os.path.join(tempdir, 'condarc'), 'w') as f:
+                f.write(condarc)
+
+            self.project_download(ident, filename=os.path.join(tempdir, 'project.tar.gz'))
+            
+            print('Starting image build. This may take several minutes.')
+            build_image(tempdir, tag=tag, debug=debug)
 
     def project_delete(self, ident, format=None):
         id, _ = self._id('projects', ident)

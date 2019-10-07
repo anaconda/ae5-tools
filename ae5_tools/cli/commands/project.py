@@ -7,7 +7,7 @@ from .project_collaborator import collaborator
 from .project_revision import revision
 
 
-@click.group(short_help='activity, collaborator, delete, deploy, deployments, download, info, jobs, list, patch, revision, run, runs, schedule, sessions, status, upload',
+@click.group(short_help='activity, collaborator, delete, deploy, deployments, download, image, info, jobs, list, patch, revision, run, runs, schedule, sessions, status, upload',
              epilog='Type "ae5 project <command> --help" for help on a specific command.')
 @format_options()
 @login_options()
@@ -166,6 +166,31 @@ def download(ctx, project, filename):
     from .project_revision import download as revision_download
     ctx.invoke(revision_download, revision=project, filename=filename)
 
+
+@project.command()
+@click.argument('project')
+@click.option('--command', default='', help='Command name to execute.')
+@click.option('--condarc', default='', help='Path to custom condarc.')
+@click.option('--dockerfile', default='', help='Path to custom Dockerfile.')
+@click.option('--debug', is_flag=True, help='Show docker image build logs.')
+@login_options()
+@format_options()
+@click.pass_context
+def image(ctx, project, command, condarc, dockerfile, debug):
+    '''Build a Docker Image of a project.
+
+       Using the template Dockerfile the project archive is downloaded and a runable
+       Docker image is built. The PROJECT identifier need not be fully specified,
+       and may even include wildcards. But it must match exactly one project.
+
+       By default the image will pull files from this AE5 Repository.
+
+       A revision value may optionally be supplied in the PROJECT identifier.
+       If not supplied, the latest revision will be selected.
+    '''
+    from .project_revision import image as revision_image
+    ctx.invoke(revision_image, revision=project, command=command, condarc=condarc, dockerfile=dockerfile, debug=debug)
+    
 
 @project.command()
 @click.argument('filename', type=click.Path(exists=True))
