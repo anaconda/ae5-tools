@@ -6,6 +6,8 @@ import os
 import pytest
 import pprint
 import requests
+import tarfile
+import glob
 
 from datetime import datetime
 from collections import namedtuple
@@ -51,25 +53,46 @@ def test_project_activity(project_list_cli):
         assert activity[-1]['owner'] == rec0['owner']
 
 
-def test_project_download_upload_delete(user_session):
+@pytest.fixture(scope='module')
+def downloaded_project(user_session):
     uname = user_session.username
     with tempfile.TemporaryDirectory() as tempd:
-        fname = os.path.join(tempd, 'blob')
-        fname2 = os.path.join(tempd, 'blob2')
+        fname = os.path.join(tempd, 'blob.tar.gz')
+        fname2 = os.path.join(tempd, 'blob2.tar.gz')
         _cmd(f'project download {uname}/testproj1 --filename {fname}', table=False)
-        _cmd(f'project upload {fname} --name test_upload --tag 1.2.3')
-        rrec = _cmd(f'project revision list test_upload')
-        assert len(rrec) == 1
-        assert rrec[0]['name'] == '1.2.3'
-        _cmd(f'project download test_upload --filename {fname2}', table=False)
-        for r in _cmd('project list'):
-            if r['name'] == 'test_upload':
-                _cmd(f'project delete {r["id"]} --yes', table=False)
-                break
-        else:
-            assert False, 'Uploaded project could not be found'
-    assert not any(r['name'] == 'test_upload' and r['owner'] == uname
+        with tarfile.open(fname, 'r') as tf:
+            tf.extractall(path=tempd)
+        dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
+        assert len(dnames) == 1
+        dname = os.path.dirname(dnames[0])
+        yield fname, fname2, dname
+    for r in user_session.project_list():
+        if r['owner'] == uname and r['name'].startswith('test_upload'):
+            _cmd(f'project delete {r["id"]} --yes', table=False)
+    assert not any(r['owner'] == uname and r['name'].startswith('test_upload')
                    for r in _cmd('project list'))
+
+
+def test_project_download(downloaded_project):
+    pass
+
+
+def test_project_upload(user_session, downloaded_project):
+    fname, fname2, dname = downloaded_project
+    _cmd(f'project upload {fname} --name test_upload1 --tag 1.2.3')
+    rrec = _cmd(f'project revision list test_upload1')
+    assert len(rrec) == 1
+    assert rrec[0]['name'] == '1.2.3'
+    _cmd(f'project download test_upload1 --filename {fname2}', table=False)
+
+
+def test_project_upload_as_directory(user_session, downloaded_project):
+    fname, fname2, dname = downloaded_project
+    _cmd(f'project upload {dname} --name test_upload2 --tag 1.2.3')
+    rrec = _cmd(f'project revision list test_upload2')
+    assert len(rrec) == 1
+    assert rrec[0]['name'] == '1.2.3'
+    _cmd(f'project download test_upload2 --filename {fname2}', table=False)
 
 
 def test_job_run1(user_session):
