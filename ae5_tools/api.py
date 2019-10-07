@@ -14,7 +14,7 @@ from tempfile import TemporaryDirectory
 
 from .config import config
 from .identifier import Identifier
-from .docker import get_dockerfile
+from .docker import get_dockerfile, get_condarc
 from .docker import build_image
 
 from http.cookiejar import LWPCookieJar
@@ -617,28 +617,21 @@ class AEUserSession(AESessionBase):
         with open(filename, 'wb') as fp:
             fp.write(response)
 
-    def project_image(self, ident, command=None, use_anaconda_cloud=False, dockerfile_path=None, debug=False, format=None):
+    def project_image(self, ident, command=None, condarc_path=None, dockerfile_path=None, debug=False, format=None):
         '''Build docker image'''
-        id, rev, _, rrec = self._revision(ident)
+        _, rev, _, rrec = self._revision(ident)
         info = self.project_info(ident, format='response')
         name = info['name'].replace(' ','').lower()
         owner = info['owner'].replace('@','_at_')
         tag = f'{owner}/{name}:{rev}'
 
-        if dockerfile_path:
-            if not os.path.exists(dockerfile_path):
-                print(f'The requested Dockerfile was not found.\n{dockerfile_path}.')
-                return
-            else:
-                with open(dockerfile_path) as f:
-                    dockerfile = f.read()
-        else:
-            dockerfile = get_dockerfile()
-        
+        dockerfile = get_dockerfile(dockerfile_path)
+        condarc = get_condarc(condarc_path)
+
         if command:
             commands = [c['id'] for c in rrec['commands']]
             if not commands:
-                print('There are now configured commands in this project.')
+                print('There are no configured commands in this project.')
                 print('Remove the --command option to build the container anyway.')
                 return
             if command in commands:
@@ -657,11 +650,14 @@ class AEUserSession(AESessionBase):
         with TemporaryDirectory() as tempdir:
             with open(os.path.join(tempdir, 'Dockerfile'), 'w') as f:
                 f.write(dockerfile)
-                self.project_download(ident, filename=os.path.join(tempdir, 'project.tar.gz'))
+
+            with open(os.path.join(tempdir, 'condarc'), 'w') as f:
+                f.write(condarc)
+
+            self.project_download(ident, filename=os.path.join(tempdir, 'project.tar.gz'))
             
-            ae5_hostname = self.hostname if not use_anaconda_cloud else None
             print('Starting image build. This may take several minutes.')
-            build_image(tempdir, tag=tag, ae5_hostname=ae5_hostname, debug=debug)
+            build_image(tempdir, tag=tag, debug=debug)
 
     def project_delete(self, ident, format=None):
         id, _ = self._id('projects', ident)

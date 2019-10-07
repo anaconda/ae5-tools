@@ -69,17 +69,17 @@ def download(revision, filename):
 @revision.command()
 @click.argument('revision')
 @click.option('--command', default='', help='Command name to execute.')
-@click.option('--use-anaconda-cloud', is_flag=True, help='public repo')
-@click.option('--dockerfile', default='', help='dockerfile path')
+@click.option('--condarc', default='', help='Path to custom condarc file.')
+@click.option('--dockerfile', default='', help='Path to custom Dockerfile.')
 @click.option('--debug', is_flag=True, help='debug logs')
 @format_options()
 @login_options()
-def image(revision, command, use_anaconda_cloud, dockerfile, debug):
+def image(revision, command, condarc, dockerfile, debug):
     ident = Identifier.from_string(revision)
     record = cluster_call('revision_info', ident, format='json')
     _, pid, _, rev = record['url'].rsplit('/', 3)
     pid = 'a0-' + pid
     cluster_call('project_image', f'{pid}:{rev}', command=command,
-                 use_anaconda_cloud=use_anaconda_cloud, dockerfile_path=dockerfile,
+                 condarc_path=condarc, dockerfile_path=dockerfile,
                  debug=debug, cli=True)
 

@@ -3,39 +3,77 @@
 import os
 import sys
 import json
-import logging
+import shutil
+import subprocess
 from os import path
 
 
-def get_logger(name, stdout=False):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    filename = f'{name.replace(":","__").replace("/","-")}.log'
-    file_handler = logging.FileHandler(filename=filename)
-    logger.addHandler(file_handler)
-    if stdout:
-        stdout_handler = logging.StreamHandler(sys.stdout)
-        logger.addHandler(stdout_handler)
+def get_condarc(custom_path):
+    '''return contents of condarc
+    
+    The following locations are sanned in order
+    for the condarc file
+    
+    1. provided path
+    2. ~/.ae5/condarc
+    3. <site-packages>/ae5_tools/condarc.dist (copied to #2)
+    '''
 
-    return logger
+    _path = path.expanduser(os.getenv('AE5_TOOLS_CONFIG_DIR') or '~/.ae5')
+    user_file = path.join(_path, 'condarc')
+    dist_file = path.join(path.dirname(__file__), 'condarc.dist')
+
+    if custom_path:
+        if path.exists(custom_path):
+            condarc = custom_path
+        else:
+            msg = f'Custom condarc file {custom_path} was not found.'
+            raise FileNotFoundError(msg)
+
+    elif path.exists(user_file):
+        condarc = user_file
+    elif path.exists(dist_file):
+        shutil.copy(dist_file, user_file)
+        condarc = user_file
+    else:
+        msg = f'''condarc was not found in any of the following locations
+{user_file}
+{dist_file}
+Please check that the file exists or that ae5-tools was installed properly.
+Otherwise, please file a bug report.'''
+        raise FileNotFoundError(msg)
+
+    with open(condarc) as f:
+        contents = f.read()
+    return contents
 
 
-def get_dockerfile():
-    '''return path to dockerfile
+def get_dockerfile(custom_path=None):
+    '''return contents of dockerfile
 
     The following locations are scanned in order
     for the Dockerfile
-    1. ~/.ae5/Dockerfile
-    2. <site-packages>/ae5_tools/Dockerfile.dist
+    1. provided path
+    2. ~/.ae5/Dockerfile
+    3. <site-packages>/ae5_tools/Dockerfile.dist (copied to #2)
     '''
 
     _path = path.expanduser(os.getenv('AE5_TOOLS_CONFIG_DIR') or '~/.ae5')
     user_file = path.join(_path, 'Dockerfile')
     dist_file = path.join(path.dirname(__file__), 'Dockerfile.dist')
-    if path.exists(user_file):
+
+    if custom_path:
+        if path.exists(custom_path):
+            dockerfile = custom_path
+        else:
+            msg = f'Custom Dockerfile {custom_path} was not found.'
+            raise FileNotFoundError(msg)
+
+    elif path.exists(user_file):
         dockerfile = user_file
     elif path.exists(dist_file):
-        dockerfile = dist_file
+        shutil.copy(dist_file, user_file)
+        dockerfile = user_file
     else:
         msg = f'''Dockerfile was not found in any of the following locations
 {user_file}
@@ -48,36 +86,12 @@ Otherwise, please file a bug report.'''
         contents = f.read()
     return contents
 
+def build_image(path, tag, debug=True, **build_args):
+    print(f'*** {tag} image build starting')
 
-def build_image(path, tag, ae5_hostname=None, debug=False):
-    try:
-        import docker
-    except ModuleNotFoundError:
-        print()
-        print('You must install docker-py to build an image')
-        print()
-        print('  conda install -c conda-forge docker-py')
-        print()
-        return
+    cmd = ['docker', 'build', path, '-t', tag]
+    for arg,value in build_args.items():
+        cmd.append('--' + arg)
+        cmd.append(value)
 
-    logger = get_logger(tag, stdout=debug)
-    print(f'Build logs written to {logger.handlers[0].baseFilename}')
-    logger.debug(f'*** {tag} image build starting')
-
-## the client.images.build() function will not keep logs on error
-## the logs returned by this process are not easily readable, but OK.
-    client = docker.from_env()
-    buildargs={'CHANNEL_ALIAS':f'https://{ae5_hostname}/repository/conda/'} if ae5_hostname else None
-    for line in client.api.build(path=path, tag=tag, buildargs=buildargs):
-        text = line.decode().strip()
-        logger.info(text)
-        try:
-            d = json.loads(text)
-            error = d.get('error', False)
-            if error:
-                print('Error encountered during image build. See build log for more details.')
-                return
-        except json.decoder.JSONDecodeError:
-            pass
-
-    print(f'Docker Image {tag} created.')
+    build = subprocess.check_call(cmd)

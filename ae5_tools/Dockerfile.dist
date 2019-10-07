@@ -9,16 +9,10 @@ FROM centos
 # we install in the environment is anaconda-project.
 ADD https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh miniconda.sh
 
-# Optional configuration of on-premises repository
-ARG CHANNEL_ALIAS="anaconda_cloud"
+COPY --chown=root condarc /root/.condarc
 
 RUN yum install -y bzip2 && \
     bash miniconda.sh -b -p /opt/conda && \
-    if [ "${CHANNEL_ALIAS}" != "anaconda_cloud" ]; then \
-        /opt/conda/bin/conda config --system --set channel_alias ${CHANNEL_ALIAS} && \
-        /opt/conda/bin/conda config --system --append default_channels ${CHANNEL_ALIAS}/anaconda && \
-        /opt/conda/bin/conda config --system --append default_channels ${CHANNEL_ALIAS}/r; \
-    fi; \
     /opt/conda/bin/conda config --set auto_update_conda False --system && \
     /opt/conda/bin/conda install anaconda-project --yes && \
     /opt/conda/bin/conda clean --all --yes && \
@@ -29,6 +23,7 @@ RUN yum install -y bzip2 && \
 USER anaconda
 WORKDIR /home/anaconda
 ENV PATH="/opt/conda/bin:${PATH}"
+COPY --chown=anaconda condarc /home/anaconda/.condarc
 RUN conda info
 COPY --chown=anaconda project.tar.gz .
 # The --strip-components option puts the project files directly
