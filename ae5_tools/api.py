@@ -11,6 +11,7 @@ from datetime import datetime
 from dateutil import parser
 import getpass
 from tempfile import TemporaryDirectory
+import tarfile
 
 from .config import config
 from .identifier import Identifier
