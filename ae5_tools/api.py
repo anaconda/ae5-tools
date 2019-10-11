@@ -123,8 +123,15 @@ class AESessionBase(object):
             cls._auth_message('Must supply a password.')
 
     def __del__(self):
-        if not self.persist and self.connected:
-            self.disconnect()
+        # Try to be a good citizen and shut down the active session.
+        # But fail silently if it does not work. In particular, if this
+        # destructor is called too late in the shutdown process, the call
+        # to requests will fail with an ImportError.
+        if sys.meta_path is not None and not self.persist and self.connected:
+            try:
+                self.disconnect()
+            except Exception:
+                pass
 
     def _is_login(self, response):
         pass
