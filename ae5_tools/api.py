@@ -775,12 +775,12 @@ class AEUserSession(AESessionBase):
             headers = self._join_changes(response)
         return self._format_response(response, format, columns=headers)
 
-    def session_info(self, ident, internal=False, format=None, quiet=False):
+    def session_info(self, ident, internal=False, changes=False, format=None, quiet=False):
         id, record = self._id('sessions', ident, quiet=quiet)
         if record:
             self._join_projects(record, 'session')
         headers = _S_COLUMNS
-        if not internal:
+        if not internal and changes:
             headers = self._join_changes(record)
         return self._format_response(record, format, columns=headers)
 

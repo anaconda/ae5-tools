@@ -33,6 +33,7 @@ def list(changes):
 
 @session.command()
 @click.argument('session')
+@click.option('--changes', is_flag=True, help='Include modified/changes columns (requires additional API calls).')
 @format_options()
 @login_options()
 def info(session):
