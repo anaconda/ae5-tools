@@ -14,7 +14,7 @@ There is already a fair amount of inline help, so type `ae5 --help` to get start
 
 ### Installation
 
-The prefferred and supported way to install `ae5-tools` is with `conda`. The latest version of the tool
+The preferred and supported way to install `ae5-tools` is with `conda`. The latest version of the tool
 is always available on the [`ae5-admin` channel on anaconda.org](https://anaconda.org/ae5-admin/ae5-tools).
 To install this package, you can use this command:
 ```
