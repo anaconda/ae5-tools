@@ -96,6 +96,14 @@ def test_project_upload_as_directory(user_session, downloaded_project):
     _cmd(f'project download test_upload2 --filename {fname2}', table=False)
 
 
+def test_project_create_from_sample(user_session):
+    uname = user_session.username
+    cname = 'nlp_api'
+    pname = 'testclone'
+    rrec = _cmd(f'sample clone {cname} --name {pname}')
+    _cmd(f'project delete {rrec["id"]} --yes', table=False)
+
+
 def test_job_run1(user_session):
     uname = user_session.username
     _cmd(f'job create {uname}/testproj3 --name testjob1 --command run --run --wait')
