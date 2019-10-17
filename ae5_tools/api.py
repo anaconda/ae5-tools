@@ -915,7 +915,8 @@ class AEUserSession(AESessionBase):
 
     def deployment_start(self, ident, name=None, endpoint=None, command=None,
                          resource_profile=None, public=False,
-                         collaborators=None, wait=True, format=None):
+                         collaborators=None, wait=True,
+                         stop_on_error=False, format=None):
         id, rev, prec, rrec = self._revision(ident)
         data = {'source': rrec['url'],
                 'revision': rrec['id'],
@@ -933,15 +934,18 @@ class AEUserSession(AESessionBase):
         if collaborators:
             self.deployment_collaborator_list_set(response['id'], collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
-        while wait and response['state'] in ('initial', 'starting'):
-            time.sleep(5)
-            response = self._get(f'deployments/{response["id"]}')
-        if wait and response['state'] != 'started':
-            raise RuntimeError(f'Error completing deployment start: {response["status_text"]}')
+        if wait or stop_on_error:
+            while response['state'] in ('initial', 'starting'):
+                time.sleep(5)
+                response = self._get(f'deployments/{response["id"]}')
+            if response['state'] != 'started':
+                if stop_on_error:
+                    self.deployment_stop(response["id"])
+                raise RuntimeError(f'Error completing deployment start: {response["status_text"]}')
         response['project_id'] = id
         return self._format_response(response, format=format, columns=_S_COLUMNS)
 
-    def deployment_restart(self, ident, wait=True, format=None):
+    def deployment_restart(self, ident, wait=True, stop_on_error=False, format=None):
         id, record = self._id('deployments', ident)
         collab = self.deployment_collaborators(id)
         if record.get('url'):
@@ -954,7 +958,8 @@ class AEUserSession(AESessionBase):
         return self.deployment_start(record['project_id'],
                                      endpoint=endpoint, command=record['command'],
                                      resource_profile=record['resource_profile'], public=record['public'],
-                                     collaborators=collab, wait=wait, format=format)
+                                     collaborators=collab, wait=wait,
+                                     stop_on_error=stop_on_error, format=format)
 
     def deployment_patch(self, ident, **kwargs):
         format = kwargs.pop('format', None)

@@ -119,12 +119,13 @@ def _open(record, frame):
 @click.option('--public', is_flag=True, help='Make the deployment public.')
 @click.option('--private', is_flag=True, help='Make the deployment private (the default).')
 @click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
-def start(ctx, project, name, endpoint, command, resource_profile, public, private, wait, open, frame):
+def start(ctx, project, name, endpoint, command, resource_profile, public, private, wait, stop_on_error, open, frame):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -161,7 +162,7 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
                             name=name if name else None,
                             endpoint=endpoint, command=command,
                             resource_profile=resource_profile, public=public,
-                            wait=wait or open,
+                            wait=wait or open, stop_on_error=stop_on_error,
                             prefix=f'Starting deployment{name_s}{endpoint_s} for {{ident}}...',
                             postfix='started.')
     if open:
@@ -171,19 +172,20 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
 @deployment.command(short_help='Restart a deployment for a project.')
 @click.argument('deployment')
 @click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
-def restart(ctx, deployment, wait, open, frame):
+def restart(ctx, deployment, wait, stop_on_error, open, frame):
     '''Restart a deployment for a project.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
     result = cluster_call('deployment_restart', ident=deployment,
-                          wait=wait or open,
+                          wait=wait or open, stop_on_error=stop_on_error,
                           prefix='Restarting deployment {ident}...',
                           postfix='restarted.')
     if open:
