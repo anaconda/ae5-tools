@@ -12,6 +12,7 @@ import glob
 from datetime import datetime
 from collections import namedtuple
 from ae5_tools.api import AEUnexpectedResponseError
+from subprocess import CalledProcessError
 
 from .utils import _cmd
 
@@ -231,7 +232,7 @@ def test_deploy_broken(user_session):
     uname = user_session.username
     dname = 'testdeploy'
     ename = 'testbroken'
-    with pytest.raises(RuntimeError):
+    with pytest.raises(CalledProcessError):
         _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command broken --private --stop-on-error', table=False)
     drecs = [r for r in _cmd('deployment list')
              if r['owner'] == uname and r['name'] == dname]
