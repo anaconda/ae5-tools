@@ -36,13 +36,13 @@ def list(changes):
 @click.option('--changes', is_flag=True, help='Include modified/changes columns (requires additional API calls).')
 @format_options()
 @login_options()
-def info(session):
+def info(session, changes):
     '''Retreive information about a single session.
 
        The SESSION identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one session.
     '''
-    cluster_call('session_info', session, cli=True)
+    cluster_call('session_info', session, changes=changes, cli=True)
 
 
 @session.command()
