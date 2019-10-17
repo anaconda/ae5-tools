@@ -218,10 +218,11 @@ def test_deploy_logs(user_session, api_deployment):
 def test_deploy_broken(user_session):
     uname = user_session.username
     dname = 'testbroken'
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError) as excinfo:
         user_session.deployment_start(f'{uname}/testproj3', name=dname,
                                       command='broken', public=False,
                                       stop_on_error=True)
+    assert str('Error completing deployment start: App failed to run') in str(excinfo.value)
     drecs = [r for r in user_session.deployment_list()
              if r['owner'] == uname and r['name'] == dname]
     assert len(drecs) == 0, drecs
