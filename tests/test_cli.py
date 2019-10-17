@@ -230,10 +230,9 @@ def test_deploy_logs(user_session, cli_deployment):
 
 def test_deploy_broken(user_session):
     uname = user_session.username
-    dname = 'testdeploy'
-    ename = 'testbroken'
+    dname = 'testbroken'
     with pytest.raises(CalledProcessError):
-        _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command broken --private --stop-on-error', table=False)
+        _cmd(f'project deploy {uname}/testproj3 --name {dname} --command broken --private --stop-on-error', table=False)
     drecs = [r for r in _cmd('deployment list')
              if r['owner'] == uname and r['name'] == dname]
     assert len(drecs) == 0, drecs
