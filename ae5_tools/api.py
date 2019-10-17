@@ -512,7 +512,7 @@ class AEUserSession(AESessionBase):
         id, rec = self._id_or_name('editor', name)
         return self._format_response(rec, format=format, columns=_ED_COLUMNS)
 
-    def sample_list(self, format=None):
+    def sample_list(self, internal=False, format=None):
         result = []
         for sample in self._get('template_projects'):
             sample['is_template'] = True
@@ -525,6 +525,16 @@ class AEUserSession(AESessionBase):
     def sample_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id_or_name('sample', ident, quiet=quiet)
         return self._format_response(record, format=format, columns=_T_COLUMNS)
+
+    def sample_clone(self, ident, name=None, tag=None,
+                     make_unique=None, wait=True, format=None):
+        id, record = self._id_or_name('sample', ident)
+        if name is None:
+            name = record['name']
+            if make_unique is None:
+                make_unique = True
+        return self.project_create(record['download_url'], name=name, tag=tag,
+                                   make_unique=make_unique, wait=wait, format=format)
 
     def project_collaborator_list(self, ident, format=None):
         id, _ = self._id('projects', ident)
@@ -683,6 +693,26 @@ class AEUserSession(AESessionBase):
                 index = index + 1
         return status
 
+    def project_create(self, url, name=None, tag=None,
+                       make_unique=None, wait=True, format=None):
+        if not name:
+            parts = urllib3.util.parse_url(url)
+            name = basename(parts.path).split('.', 1)[0]
+            if make_unique is None:
+                make_unique = True
+        params = {'name': name, 'source': url, 'make_unique': bool(make_unique)}
+        if tag:
+            params['tag'] = tag
+        response = self._post('projects', json=params)
+        if response.get('error'):
+            raise RuntimeError('Error creating project: {}'.format(response['error']['message']))
+        if not wait:
+            return self._format_response(response, format, columns=_P_COLUMNS)
+        response['action'] = self._wait(response['id'], response['action'])
+        if response['action']['error']:
+            raise RuntimeError('Error processing creation: {}'.format(response['action']['message']))
+        return self.project_info(response['id'], format=format)
+
     def project_upload(self, project_archive, name, tag, wait=True, format=None):
         if not name:
             if type(project_archive) == bytes:
@@ -712,11 +742,12 @@ class AEUserSession(AESessionBase):
                 f.close()
         if response.get('error'):
             raise RuntimeError('Error uploading project: {}'.format(response['error']['message']))
-        if wait:
-            response['action'] = self._wait(response['id'], response['action'])
+        if not wait:
+            return self._format_response(response, format, columns=_P_COLUMNS)
+        response['action'] = self._wait(response['id'], response['action'])
         if response['action']['error']:
             raise RuntimeError('Error processing upload: {}'.format(response['action']['message']))
-        return self._format_response(response, format, columns=_P_COLUMNS)
+        return self.project_info(response['id'], format=format)
 
     def _join_projects(self, response, nameprefix=None):
         if isinstance(response, dict):
