@@ -218,12 +218,13 @@ def upload(filename, name, tag, no_wait):
 @click.option('--public', is_flag=True, help='Make the deployment public.')
 @click.option('--private', is_flag=True, help='Make the deployment private (the default).')
 @click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
+@click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @format_options()
 @login_options()
 @click.pass_context
-def deploy(ctx, project, name, endpoint, command, resource_profile, public, private, wait, open, frame):
+def deploy(ctx, project, name, endpoint, command, resource_profile, public, private, wait, stop_on_error, open, frame):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -241,7 +242,8 @@ def deploy(ctx, project, name, endpoint, command, resource_profile, public, priv
     from .deployment import start as deployment_start
     ctx.invoke(deployment_start, project=project, name=name, endpoint=endpoint,
                resource_profile=resource_profile, command=command,
-               public=public, private=private, wait=wait, open=open, frame=frame)
+               public=public, private=private, wait=wait,
+               stop_on_error=stop_on_error, open=open, frame=frame)
 
 
 @project.command()

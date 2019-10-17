@@ -215,6 +215,18 @@ def test_deploy_logs(user_session, api_deployment):
     assert 'App Proxy is fully operational!' in logs['proxy'], logs['proxy']
 
 
+def test_deploy_broken(user_session):
+    uname = user_session.username
+    dname = 'testbroken'
+    with pytest.raises(RuntimeError):
+        user_session.deployment_start(f'{uname}/testproj3', name=dname,
+                                      command='broken', public=False,
+                                      stop_on_error=True)
+    drecs = [r for r in user_session.deployment_list()
+             if r['owner'] == uname and r['name'] == dname]
+    assert len(drecs) == 0, drecs
+
+
 def test_login_time(admin_session, user_session):
     # The current session should already be authenticated
     now = datetime.utcnow()

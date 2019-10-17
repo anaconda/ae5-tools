@@ -181,7 +181,7 @@ def cli_deployment(user_session):
     uname = user_session.username
     dname = 'testdeploy'
     ename = 'testendpoint'
-    _cmd(f'project deploy {uname}/testproj3 --name testdeploy --endpoint testendpoint --command default --private --wait', table=False)
+    _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command default --private --wait', table=False)
     drecs = [r for r in _cmd('deployment list')
              if r['owner'] == uname and r['name'] == dname]
     assert len(drecs) == 1, drecs
@@ -225,6 +225,17 @@ def test_deploy_logs(user_session, cli_deployment):
     assert 'The project is ready to run commands.' in app_logs
     assert app_prefix in event_logs, event_logs
     assert 'App Proxy is fully operational!' in proxy_logs, proxy_logs
+
+
+def test_deploy_broken(user_session):
+    uname = user_session.username
+    dname = 'testdeploy'
+    ename = 'testbroken'
+    with pytest.raises(RuntimeError):
+        _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command broken --private --stop-on-error', table=False)
+    drecs = [r for r in _cmd('deployment list')
+             if r['owner'] == uname and r['name'] == dname]
+    assert len(drecs) == 0, drecs
 
 
 def test_login_time(admin_session, user_session):
