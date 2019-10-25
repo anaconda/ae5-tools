@@ -1,35 +1,32 @@
-language: generic
-sudo: false
+language: c
 branches:
   only:
   - master
   - "/^\\d+\\.\\d+.*$/"
+env:
+  - TEST_TARGET=3.7
+  - TEST_TARGET=3.6
 os:
-- linux
+  - linux
+  - osx
+jobs:
+  include:
+  - stage: deploy
+    if: branch = master
+    script:
+      - conda install anaconda-client --yes
+      - conda build conda-recipe --no-test
+      - if [ $TRAVIS_TAG ]; then LABEL=main; else LABEL=dev; fi
+      - anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label $LABEL $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
 install:
-- wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $HOME/miniconda.sh
-- bash $HOME/miniconda.sh -b -p $HOME/miniconda
-- source $HOME/miniconda/bin/activate
-- conda config --append channels ae5-admin
-- conda install conda conda-build conda-verify anaconda-client --yes
-- conda info -a
+  - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $HOME/miniconda.sh
+  - bash $HOME/miniconda.sh -b -p $HOME/miniconda
+  - source $HOME/miniconda/bin/activate
+  - conda config --append channels ae5-admin
+  - conda install conda conda-build conda-verify --yes
+  - conda info -a
 script:
-- conda build conda-recipe --python 3.6
-deploy:
-- provider: script
-  skip_cleanup: true
-  on:
-    all_branches: true
-    tags: true
-  script: anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $HOME/miniconda/conda-bld/*/*.tar.bz2
-    --force
-- provider: script
-  skip_cleanup: true
-  on:
-    all_branches: true
-    tags: false
-  script: anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label
-    dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
+  - conda build conda-recipe --python $TEST_TARGET
 env:
   global:
   - PYTHONUNBUFFERED=1
