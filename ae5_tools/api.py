@@ -28,11 +28,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
 
 
-_P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                                    'id',               'created', 'updated', 'project_create_status', 'url']  # noqa: E241, E201
-_R_COLUMNS = [            'name', 'owner', 'commands',                                                        'id', 'project_id', 'created', 'updated',                          'url']  # noqa: E241, E201
-_S_COLUMNS = [            'name', 'owner',             'resource_profile',                           'state', 'id', 'project_id', 'created', 'updated',                          'url']  # noqa: E241, E201
-_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'state', 'id', 'project_id', 'created', 'updated',                          'url']  # noqa: E241, E201
-_J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'state', 'id', 'project_id', 'created', 'updated',                          'url']  # noqa: E241, E201
+_P_COLUMNS = [            'name', 'owner', 'editor',              'resource_profile',                           'id', 'created', 'updated', 'project_create_status',               'url']  # noqa: E241, E201
+_R_COLUMNS = [            'name', 'owner', 'commands',                                                          'id', 'created', 'updated',                          'project_id', 'url']  # noqa: E241, E201
+_S_COLUMNS = [            'name', 'owner', 'changes', 'modified', 'resource_profile',                           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
+_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',             'resource_profile', 'project_name', 'public', 'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
+_J_COLUMNS = [            'name', 'owner', 'command',             'resource_profile', 'project_name',           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
 _U_COLUMNS = ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id']
 _T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
@@ -179,12 +179,15 @@ class AESessionBase(object):
         else:
             raise ValueError('Not a tabular data format')
         clist = list(columns or ())
-        cset = set(clist)
+        csrc = set()
+        cdst = set(clist)
         for rec in response:
-            clist.extend(c for c in rec if c not in cset)
-            cset.update(rec)
+            clist.extend(c for c in rec if c not in cdst)
+            cdst.update(rec)
+            csrc.update(rec)
+        clist = [c for c in clist if c in csrc]
         for col, dtype in _DTYPES.items():
-            if col in cset:
+            if col in cdst:
                 if dtype == 'datetime':
                     for rec in response:
                         if rec.get(col):
@@ -791,29 +794,27 @@ class AEUserSession(AESessionBase):
 
     def _join_changes(self, record):
         for rec in ([record] if isinstance(record, dict) else record):
-            changes = self.session_changes(rec['id'], format='json')
+            try:
+                changes = self.session_changes(rec['id'], format='json')
+            except AEException:
+                continue
             rec['changes'] = ', '.join(r['path'] for r in changes)
             rec['modified'] = max((r['modified'] or rec['updated'] for r in changes), default='')
-        return _S_COLUMNS[:2] + ['changes', 'modified'] + _S_COLUMNS[2:]
 
     def session_list(self, internal=False, changes=False, format=None):
         response = self._get('sessions')
         # We need _join_projects even in internal mode to replace
         # the internal session name with the project name
         self._join_projects(response, 'session')
-        headers = _S_COLUMNS
         if not internal and changes:
-            headers = self._join_changes(response)
-        return self._format_response(response, format, columns=headers)
+            self._join_changes(response)
+        return self._format_response(response, format, columns=_S_COLUMNS)
 
     def session_info(self, ident, internal=False, changes=False, format=None, quiet=False):
         id, record = self._id('sessions', ident, quiet=quiet)
-        if record:
-            self._join_projects(record, 'session')
-        headers = _S_COLUMNS
         if not internal and changes:
-            headers = self._join_changes(record)
-        return self._format_response(record, format, columns=headers)
+            self._join_changes(record)
+        return self._format_response(record, format, columns=_S_COLUMNS)
 
     def session_changes(self, ident, master=False, format=None):
         id, _ = self._id('sessions', ident)

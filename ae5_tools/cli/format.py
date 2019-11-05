@@ -213,6 +213,20 @@ def print_csv(records, columns, header):
         cw.writerow(rec)
 
 
+def split_header(col, wid):
+    # Always split along slashes
+    result = col.split('/')
+    cwid = max(len(c) for c in result)
+    # If the widths are all less than the data width, we are done
+    if cwid <= wid:
+        return result, wid
+    # Determine the shortest width we can get if we split across underscores too
+    wid = max((wid, max(max(len(c2) for c2 in c.split('_')) for c in result)))
+    # Further split the ones that can't fit in this new width
+    result = sum(([c] if len(c) <= wid else c.split('_') for c in result), [])
+    return result, max(len(c) for c in result)
+
+
 def print_table(records, columns, header=True, width=0):
     if width <= 0:
         # http://granitosaurus.rocks/getting-terminal-size.html
@@ -229,38 +243,44 @@ def print_table(records, columns, header=True, width=0):
             print('-' * width)
         return
     nwidth = -2
-    head, dash, final = '', '', []
-    for ndx, col in enumerate(columns):
-        col = str(col)
-        val = [_str(rec[ndx]) for rec in records]
-        twid = max(len(col), max((len(v) for v in val), default=len(col)))
-        val = [v + ' ' * (twid - len(v)) for v in val]
-        if len(col) > twid:
-            col = col[:twid - 1] + '.'
-        col = col + ' ' * (twid - len(col))
-        if nwidth < 0:
-            final = val
-            head = col
-            dash = '-' * twid
-        else:
-            final = [x + '  ' + y for x, y in zip(final, val)]
-            head = head + '  ' + col
-            dash = dash + '  ' + '-' * twid
-        owidth, nwidth = nwidth, nwidth + twid + 2
+    widths = []
+    lines = [[] for _ in range(len(records))]
+    columns2 = []
+    for ndx in range(len(columns)):
+        vals = [_str(rec[ndx]) for rec in records]
+        wid = max((len(v) for v in vals), default=0)
+        if header:
+            col, wid = split_header(columns[ndx], wid)
+            columns2.append(col)
+        widths.append(wid)
+        for line, val in zip(lines, vals):
+            line.append((val, wid))
+        owidth, nwidth = nwidth, nwidth + wid + 2
         if nwidth >= width:
-            if nwidth > width:
-                n = min(3, max(0, width - owidth - 2))
-                d, s = '.' * n, ' ' * n
-                head = head[:width] if head[width - n:width] == s else head[:width - n] + d
-                dash = dash[:width]
-                final = [f[:width] if f[width - n:width] == s else f[:width - n] + d
-                         for f in final]
             break
     if header:
-        print(head.rstrip())
-        print(dash)
-    if len(final):
-        print('\n'.join(map(str.rstrip, final)))
+        lines.insert(0, [('-' * wid, wid) for wid in widths])
+        nhead = max(len(col) for col in columns2)
+        columns = [[''] * (nhead - len(col)) + col for col in columns2]
+        for ndx in range(1, nhead + 1):
+            header = []
+            for col, wid in zip(columns, widths):
+                tcol = col[-ndx]
+                if ndx == 1 or not header or header[-1][0] != tcol:
+                    header.append((tcol, wid))
+                else:
+                    header[-1] = (tcol, wid + 2 + header[-1][1])
+            header = [(' ' * (max((0, w - len(c))) // 2) + c, w) for c, w in header]
+            lines.insert(0, header)
+    lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v))) for v, w in line)
+             for line in lines]
+    if nwidth > width:
+        n = min(3, max(0, width - owidth - 2))
+        dots, dashes, spaces = '.' * n, '-' * n, ' ' * n
+        lines = [f[:width] if f[width - n:width] in (dashes, spaces)
+                 else f[:width - n] + dots for f in lines]
+    for line in lines:
+        print(line.rstrip())
 
 
 def print_output(result):
