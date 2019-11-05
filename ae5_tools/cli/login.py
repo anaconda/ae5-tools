@@ -47,6 +47,11 @@ _login_help = {
     'password': 'Password for standard access. (AE5_PASSWORD)',
     'admin-username': 'Username for Keycloak admin access. (AE5_ADMIN_USERNAME)',
     'admin-password': 'Password for Keycloak admin access. (AE5_ADMIN_PASSWORD)',
+    'k8s-username': ('Username for Kubectl access. If the k8s deployment is not available, '
+                     'this provides another mechanism for obtaining the kubectl data needed '
+                     'for certain ae5-tools calls. This must be the name of an account on the '
+                     'host that has kubectl access, and for whom the local user has passwordless '
+                     'SSH access. (AE5_K8S_USERNAME)'),
     'impersonate': ('Use the Keycloak administrator account to impersonate the '
                     'given user instead of requiring the user password. '
                     '(AE5_IMPERSONATE)'),
@@ -63,6 +68,7 @@ _login_options = [
     click.option('--password', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_PASSWORD', hidden=True),
     click.option('--admin-username', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_USERNAME', hidden=True),
     click.option('--admin-password', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_PASSWORD', hidden=True),
+    click.option('--k8s-username', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_K8S_USERNAME', hidden=True),
     click.option('--impersonate', is_flag=True, default=None, expose_value=False, callback=param_callback, envvar='AE5_IMPERSONATE', hidden=True),
     click.option('--no-saved-logins', is_flag=True, default=None, expose_value=False, callback=param_callback, envvar='AE5_NO_SAVED_LOGINS', hidden=True),
     click.option('--help-login', is_flag=True, callback=print_login_help, expose_value=False, is_eager=True,
@@ -126,7 +132,8 @@ def cluster_connect(hostname, username, admin):
                 else:
                     password = opts.get('password')
                 conn = AEUserSession(hostname, username, password,
-                                     persist=session_save)
+                                     persist=session_save,
+                                     ssh_username=opts.get('k8s_username'))
             SESSIONS[key] = conn
         except (ValueError, AEException) as e:
             raise click.ClickException(str(e))

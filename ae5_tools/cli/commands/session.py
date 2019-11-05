@@ -17,10 +17,10 @@ def session():
 
 @session.command(short_help='List active sessions.')
 @ident_filter('session')
-@click.option('--changes', is_flag=True, help='Include modified/changes columns (requires additional API calls).')
+@click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
 @format_options()
 @login_options()
-def list(changes):
+def list(k8s):
     '''List sessions.
 
        By default, lists all sessions visible to the authenticated user.
@@ -28,21 +28,21 @@ def list(changes):
        can be performed by supplying an optional SESSION argument. Filters
        on other fields may be applied using the --filter option.
     '''
-    cluster_call('session_list', changes=changes, cli=True)
+    cluster_call('session_list', k8s=k8s, cli=True)
 
 
 @session.command()
 @click.argument('session')
-@click.option('--changes', is_flag=True, help='Include modified/changes columns (requires additional API calls).')
+@click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
 @format_options()
 @login_options()
-def info(session, changes):
+def info(session, k8s):
     '''Retreive information about a single session.
 
        The SESSION identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one session.
     '''
-    cluster_call('session_info', session, changes=changes, cli=True)
+    cluster_call('session_info', session, k8s=k8s, cli=True)
 
 
 @session.command()

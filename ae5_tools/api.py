@@ -18,6 +18,7 @@ from .identifier import Identifier
 from .docker import get_dockerfile, get_condarc
 from .docker import build_image
 from .archiver import create_tar_archive
+from .k8s.client import AE5K8SLocalClient, AE5K8SRemoteClient
 
 from http.cookiejar import LWPCookieJar
 from requests.packages import urllib3
@@ -44,6 +45,7 @@ _ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
 _BR_COLUMNS = ['branch', 'sha1']
 _CH_COLUMNS = ['path', 'change_type', 'modified', 'conflicted', 'id']
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
+           'since': 'datetime', 'mtime': 'datetime', 'timestamp': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s',
            'lastLogin': 'timestamp/ms', 'time': 'timestamp/ms'}
 
@@ -330,10 +332,26 @@ class AESessionBase(object):
 
 
 class AEUserSession(AESessionBase):
-    def __init__(self, hostname, username, password=None, persist=True):
+    def __init__(self, hostname, username, password=None, persist=True, ssh_username=None):
         self._filename = os.path.join(config._path, 'cookies', f'{username}@{hostname}')
         super(AEUserSession, self).__init__(hostname, username, password=password,
                                             prefix='api/v2', persist=persist)
+        if ssh_username:
+            self._k8s_client = AE5K8SLocalClient(hostname, ssh_username)
+        else:
+            self._k8s_client = AE5K8SRemoteClient(self)
+
+    def _k8s(self, method, *args, **kwargs):
+        quiet = kwargs.pop('quiet', False)
+        if self._k8s_client is None:
+            if not quiet:
+                raise AEException('No kubectl connection has been established')
+        elif not self._k8s_client.healthy():
+            if not quiet:
+                raise AEException('Error establishing kubectl connection')
+            self._k8s_client = None
+        else:
+            return getattr(self._k8s_client, method)(*args, **kwargs)
 
     def _set_header(self):
         s = self.session
@@ -799,31 +817,43 @@ class AEUserSession(AESessionBase):
             for record in response:
                 self._fix_endpoints(record)
 
-    def _join_changes(self, record):
-        for rec in ([record] if isinstance(record, dict) else record):
-            if rec['owner'] == self.username:
-                rec['modified'] = any(self.session_changes(rec['id'], format='json'))
-            else:
-                rec['modified'] = ''
+    def _join_k8s(self, record, changes=False):
+        is_single = isinstance(record, dict)
+        if is_single:
+            record = [record]
+        if record:
+            record2 = self._k8s('pod_info', [r['id'] for r in record])
+            has_changes = False
+            for rec, rec2 in zip(record, record2):
+                rec['usage/cpu'] = rec2['usage']['cpu']
+                rec['usage/memory'] = rec2['usage']['memory']
+                if changes:
+                    rec['modified'] = any(rec2['changes'][x] for x in ('modified', 'deleted', 'added'))
+                rec['node'] = rec2['node']
+                rec['k8s'] = rec2
+        nhead = ['usage/cpu', 'usage/memory', 'modified', 'node']
+        if not changes:
+            nhead.remove('modified')
+        return nhead
 
-    def session_list(self, internal=False, changes=False, format=None):
+    def session_list(self, internal=False, k8s=False, format=None):
         response = self._get('sessions')
         # We need _join_projects even in internal mode to replace
         # the internal session name with the project name
         self._join_projects(response, 'session')
         headers = _S_COLUMNS
-        if not internal and changes:
-            self._join_changes(response)
-            headers = headers[:2] + ['modified'] + headers[2:]
+        if not internal and k8s:
+            nhead = self._join_k8s(response, True)
+            headers = headers[:2] + nhead + headers[2:]
         return self._format_response(response, format, columns=headers, record_type='session')
 
-    def session_info(self, ident, internal=False, changes=False, format=None, quiet=False):
+    def session_info(self, ident, internal=False, k8s=False, format=None, quiet=False):
         id, record = self._id('sessions', ident, quiet=quiet)
         headers = _S_COLUMNS
-        if not internal and changes:
-            self._join_changes(record)
-            headers = headers[:2] + ['modified'] + headers[2:]
-        return self._format_response(record, format, columns=headers, record_type='session')
+        if not internal and k8s:
+            nhead = self._join_k8s(response, True)
+            headers = headers[:2] + nhead + headers[2:]
+        return self._format_response(response, format, columns=headers, record_type='session')
 
     def session_changes(self, ident, master=False, format=None):
         id, _ = self._id('sessions', ident)
@@ -1161,6 +1191,41 @@ class AEUserSession(AESessionBase):
     def run_delete(self, ident, format=None):
         id, _ = self._id('runs', ident)
         self._delete(f'runs/{id}')
+
+    def node_list(self, internal=False, format=None):
+        records = self._k8s('node_info')
+        result = []
+        for rec in records:
+            result.append({
+                'name': rec['name'],
+                'ready': rec['ready'],
+                'cpu': rec['allocatable']['cpu'],
+                'memory': rec['allocatable']['memory'],
+                'usage/total/pods': rec['total']['pods'],
+                'usage/total/cpu': rec['total']['usage']['cpu'],
+                'usage/total/memory': rec['total']['usage']['memory'],
+                'usage/total/gpu': rec['total']['usage']['nvidia.com/gpu'],
+                'usage/sessions/pods': rec['sessions']['pods'],
+                'usage/sessions/cpu': rec['sessions']['usage']['cpu'],
+                'usage/sessions/memory': rec['sessions']['usage']['memory'],
+                'usage/sessions/gpu': rec['sessions']['usage']['nvidia.com/gpu'],
+                'usage/deployments/pods': rec['deployments']['pods'],
+                'usage/deployments/cpu': rec['deployments']['usage']['cpu'],
+                'usage/deployments/memory': rec['deployments']['usage']['memory'],
+                'usage/deployments/gpu': rec['deployments']['usage']['nvidia.com/gpu'],
+                'usage/middleware/pods': rec['middleware']['pods'],
+                'usage/middleware/cpu': rec['middleware']['usage']['cpu'],
+                'usage/middleware/memory': rec['middleware']['usage']['memory'],
+                'usage/system/pods': rec['system']['pods'],
+                'usage/system/cpu': rec['system']['usage']['cpu'],
+                'usage/system/memory': rec['system']['usage']['memory'],
+                'k8s': rec
+            })
+        return self._format_response(result, format=format)
+
+    def node_info(self, node, format=None):
+        id, rec = self._id_or_name('node', node)
+        return self._format_response(rec, format=format)
 
 
 class AEAdminSession(AESessionBase):
