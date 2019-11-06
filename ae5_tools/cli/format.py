@@ -270,22 +270,30 @@ def print_table(records, columns, header=True, width=0):
         owidth, nwidth = nwidth, nwidth + wid + 2
         if nwidth >= width:
             break
-    if header:
-        lines.insert(0, [('-' * wid, wid) for wid in widths])
-        nhead = max(len(col) for col in columns2)
-        columns = [[''] * (nhead - len(col)) + col for col in columns2]
-        for ndx in range(1, nhead + 1):
-            header = []
-            for col, wid in zip(columns, widths):
-                tcol = col[-ndx]
-                if ndx == 1 or not header or header[-1][0] != tcol:
-                    header.append((tcol, wid))
-                else:
-                    header[-1] = (tcol, wid + 2 + header[-1][1])
-            header = [(' ' * (max((0, w - len(c))) // 2) + c, w) for c, w in header]
-            lines.insert(0, header)
     lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v))) for v, w in line)
              for line in lines]
+    if header:
+        lines.insert(0, '  '.join('-' * wid for wid in widths))
+        nhead = max(len(col) for col in columns2)
+        for ndx in range(1, nhead + 1):
+            header = []
+            for col, wid in zip(columns2, widths):
+                if ndx > len(col):
+                    header.append(('', wid, False))
+                    continue
+                label = col[-ndx]
+                if ndx == 1 or not header or header[-1][0] != label:
+                    header.append((label, wid, False))
+                else:
+                    header[-1] = (label, wid + 2 + header[-1][1], True)
+            for ndx, (label, wid, multi) in enumerate(header):
+                nw = max(0, wid - len(label)) // 2
+                if multi:
+                    nd = min(3, nw - 1)
+                    label = '-' * nd + ' ' + label + ' ' + '-' * nd
+                    nw -= nd + 1
+                header[ndx] = ' ' * nw + label + ' ' * (wid - len(label) - nw)
+            lines.insert(0, '  '.join(header))
     if nwidth > width:
         n = min(3, max(0, width - owidth - 2))
         dots, dashes, spaces = '.' * n, '-' * n, ' ' * n
