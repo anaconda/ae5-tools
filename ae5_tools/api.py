@@ -30,7 +30,7 @@ KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
 
 _P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                           'id', 'created', 'updated', 'project_create_status',               'url']  # noqa: E241, E201
 _R_COLUMNS = [            'name', 'owner', 'commands',                                               'id', 'created', 'updated',                          'project_id', 'url']  # noqa: E241, E201
-_S_COLUMNS = [            'name', 'owner', 'modified', 'resource_profile',                           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
+_S_COLUMNS = [            'name', 'owner',             'resource_profile',                           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
 _D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
 _J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
@@ -179,15 +179,14 @@ class AESessionBase(object):
         else:
             raise ValueError('Not a tabular data format')
         clist = list(columns or ())
-        csrc = set()
-        cdst = set(clist)
+        if not response:
+            return response, clist
+        csrc = set(clist)
         for rec in response:
-            clist.extend(c for c in rec if c not in cdst)
-            cdst.update(rec)
+            clist.extend(c for c in rec if c not in csrc)
             csrc.update(rec)
-        clist = [c for c in clist if c in csrc]
         for col, dtype in _DTYPES.items():
-            if col in cdst:
+            if col in csrc:
                 if dtype == 'datetime':
                     for rec in response:
                         if rec.get(col):
@@ -807,14 +806,18 @@ class AEUserSession(AESessionBase):
         # We need _join_projects even in internal mode to replace
         # the internal session name with the project name
         self._join_projects(response, 'session')
+        headers = _S_COLUMNS
         if not internal and changes:
             self._join_changes(response)
-        return self._format_response(response, format, columns=_S_COLUMNS)
+            headers = headers[:2] + ['modified'] + headers[2:]
+        return self._format_response(response, format, columns=headers)
 
     def session_info(self, ident, internal=False, changes=False, format=None, quiet=False):
         id, record = self._id('sessions', ident, quiet=quiet)
+        headers = _S_COLUMNS
         if not internal and changes:
             self._join_changes(record)
+            headers = headers[:2] + ['modified'] + headers[2:]
         return self._format_response(record, format, columns=_S_COLUMNS)
 
     def session_changes(self, ident, master=False, format=None):

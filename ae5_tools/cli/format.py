@@ -216,13 +216,13 @@ def print_csv(records, columns, header):
 # Column header splitting methodology:
 # - Forward slashes delimit category levels, so we always split those
 # - We split along underscores when necessary, but we keep the underscore
-#   with its previous chunk so the user knows it is part of column label.
+#   so the user knows it is part of column label.
 # - We split along spaces as well (but we currently have no examples of this)
 
 
 def header_width(col):
     return max(max(len(chunk2.rstrip())
-                   for chunk2 in re.findall('[^_ ]*_? *', chunk1))
+                   for chunk2 in chunk1.split('_'))
                for chunk1 in col.split('/'))
 
 
@@ -230,7 +230,7 @@ def split_header(col, wid):
     result = []
     for chunk1 in col.split('/'):
         first = True
-        for chunk2 in re.findall(r'[^_ ]*_? *', chunk1):
+        for chunk2 in chunk1.partition('_'):
             if first or len(chunk2) + len(result[-1]) > wid:
                 result.append(chunk2)
             else:
@@ -260,7 +260,7 @@ def print_table(records, columns, header=True, width=0):
     columns2 = []
     for ndx in range(len(columns)):
         vals = [_str(rec[ndx]) for rec in records]
-        wid = max((len(v) for v in vals), default=0)
+        wid = max((1, max((len(v) for v in vals), default=0)))
         if header:
             wid = max((wid, header_width(columns[ndx])))
             columns2.append(split_header(columns[ndx], wid))
