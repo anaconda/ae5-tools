@@ -213,18 +213,30 @@ def print_csv(records, columns, header):
         cw.writerow(rec)
 
 
+# Column header splitting methodology:
+# - Forward slashes delimit category levels, so we always split those
+# - We split along underscores when necessary, but we keep the underscore
+#   with its previous chunk so the user knows it is part of column label.
+# - We split along spaces as well (but we currently have no examples of this)
+
+
+def header_width(col):
+    return max(max(len(chunk2.rstrip())
+                   for chunk2 in re.findall('[^_ ]*_? *', chunk1))
+               for chunk1 in col.split('/'))
+
+
 def split_header(col, wid):
-    # Always split along slashes
-    result = col.split('/')
-    cwid = max(len(c) for c in result)
-    # If the widths are all less than the data width, we are done
-    if cwid <= wid:
-        return result, wid
-    # Determine the shortest width we can get if we split across underscores too
-    wid = max((wid, max(max(len(c2) for c2 in c.split('_')) for c in result)))
-    # Further split the ones that can't fit in this new width
-    result = sum(([c] if len(c) <= wid else c.split('_') for c in result), [])
-    return result, max(len(c) for c in result)
+    result = []
+    for chunk1 in col.split('/'):
+        first = True
+        for chunk2 in re.findall(r'[^_ ]*_? *', chunk1):
+            if first or len(chunk2) + len(result[-1]) > wid:
+                result.append(chunk2)
+            else:
+                result[-1] += chunk2
+            first = False
+    return result
 
 
 def print_table(records, columns, header=True, width=0):
@@ -250,8 +262,8 @@ def print_table(records, columns, header=True, width=0):
         vals = [_str(rec[ndx]) for rec in records]
         wid = max((len(v) for v in vals), default=0)
         if header:
-            col, wid = split_header(columns[ndx], wid)
-            columns2.append(col)
+            wid = max((wid, header_width(columns[ndx])))
+            columns2.append(split_header(columns[ndx], wid))
         widths.append(wid)
         for line, val in zip(lines, vals):
             line.append((val, wid))

@@ -28,11 +28,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
 
 
-_P_COLUMNS = [            'name', 'owner', 'editor',              'resource_profile',                           'id', 'created', 'updated', 'project_create_status',               'url']  # noqa: E241, E201
-_R_COLUMNS = [            'name', 'owner', 'commands',                                                          'id', 'created', 'updated',                          'project_id', 'url']  # noqa: E241, E201
-_S_COLUMNS = [            'name', 'owner', 'changes', 'modified', 'resource_profile',                           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
-_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',             'resource_profile', 'project_name', 'public', 'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
-_J_COLUMNS = [            'name', 'owner', 'command',             'resource_profile', 'project_name',           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
+_P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                           'id', 'created', 'updated', 'project_create_status',               'url']  # noqa: E241, E201
+_R_COLUMNS = [            'name', 'owner', 'commands',                                               'id', 'created', 'updated',                          'project_id', 'url']  # noqa: E241, E201
+_S_COLUMNS = [            'name', 'owner', 'modified', 'resource_profile',                           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
+_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
+_J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
 _U_COLUMNS = ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id']
 _T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
@@ -42,7 +42,7 @@ _R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
 _ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
 _BR_COLUMNS = ['branch', 'sha1']
 _CH_COLUMNS = ['path', 'change_type', 'modified', 'conflicted', 'id']
-_DTYPES = {'created': 'datetime', 'updated': 'datetime', 'modified': 'datetime',
+_DTYPES = {'created': 'datetime', 'updated': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s',
            'lastLogin': 'timestamp/ms', 'time': 'timestamp/ms'}
 
@@ -191,7 +191,10 @@ class AESessionBase(object):
                 if dtype == 'datetime':
                     for rec in response:
                         if rec.get(col):
-                            rec[col] = parser.isoparse(rec[col])
+                            try:
+                                rec[col] = parser.isoparse(rec[col])
+                            except ValueError:
+                                pass
                 elif dtype.startswith('timestamp'):
                     incr = dtype.rsplit('/', 1)[1]
                     fact = 1000.0 if incr == 'ms' else 1.0
@@ -794,12 +797,10 @@ class AEUserSession(AESessionBase):
 
     def _join_changes(self, record):
         for rec in ([record] if isinstance(record, dict) else record):
-            try:
-                changes = self.session_changes(rec['id'], format='json')
-            except AEException:
-                continue
-            rec['changes'] = ', '.join(r['path'] for r in changes)
-            rec['modified'] = max((r['modified'] or rec['updated'] for r in changes), default='')
+            if rec['owner'] == self.username:
+                rec['modified'] = any(self.session_changes(rec['id'], format='json'))
+            else:
+                rec['modified'] = ''
 
     def session_list(self, internal=False, changes=False, format=None):
         response = self._get('sessions')
