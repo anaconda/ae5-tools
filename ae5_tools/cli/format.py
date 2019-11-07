@@ -213,6 +213,32 @@ def print_csv(records, columns, header):
         cw.writerow(rec)
 
 
+# Column header splitting methodology:
+# - Forward slashes delimit category levels, so we always split those
+# - We split along underscores when necessary, but we keep the underscore
+#   so the user knows it is part of column label.
+# - We split along spaces as well (but we currently have no examples of this)
+
+
+def header_width(col):
+    return max(max(len(chunk2.rstrip())
+                   for chunk2 in chunk1.split('_'))
+               for chunk1 in col.split('/'))
+
+
+def split_header(col, wid):
+    result = []
+    for chunk1 in col.split('/'):
+        first = True
+        for chunk2 in chunk1.partition('_'):
+            if first or len(chunk2) + len(result[-1]) > wid:
+                result.append(chunk2)
+            else:
+                result[-1] += chunk2
+            first = False
+    return result
+
+
 def print_table(records, columns, header=True, width=0):
     if width <= 0:
         # http://granitosaurus.rocks/getting-terminal-size.html
@@ -229,38 +255,52 @@ def print_table(records, columns, header=True, width=0):
             print('-' * width)
         return
     nwidth = -2
-    head, dash, final = '', '', []
-    for ndx, col in enumerate(columns):
-        col = str(col)
-        val = [_str(rec[ndx]) for rec in records]
-        twid = max(len(col), max((len(v) for v in val), default=len(col)))
-        val = [v + ' ' * (twid - len(v)) for v in val]
-        if len(col) > twid:
-            col = col[:twid - 1] + '.'
-        col = col + ' ' * (twid - len(col))
-        if nwidth < 0:
-            final = val
-            head = col
-            dash = '-' * twid
-        else:
-            final = [x + '  ' + y for x, y in zip(final, val)]
-            head = head + '  ' + col
-            dash = dash + '  ' + '-' * twid
-        owidth, nwidth = nwidth, nwidth + twid + 2
+    widths = []
+    lines = [[] for _ in range(len(records))]
+    columns2 = []
+    for ndx in range(len(columns)):
+        vals = [_str(rec[ndx]) for rec in records]
+        wid = max((1, max((len(v) for v in vals), default=0)))
+        if header:
+            wid = max((wid, header_width(columns[ndx])))
+            columns2.append(split_header(columns[ndx], wid))
+        widths.append(wid)
+        for line, val in zip(lines, vals):
+            line.append((val, wid))
+        owidth, nwidth = nwidth, nwidth + wid + 2
         if nwidth >= width:
-            if nwidth > width:
-                n = min(3, max(0, width - owidth - 2))
-                d, s = '.' * n, ' ' * n
-                head = head[:width] if head[width - n:width] == s else head[:width - n] + d
-                dash = dash[:width]
-                final = [f[:width] if f[width - n:width] == s else f[:width - n] + d
-                         for f in final]
             break
+    lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v))) for v, w in line)
+             for line in lines]
     if header:
-        print(head.rstrip())
-        print(dash)
-    if len(final):
-        print('\n'.join(map(str.rstrip, final)))
+        lines.insert(0, '  '.join('-' * wid for wid in widths))
+        nhead = max(len(col) for col in columns2)
+        for ndx in range(1, nhead + 1):
+            header = []
+            for col, wid in zip(columns2, widths):
+                if ndx > len(col):
+                    header.append(('', wid, False))
+                    continue
+                label = col[-ndx]
+                if ndx == 1 or not header or header[-1][0] != label:
+                    header.append((label, wid, False))
+                else:
+                    header[-1] = (label, wid + 2 + header[-1][1], True)
+            for ndx, (label, wid, multi) in enumerate(header):
+                nw = max(0, wid - len(label)) // 2
+                if multi:
+                    nd = min(3, nw - 1)
+                    label = '-' * nd + ' ' + label + ' ' + '-' * nd
+                    nw -= nd + 1
+                header[ndx] = ' ' * nw + label + ' ' * (wid - len(label) - nw)
+            lines.insert(0, '  '.join(header))
+    if nwidth > width:
+        n = min(3, max(0, width - owidth - 2))
+        dots, dashes, spaces = '.' * n, '-' * n, ' ' * n
+        lines = [f[:width] if f[width - n:width] in (dashes, spaces)
+                 else f[:width - n] + dots for f in lines]
+    for line in lines:
+        print(line.rstrip())
 
 
 def print_output(result):
