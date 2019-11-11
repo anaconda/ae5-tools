@@ -147,15 +147,6 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
         if not re.match(r'[A-Za-z0-9-]+', endpoint):
             click.ClickException(f'Invalid endpoint: {endpoint}')
         prec = cluster_call('project_info', project, collaborators=False, format='json')
-        for e in endpoints:
-            if e['id'] != endpoint:
-                continue
-            elif e['deployment_id']:
-                raise click.ClickException(f'Endpoint {endpoint} is already active')
-            elif e['owner'] and e['owner'] != prec['owner']:
-                raise click.ClickException(f'Endpoint {endpoint} is claimed by user {e["owner"]}')
-            elif e['project_id'] and e['project_id'] != prec['id']:
-                raise click.ClickException(f'Endpoint {endpoint} is claimed by project {e["project_name"]}')
     name_s = f' {name}' if name else ''
     endpoint_s = f' at endpoint {endpoint}' if endpoint else ''
     response = cluster_call('deployment_start', ident=project, id_class='project',

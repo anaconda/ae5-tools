@@ -236,6 +236,17 @@ def test_deploy_logs(user_session, cli_deployment):
     assert 'App Proxy is fully operational!' in proxy_logs, proxy_logs
 
 
+def test_deploy_duplicate(user_session, cli_deployment):
+    uname = user_session.username
+    dname = 'testdeploy2'
+    ename = 'testendpoint'
+    with pytest.raises(CalledProcessError):
+        _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command default --private --wait', table=False)
+    drecs = [r for r in _cmd('deployment list')
+             if r['owner'] == uname and r['name'] == dname]
+    assert len(drecs) == 0, drecs
+
+
 def test_deploy_broken(user_session):
     uname = user_session.username
     dname = 'testbroken'

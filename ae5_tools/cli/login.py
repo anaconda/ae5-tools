@@ -192,6 +192,8 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=admin)
         result = getattr(c, method)(*args, **kwargs)
     except AEException as e:
+        if postfix or prefix:
+            click.echo('', nl=True, err=True)
         raise click.ClickException(str(e))
 
     # Finish out the standardized CLI output
