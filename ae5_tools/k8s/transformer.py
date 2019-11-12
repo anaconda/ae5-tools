@@ -10,6 +10,12 @@ from urllib.parse import urlencode
 import dateutil.parser
 
 
+def _or_raise(exc, return_exceptions):
+    if return_exceptions:
+        return exc
+    raise exc
+
+
 def _to_datetime(rec):
     for key, value in (rec.items() if isinstance(rec, dict) else enumerate(rec)):
         if isinstance(value, str):
@@ -133,10 +139,14 @@ def _pod_merge_metrics(pRec, mRec):
 class FileStream(object):
     def __init__(self, stream):
         self.stream = sys.stdout if stream is None else stream
+    async def prepare(self, request):
+        pass
     def closing(self):
         return False
     async def write(self, data):
         return self.stream.write(data.decode())
+    async def finish(self):
+        pass
 
 
 class AE5K8STransformer(object):
@@ -171,9 +181,9 @@ class AE5K8STransformer(object):
         else:
             return resp
 
-    async def _pod_info(self, id):
+    async def _pod_info(self, id, return_exceptions=False):
         if not re.match(r'[a-f0-9]{2}-[a-f0-9]{32}', id) or not id.startswith(('a1', 'a2')):
-            raise ValueError(f'Invalid ID: {id}')
+            return _or_raise(ValueError(f'Invalid ID: {id}'), return_exceptions)
         prefix, slug = id.split('-', 1)
         label = 'anaconda-session-id' if prefix == 'a1' else 'anaconda-app-id'
         query = urlencode({'labelSelector': f'{label}={slug}', 'limit': 1})
@@ -181,7 +191,7 @@ class AE5K8STransformer(object):
         resp1 = await self.get(path)
         resp1 = resp1['items']
         if len(resp1) != 1:
-            raise KeyError(f'Pod not found: {id}')
+            return _or_raise(KeyError(f'Pod not found: {id}', return_exceptions))
         return _k8s_pod_to_record(resp1[0])
     
     async def _exec_pod(self, pod, namespace, container, command):
@@ -239,10 +249,12 @@ class AE5K8STransformer(object):
                 result['mtime'] = max(result.get('mtime') or '', line.split()[0])
         return result
     
-    async def pod_info(self, id):
+    async def pod_info(self, id, return_exceptions=False):
         if isinstance(id, list):
-            return await asyncio.gather(*(self.pod_info(t) for t in id))
-        nrec = await self._pod_info(id)
+            return await asyncio.gather(*(self.pod_info(t) for t in id), return_exceptions=return_exceptions)
+        nrec = await self._pod_info(id, return_exceptions=return_exceptions)
+        if isinstance(nrec, Exception):
+            return nrec
         name = nrec['name']
         metrics_url = f'namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/namespaces/default/pods/{name}'
         if id.startswith('a2-'):
@@ -271,11 +283,13 @@ class AE5K8STransformer(object):
         result = await self.get(path, type=ctype)
         if ctype == 'text':
             return result
+        await stream.prepare(result)
         async for data, eoc in result.content.iter_chunks():
             if stream.closing():
                 await result.release()
                 break
             await stream.write(data)
+        await stream.finish()
 
     async def node_info(self):
         resp1 = self.get('nodes')

@@ -29,6 +29,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Maximum page size in keycloak
 KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
 
+# Default subdomain for kubectl service
+DEFAULT_K8S_ENDPOINT = 'k8s'
+
 
 _P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                           'id', 'created', 'updated', 'project_create_status',               'url']  # noqa: E241, E201
 _R_COLUMNS = [            'name', 'owner', 'commands',                                               'id', 'created', 'updated',                          'project_id', 'url']  # noqa: E241, E201
@@ -332,14 +335,19 @@ class AESessionBase(object):
 
 
 class AEUserSession(AESessionBase):
-    def __init__(self, hostname, username, password=None, persist=True, ssh_username=None):
+    def __init__(self, hostname, username, password=None, persist=True, k8s_endpoint=None):
         self._filename = os.path.join(config._path, 'cookies', f'{username}@{hostname}')
         super(AEUserSession, self).__init__(hostname, username, password=password,
                                             prefix='api/v2', persist=persist)
-        if ssh_username:
-            self._k8s_client = AE5K8SLocalClient(hostname, ssh_username)
+        if k8s_endpoint and k8s_endpoint.startswith('ssh:'):
+            self._k8s_client = AE5K8SLocalClient(hostname, k8s_endpoint.split(':', 1)[1])
         else:
-            self._k8s_client = AE5K8SRemoteClient(self)
+            k8s_endpoint = k8s_endpoint or DEFAULT_K8S_ENDPOINT
+            try:
+                response = self._head(f'/_errors/404.html', subdomain=k8s_endpoint, format='response')
+                self._k8s_client = AE5K8SRemoteClient(self, k8s_endpoint)
+            except AEUnexpectedResponseError:
+                self._k8s_client = None
 
     def _k8s(self, method, *args, **kwargs):
         quiet = kwargs.pop('quiet', False)
@@ -897,16 +905,20 @@ class AEUserSession(AESessionBase):
         # case where the session settings are patched prior to restart
         return self.session_start(record['project_id'], wait=wait, format=format)
 
-    def deployment_list(self, collaborators=True, endpoints=True, internal=False, format=None):
+    def deployment_list(self, collaborators=True, endpoints=True, k8s=False, internal=False, format=None):
         response = self._get('deployments')
         self._join_projects(response)
         if not internal and collaborators:
             self._join_collaborators('deployments', response)
         if endpoints:
             self._fix_endpoints(response)
-        return self._format_response(response, format, columns=_D_COLUMNS, record_type='deployment')
+        headers = _D_COLUMNS
+        if not internal and k8s:
+            nhead = self._join_k8s(response, False)
+            headers = headers[:3] + nhead + headers[3:]
+        return self._format_response(response, format, headers, record_type='deployment')
 
-    def deployment_info(self, ident, collaborators=True, internal=False, format=None, quiet=False):
+    def deployment_info(self, ident, collaborators=True, k8s=False, internal=False, format=None, quiet=False):
         id, record = self._id('deployments', ident, quiet=quiet)
         if record:
             self._join_projects(record)
@@ -914,7 +926,11 @@ class AEUserSession(AESessionBase):
                 self._join_collaborators('deployments', record)
             if record.get('url'):
                 record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
-        return self._format_response(record, format, columns=_D_COLUMNS, record_type='deployment')
+        headers = _D_COLUMNS
+        if not internal and k8s:
+            nhead = self._join_k8s(record, False)
+            headers = headers[:3] + nhead + headers[3:]
+        return self._format_response(record, format, headers, record_type='deployment')
 
     def endpoint_list(self, format=None, internal=False):
         response = self._get('/platform/deploy/api/v1/apps/static-endpoints')

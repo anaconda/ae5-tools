@@ -30,11 +30,12 @@ class AE5K8SLocalClient(object):
 
 
 class AE5K8SRemoteClient(object):
-    def __init__(self, session):
+    def __init__(self, session, subdomain):
         self._session = session
+        self._subdomain = subdomain
 
     def _get(self, path, **kwargs):
-        return self._session._get(path, subdomain='k8s', **kwargs)
+        return self._session._get(path, subdomain=self._subdomain, **kwargs)
 
     def healthy(self):
         try:
