@@ -223,6 +223,19 @@ def test_deploy_logs(user_session, api_deployment):
     assert 'App Proxy is fully operational!' in logs['proxy'], logs['proxy']
 
 
+def test_deploy_duplicate(user_session, api_deployment):
+    uname = user_session.username
+    dname = 'testdeploy2'
+    ename = 'testendpoint'
+    with pytest.raises(RuntimeError) as excinfo:
+        user_session.deployment_start(f'{uname}/testproj3', name=dname, endpoint=ename,
+                                      command='default', public=False, wait=True)
+    assert f'endpoint "{ename}" is already in use' in str(excinfo.value)
+    drecs = [r for r in user_session.deployment_list()
+             if r['owner'] == uname and r['name'] == dname]
+    assert len(drecs) == 0, drecs
+
+
 def test_deploy_broken(user_session):
     uname = user_session.username
     dname = 'testbroken'
@@ -230,7 +243,7 @@ def test_deploy_broken(user_session):
         user_session.deployment_start(f'{uname}/testproj3', name=dname,
                                       command='broken', public=False,
                                       stop_on_error=True)
-    assert str('Error completing deployment start: App failed to run') in str(excinfo.value)
+    assert 'Error completing deployment start: App failed to run' in str(excinfo.value)
     drecs = [r for r in user_session.deployment_list()
              if r['owner'] == uname and r['name'] == dname]
     assert len(drecs) == 0, drecs

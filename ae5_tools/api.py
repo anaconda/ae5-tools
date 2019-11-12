@@ -316,6 +316,9 @@ class AESessionBase(object):
     def _post(self, endpoint, **kwargs):
         return self._api('post', endpoint, **kwargs)
 
+    def _head(self, endpoint, **kwargs):
+        return self._api('head', endpoint, **kwargs)
+
     def _put(self, endpoint, **kwargs):
         return self._api('put', endpoint, **kwargs)
 
@@ -963,10 +966,16 @@ class AEUserSession(AESessionBase):
         if name:
             data['name'] = name
         if endpoint:
+            try:
+                response = self._head(f'/_errors/404.html', subdomain=endpoint, format='response')
+                if response.status_code == 200:
+                    raise AEException('endpoint "{}" is already in use'.format(endpoint))
+            except AEUnexpectedResponseError:
+                pass
             data['static_endpoint'] = endpoint
         response = self._post(f'projects/{id}/deployments', json=data)
         if response.get('error'):
-            raise RuntimeError('Error starting deployment: {}'.format(response['error']['message']))
+            raise AEException('Error starting deployment: {}'.format(response['error']['message']))
         if collaborators:
             self.deployment_collaborator_list_set(response['id'], collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
@@ -977,7 +986,7 @@ class AEUserSession(AESessionBase):
             if response['state'] != 'started':
                 if stop_on_error:
                     self.deployment_stop(response["id"])
-                raise RuntimeError(f'Error completing deployment start: {response["status_text"]}')
+                raise AEException(f'Error completing deployment start: {response["status_text"]}')
         response['project_id'] = id
         return self._format_response(response, format=format, columns=_S_COLUMNS)
 
@@ -1091,7 +1100,7 @@ class AEUserSession(AESessionBase):
             data['variables'] = variables
         response = self._post(f'projects/{id}/jobs', json=data)
         if response.get('error'):
-            raise RuntimeError('Error starting job: {}'.format(response['error']['message']))
+            raise AEException('Error starting job: {}'.format(response['error']['message']))
         response['project_id'] = id
         if run:
             run = self._get(f'jobs/{response["id"]}/runs')[-1]
