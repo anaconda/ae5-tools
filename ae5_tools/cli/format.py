@@ -118,7 +118,7 @@ OPS = {'<': lambda x, y: x < y,
        '!=': lambda x, y: not fnmatch(x, y)}
 
 
-def filter_df(records, _columns, filter, columns=None):
+def filter_df(records, _columns, filter, columns, drop_under):
     if columns:
         columns = columns.split(',')
         missing = '\n  - '.join(set(columns) - set(_columns))
@@ -148,9 +148,12 @@ def filter_df(records, _columns, filter, columns=None):
         mask0 = mask1 if mask0 is None else [m1 and m2 for m1, m2 in zip(mask0, mask1)]
     if mask0:
         records = [rec for rec, flag in zip(records, mask0) if flag]
-    if columns and records:
-        ndxs = [_columns.index(col) for col in columns]
-        records = [[rec[ndx] for ndx in ndxs] for rec in records]
+    if not columns and drop_under:
+        columns = [c for c in _columns if not c.startswith('_')]
+    if columns:
+        if records:
+            ndxs = [_columns.index(col) for col in columns]
+            records = [[rec[ndx] for ndx in ndxs] for rec in records]
         _columns = columns
     return records, _columns
 
@@ -221,21 +224,31 @@ def print_csv(records, columns, header):
 
 
 def header_width(col):
-    return max(max(len(chunk2.rstrip())
-                   for chunk2 in chunk1.split('_'))
-               for chunk1 in col.split('/'))
+    if '/' in col:
+        return len(col.rsplit('/', 1)[0])
+    if '_' not in col:
+        return len(col)
+    wid = max(len(chunk) for chunk in col.split('_')) + 1
+    nrows = len(split_header(col, wid))
+    while True:
+        result = split_header(col, wid - 1 )
+        if len(result) > nrows or any(len(c) >= wid for c in result):
+            return wid
+        wid -= 1
 
 
 def split_header(col, wid):
-    result = []
-    for chunk1 in col.split('/'):
-        first = True
-        for chunk2 in chunk1.partition('_'):
-            if first or len(chunk2) + len(result[-1]) > wid:
-                result.append(chunk2)
-            else:
-                result[-1] += chunk2
-            first = False
+    result = col.split('/')
+    result, chunks = result[:-1], (result[-1],)
+    first = True
+    while '_' in chunks[-1]:
+        chunks = chunks[:-1] + chunks[-1].partition('_')
+    for chunk2 in chunks:
+        if first or len(chunk2) + len(result[-1]) > wid:
+            result.append(chunk2)
+        else:
+            result[-1] += chunk2
+        first = False
     return result
 
 
@@ -316,9 +329,9 @@ def print_output(result):
     opts = get_options()
     if opts.get('sort'):
         result = sort_df(result, columns, opts.get('sort'))
-    if opts.get('filter') or opts.get('columns'):
-        result, columns = filter_df(result, columns, opts.get('filter'), opts.get('columns'))
     fmt = opts.get('format')
+    drop_under = fmt not in ('json', 'csv')
+    result, columns = filter_df(result, columns, opts.get('filter'), opts.get('columns'), drop_under)
     if fmt == 'json':
         print_json(result, columns)
     elif fmt == 'csv':
