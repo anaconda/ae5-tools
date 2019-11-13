@@ -35,7 +35,7 @@ _D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'proj
 _J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
 _C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
 _U_COLUMNS = ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id']
-_T_COLUMNS = ['name', 'id', 'description', 'is_template', 'is_default', 'download_url', 'owner', 'created', 'updated']
+_T_COLUMNS = ['name', 'id', 'is_template', 'is_default', 'description', 'download_url', 'owner', 'created', 'updated']
 _A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
 _E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
 _R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
@@ -165,9 +165,6 @@ class AESessionBase(object):
             self._save()
         self.connected = False
 
-    def _format_kwargs(self, kwargs):
-        return kwargs.pop('format', None), kwargs.pop('columns', None)
-
     def _format_table(self, response, columns, quiet=False):
         if isinstance(response, dict):
             is_series = True
@@ -207,23 +204,11 @@ class AESessionBase(object):
             result = [tuple(rec.get(k) for k in clist) for rec in response]
         return (result, clist)
 
-    def _format_response(self, response, format, columns=None):
-        if isinstance(response, requests.models.Response):
-            if format == 'response':
-                return response
-            if len(response.content) == 0:
-                return None
-            if format == 'blob':
-                return response.content
-            if format == 'text':
-                return response.text
-            ctype = response.headers['content-type']
-            if ctype.endswith('json'):
-                response = response.json()
-            elif format in ('json', 'table'):
-                raise AEException(f'Content type {ctype} not compatible with json format')
-            else:
-                return response.text
+    def _format_response(self, response, format, columns=None, record_type=None):
+        assert not isinstance(response, requests.models.Response)
+        if record_type is not None:
+            for rec in ([response] if isinstance(response, dict) else response):
+                rec['_record_type'] = record_type
         if format in ('table', 'tableif'):
             return self._format_table(response, columns, quiet=format == 'tableif')
         elif format == 'dataframe':
@@ -237,7 +222,7 @@ class AESessionBase(object):
             return response
 
     def _api(self, method, endpoint, **kwargs):
-        fmt, cols = self._format_kwargs(kwargs)
+        format = kwargs.pop('format', None)
         subdomain = kwargs.pop('subdomain', None)
         isabs, endpoint = endpoint.startswith('/'), endpoint.lstrip('/')
         if subdomain:
@@ -305,7 +290,24 @@ class AESessionBase(object):
             else:
                 if do_save and self.persist:
                     self._save()
-                return self._format_response(response, fmt, cols)
+                break
+        if format == 'response':
+            return response
+        if len(response.content) == 0:
+            return None
+        if format == 'blob':
+            return response.content
+        if format == 'text':
+            return response.text
+        ctype = response.headers['content-type']
+        if 'json' in ctype:
+            return response.json()
+        elif format in ('json', 'table'):
+            raise AEException(f'Content type {ctype} not compatible with json format')
+        elif 'text' in ctype:
+            return response.text
+        else:
+            return response.content
 
     def _get(self, endpoint, **kwargs):
         return self._api('get', endpoint, **kwargs)
@@ -475,23 +477,19 @@ class AEUserSession(AESessionBase):
 
     def project_list(self, collaborators=False, internal=False, format=None):
         records = self._get('projects')
+        headers = _P_COLUMNS
         if collaborators and not internal:
             self._join_collaborators('projects', records)
-            columns = list(_P_COLUMNS)
-            columns.insert(4, 'collaborators')
-        else:
-            columns = _P_COLUMNS
-        return self._format_response(records, format=format, columns=columns)
+            headers = _P_COLUMNS[:4] + ['collaborators'] + _P_COLUMNS[4:]
+        return self._format_response(records, format=format, columns=headers, record_type='project')
 
     def project_info(self, ident, collaborators=True, internal=False, format=None, quiet=False):
         id, record = self._id('projects', ident, quiet=quiet)
+        headers = _P_COLUMNS
         if record and (collaborators and not internal):
             self._join_collaborators('projects', record)
-            columns = list(_P_COLUMNS)
-            columns.insert(4, 'collaborators')
-        else:
-            columns = _P_COLUMNS
-        return self._format_response(record, format=format, columns=columns)
+            headers = _P_COLUMNS[:4] + ['collaborators'] + _P_COLUMNS[4:]
+        return self._format_response(record, format=format, columns=headers, record_type='project')
 
     def resource_profile_list(self, internal=False, format=None):
         response = self._get('projects/actions', params={'q': 'create_action'})
@@ -503,22 +501,22 @@ class AEUserSession(AESessionBase):
                 profile[k.lower()] = v
             if 'gpu' not in profile:
                 profile['gpu'] = 0
-        return self._format_response(profiles, format=format, columns=_R_COLUMNS)
+        return self._format_response(profiles, format=format, columns=_R_COLUMNS, record_type='resource_profile')
 
     def resource_profile_info(self, name, internal=False, format=None, quiet=False):
         id, rec = self._id_or_name('resource_profile', name, quiet=quiet)
-        return self._format_response(rec, format=format, columns=_R_COLUMNS)
+        return self._format_response(rec, format=format, columns=_R_COLUMNS, record_type='resource_profile')
 
     def editor_list(self, internal=False, format=None):
         response = self._get('projects/actions', params={'q': 'create_action'})[0]
         editors = response['editors']
         for rec in editors:
             rec['packages'] = ' '.join(rec['packages'])
-        return self._format_response(editors, format=format, columns=_ED_COLUMNS)
+        return self._format_response(editors, format=format, columns=_ED_COLUMNS, record_type='editor')
 
     def editor_info(self, name, internal=False, format=None, quiet=False):
         id, rec = self._id_or_name('editor', name)
-        return self._format_response(rec, format=format, columns=_ED_COLUMNS)
+        return self._format_response(rec, format=format, columns=_ED_COLUMNS, record_type='editor')
 
     def sample_list(self, internal=False, format=None):
         result = []
@@ -528,11 +526,11 @@ class AEUserSession(AESessionBase):
         for sample in self._get('sample_projects'):
             sample['is_template'] = sample['is_default'] = False
             result.append(sample)
-        return self._format_response(result, format=format, columns=_T_COLUMNS)
+        return self._format_response(result, format=format, columns=_T_COLUMNS, record_type='template')
 
     def sample_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id_or_name('sample', ident, quiet=quiet)
-        return self._format_response(record, format=format, columns=_T_COLUMNS)
+        return self._format_response(record, format=format, columns=_T_COLUMNS, record_type='template')
 
     def sample_clone(self, ident, name=None, tag=None,
                      make_unique=None, wait=True, format=None):
@@ -546,20 +544,21 @@ class AEUserSession(AESessionBase):
 
     def project_collaborator_list(self, ident, format=None):
         id, _ = self._id('projects', ident)
-        return self._get(f'projects/{id}/collaborators', format=format, columns=_C_COLUMNS)
+        response = self._get(f'projects/{id}/collaborators')
+        return self._format_response(response, format=format, columns=_C_COLUMNS, record_type='collaborator')
 
     def project_collaborator_info(self, ident, userid, internal=False, format=None, quiet=False):
         collabs = self.project_collaborator_list(ident)
         for c in collabs:
             if userid == c['id']:
-                return self._format_response(c, format=format, columns=_C_COLUMNS)
+                return self._format_response(c, format=format, columns=_C_COLUMNS, record_type='collaborator')
         if not quiet:
             raise AEException(f'Collaborator not found: {userid}')
 
     def project_collaborator_list_set(self, ident, collabs, format=None):
         id, _ = self._id('projects', ident)
         result = self._put(f'projects/{id}/collaborators', json=collabs)
-        return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS)
+        return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS, record_type='collaborator')
 
     def project_collaborator_add(self, ident, userid, group=False, read_only=False):
         id, _ = self._id('projects', ident)
@@ -597,21 +596,24 @@ class AEUserSession(AESessionBase):
 
     def project_sessions(self, ident, format=None):
         id, _ = self._id('projects', ident)
-        return self._get(f'projects/{id}/sessions', format=format, columns=_S_COLUMNS)
+        record = self._get(f'projects/{id}/sessions')
+        return self._format_response(record, format=format, columns=_D_COLUMNS, record_type='deployment')
 
     def project_deployments(self, ident, format=None):
         id, _ = self._id('projects', ident)
         response = self._get(f'projects/{id}/deployments')
         self._fix_endpoints(response)
-        return self._format_response(response, format=format, columns=_D_COLUMNS)
+        return self._format_response(response, format=format, columns=_D_COLUMNS, record_type='deployment')
 
     def project_jobs(self, ident, format=None):
         id, _ = self._id('projects', ident)
-        return self._get(f'projects/{id}/jobs', format=format, columns=_J_COLUMNS)
+        response = self._get(f'projects/{id}/jobs')
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def project_runs(self, ident, format=None):
         id, _ = self._id('projects', ident)
-        return self._get(f'projects/{id}/runs', format=format, columns=_R_COLUMNS)
+        response = self._get(f'projects/{id}/runs')
+        return self._format_response(response, format=format, columns=_R_COLUMNS, record_type='run')
 
     def project_activity(self, ident, limit=0, latest=False, format=None):
         id, _ = self._id('projects', ident)
@@ -620,20 +622,20 @@ class AEUserSession(AESessionBase):
         response = self._get(f'projects/{id}/activity', params=params)['data']
         if latest:
             response = response[0]
-        return self._format_response(response, format=format, columns=_A_COLUMNS)
+        return self._format_response(response, format=format, columns=_A_COLUMNS, record_type='activity')
 
     def revision_list(self, ident, format=None):
         id, _ = self._id('projects', ident)
         response = self._get(f'projects/{id}/revisions')
         for rec in response:
             rec['project_id'] = 'a0-' + rec['url'].rsplit('/', 3)[-3]
-        return self._format_response(response, format=format, columns=_R_COLUMNS)
+        return self._format_response(response, format=format, columns=_R_COLUMNS, record_type='revision')
 
     def revision_info(self, ident, internal=False, format=None, quiet=False):
         id, rev, prec, rrec = self._revision(ident, quiet=quiet)
         if rrec:
             rrec['project_id'] = prec['id']
-        return self._format_response(rrec, format=format, columns=_R_COLUMNS)
+        return self._format_response(rrec, format=format, columns=_R_COLUMNS, record_type='revision')
 
     def project_download(self, ident, filename=None):
         id, rev, _, _ = self._revision(ident)
@@ -646,7 +648,7 @@ class AEUserSession(AESessionBase):
     def project_image(self, ident, command=None, condarc_path=None, dockerfile_path=None, debug=False, format=None):
         '''Build docker image'''
         _, rev, _, rrec = self._revision(ident)
-        info = self.project_info(ident, format='response')
+        info = self.project_info(ident)
         name = info['name'].replace(' ','').lower()
         owner = info['owner'].replace('@','_at_')
         tag = f'{owner}/{name}:{rev}'
@@ -813,7 +815,7 @@ class AEUserSession(AESessionBase):
         if not internal and changes:
             self._join_changes(response)
             headers = headers[:2] + ['modified'] + headers[2:]
-        return self._format_response(response, format, columns=headers)
+        return self._format_response(response, format, columns=headers, record_type='session')
 
     def session_info(self, ident, internal=False, changes=False, format=None, quiet=False):
         id, record = self._id('sessions', ident, quiet=quiet)
@@ -821,20 +823,20 @@ class AEUserSession(AESessionBase):
         if not internal and changes:
             self._join_changes(record)
             headers = headers[:2] + ['modified'] + headers[2:]
-        return self._format_response(record, format, columns=_S_COLUMNS)
+        return self._format_response(record, format, columns=headers, record_type='session')
 
     def session_changes(self, ident, master=False, format=None):
         id, _ = self._id('sessions', ident)
         which = 'master' if master else 'local'
-        result = self._get(f'sessions/{id}/changes/{which}/', format='json')
-        return self._format_response(result['files'], format=format, columns=_CH_COLUMNS)
+        result = self._get(f'sessions/{id}/changes/{which}')
+        return self._format_response(result['files'], format=format, columns=_CH_COLUMNS, record_type='changes')
 
     def session_branches(self, ident, format=None):
         id, _ = self._id('sessions', ident)
         # Use master because it's more likely to be a smaller result (no changed files)
-        result = self._get(f'sessions/{id}/changes/master/', format='json')
+        result = self._get(f'sessions/{id}/changes/master')
         result = [{'branch': k, 'sha1': v} for k, v in result['branches'].items()]
-        return self._format_response(result, format=format, columns=_BR_COLUMNS)
+        return self._format_response(result, format=format, columns=_BR_COLUMNS, record_type='branches')
 
     def session_start(self, ident, editor=None, resource_profile=None, wait=True, format=None):
         id, record = self._id('projects', ident)
@@ -851,7 +853,7 @@ class AEUserSession(AESessionBase):
             response['action'] = self._wait(id, response['action'])
         if response['action'].get('error'):
             raise RuntimeError('Error completing session start: {}'.format(response['action']['message']))
-        return self._format_response(response, format=format, columns=_S_COLUMNS)
+        return self._format_response(response, format=format, columns=_S_COLUMNS, record_type='session')
 
     def session_stop(self, ident, format=format):
         id, _ = self._id('sessions', ident)
@@ -872,7 +874,7 @@ class AEUserSession(AESessionBase):
             self._join_collaborators('deployments', response)
         if endpoints:
             self._fix_endpoints(response)
-        return self._format_response(response, format, _D_COLUMNS)
+        return self._format_response(response, format, columns=_D_COLUMNS, record_type='deployment')
 
     def deployment_info(self, ident, collaborators=True, internal=False, format=None, quiet=False):
         id, record = self._id('deployments', ident, quiet=quiet)
@@ -882,7 +884,7 @@ class AEUserSession(AESessionBase):
                 self._join_collaborators('deployments', record)
             if record.get('url'):
                 record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
-        return self._format_response(record, format, _D_COLUMNS)
+        return self._format_response(record, format, columns=_D_COLUMNS, record_type='deployment')
 
     def endpoint_list(self, format=None, internal=False):
         response = self._get('/platform/deploy/api/v1/apps/static-endpoints')
@@ -901,32 +903,34 @@ class AEUserSession(AESessionBase):
                 rec['name'], rec['deployment_id'] = '', ''
                 rec['project_id'] = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
                 rec['project_name'] = pnames.get(rec['project_id'], '')
-        return self._format_response(response, format=format, columns=_E_COLUMNS)
+        return self._format_response(response, format=format, columns=_E_COLUMNS, record_type='endpoint')
 
     def endpoint_info(self, ident, internal=False, format=None, quiet=False):
         id, rec = self._id_or_name('endpoint', ident, quiet=quiet)
-        return self._format_response(rec, format=format, columns=_E_COLUMNS)
+        return self._format_response(rec, format=format, columns=_E_COLUMNS, record_type='endpoint')
 
     def deployment_collaborators(self, ident, format=None):
         id, _ = self._id('deployments', ident)
-        return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
+        response = self._get(f'deployments/{id}/collaborators')
+        return self._format_response(response, format=format, columns=_C_COLUMNS, record_type='collaborators')
 
     def deployment_collaborator_list(self, ident, format=None):
         id, _ = self._id('deployments', ident)
-        return self._get(f'deployments/{id}/collaborators', format=format, columns=_C_COLUMNS)
+        response = self._get(f'deployments/{id}/collaborators')
+        return self._format_response(response, format=format, columns=_C_COLUMNS, record_type='collaborators')
 
     def deployment_collaborator_info(self, ident, userid, internal=False, format=None, quiet=False):
         collabs = self.deployment_collaborator_list(ident)
         for c in collabs:
             if userid == c['id']:
-                return self._format_response(c, format=format, columns=_C_COLUMNS)
+                return self._format_response(c, format=format, columns=_C_COLUMNS, record_type='collaborators')
         if not quiet:
             raise AEException(f'Collaborator not found: {userid}')
 
     def deployment_collaborator_list_set(self, ident, collabs, format=None):
         id, _ = self._id('deployments', ident)
         result = self._put(f'deployments/{id}/collaborators', json=collabs)
-        return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS)
+        return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS, record_type='collaborators')
 
     def deployment_collaborator_add(self, ident, userid, group=False, format=None):
         id, _ = self._id('deployments', ident)
@@ -967,9 +971,8 @@ class AEUserSession(AESessionBase):
             data['name'] = name
         if endpoint:
             try:
-                response = self._head(f'/_errors/404.html', subdomain=endpoint, format='response')
-                if response.status_code == 200:
-                    raise AEException('endpoint "{}" is already in use'.format(endpoint))
+                self._head(f'/_errors/404.html', subdomain=endpoint)
+                raise AEException('endpoint "{}" is already in use'.format(endpoint))
             except AEUnexpectedResponseError:
                 pass
             data['static_endpoint'] = endpoint
@@ -988,7 +991,7 @@ class AEUserSession(AESessionBase):
                     self.deployment_stop(response["id"])
                 raise AEException(f'Error completing deployment start: {response["status_text"]}')
         response['project_id'] = id
-        return self._format_response(response, format=format, columns=_S_COLUMNS)
+        return self._format_response(response, format=format, columns=_D_COLUMNS, record_type='deployment')
 
     def deployment_restart(self, ident, wait=True, stop_on_error=False, format=None):
         id, record = self._id('deployments', ident)
@@ -1016,11 +1019,12 @@ class AEUserSession(AESessionBase):
 
     def deployment_stop(self, ident, format=None):
         id, _ = self._id('deployments', ident)
-        return self._delete(f'deployments/{id}', format=format)
+        response = self._delete(f'deployments/{id}')
+        return self._format_response(response, format=format)
 
     def deployment_logs(self, ident, which=None, format=None):
         id, _ = self._id('deployments', ident)
-        result = self._get(f'deployments/{id}/logs', format='json')
+        result = self._get(f'deployments/{id}/logs')
         if which is not None:
             result = result[which]
         return self._format_response(result, format=format)
@@ -1033,31 +1037,37 @@ class AEUserSession(AESessionBase):
         return self._format_response(result, format=format)
 
     def job_list(self, internal=False, format=None):
-        return self._get('jobs', format=format, columns=_J_COLUMNS)
+        response = self._get('jobs')
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def job_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id('jobs', ident, quiet=quiet)
-        return self._format_response(record, format=format, columns=_J_COLUMNS)
+        return self._format_response(record, format=format, columns=_J_COLUMNS, record_type='job')
 
     def job_runs(self, ident, format=None):
         id, record = self._id('jobs', ident)
-        return self._get(f'jobs/{id}/runs', format=format, columns=_J_COLUMNS)
+        response = self._get(f'jobs/{id}/runs')
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def job_run(self, ident, format=None):
         id, _ = self._id('jobs', ident)
-        return self._post(f'jobs/{id}/runs', format=format, columns=_J_COLUMNS)
+        response = self._post(f'jobs/{id}/runs')
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def job_delete(self, ident, format=None):
         id, _ = self._id('jobs', ident)
-        return self._delete(f'jobs/{id}', format=format)
+        response = self._delete(f'jobs/{id}')
+        return self._format_response(response, format=format)
 
     def job_pause(self, ident, format=None):
         id, _ = self._id('jobs', ident)
-        return self._post(f'jobs/{id}/pause', format=format, columns=_J_COLUMNS)
+        response = self._post(f'jobs/{id}/pause')
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def job_unpause(self, ident, format=format):
         id, _ = self._id('jobs', ident)
-        return self._post(f'jobs/{id}/unpause', format=format, columns=_J_COLUMNS)
+        response = self._post(f'jobs/{id}/unpause')
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def job_create(self, ident, schedule=None, name=None, command=None,
                    resource_profile=None, variables=None, run=False,
@@ -1112,7 +1122,7 @@ class AEUserSession(AESessionBase):
                     self._delete(f'jobs/{response["id"]}')
             if show_run:
                 response = run
-        return self._format_response(response, format=format, columns=_J_COLUMNS)
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def job_patch(self, ident, name=None, command=None, schedule=None,
                   resource_profile=None, variables=None, format=None):
@@ -1128,14 +1138,16 @@ class AEUserSession(AESessionBase):
             data['resource_profile'] = resource_profile
         if variables is not None:
             data['variables'] = variables
-        return self._patch(f'jobs/{id}', json=data, format=format, columns=_J_COLUMNS)
+        response = self._patch(f'jobs/{id}', json=data)
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def run_list(self, internal=False, format=None):
-        return self._get('runs', format=format, columns=_J_COLUMNS)
+        response = self._get('runs')
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def run_info(self, ident, internal=False, format=None, quiet=False):
         id, record = self._id('runs', ident, quiet=quiet)
-        return self._format_response(record, format=format, columns=_J_COLUMNS)
+        return self._format_response(record, format=format, columns=_J_COLUMNS, record_type='job')
 
     def run_log(self, ident, format=None):
         id, _ = self._id('runs', ident)
@@ -1143,11 +1155,12 @@ class AEUserSession(AESessionBase):
 
     def run_stop(self, ident, format=None):
         id, _ = self._id('runs', ident)
-        return self._post(f'runs/{id}/stop', format=format, columns=_J_COLUMNS)
+        response = self._post(f'runs/{id}/stop')
+        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
 
     def run_delete(self, ident, format=None):
         id, _ = self._id('runs', ident)
-        return self._delete(f'runs/{id}', format=format, columns=_J_COLUMNS)
+        self._delete(f'runs/{id}')
 
 
 class AEAdminSession(AESessionBase):
@@ -1230,7 +1243,7 @@ class AEAdminSession(AESessionBase):
             users = list(users.values())
             for urec in users:
                 urec.setdefault('lastLogin', 0)
-        return self._format_response(users, format=format, columns=_U_COLUMNS)
+        return self._format_response(users, format=format, columns=_U_COLUMNS, record_type='user')
 
     def user_info(self, user_or_id, internal=False, format=None, quiet=False):
         if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
@@ -1251,7 +1264,7 @@ class AEAdminSession(AESessionBase):
             events = self.user_events(client='anaconda-platform', type='LOGIN', user=response['id'])
             response['lastLogin'] = next((e['time'] for e in events
                                          if 'response_mode' not in e['details']), 0)
-        return self._format_response(response, format, _U_COLUMNS)
+        return self._format_response(response, format, columns=_U_COLUMNS, record_type='user')
 
     def impersonate(self, user_or_id):
         record = self.user_info(user_or_id, internal=True)
