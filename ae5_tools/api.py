@@ -833,13 +833,19 @@ class AEUserSession(AESessionBase):
             record2 = self._k8s('pod_info', [r['id'] for r in record])
             has_changes = False
             for rec, rec2 in zip(record, record2):
+                rec['phase'] = rec2['phase']
+                rec['since'] = rec2['since']
+                rec['restarts'] = rec2['restarts']
                 rec['usage/cpu'] = rec2['usage']['cpu']
-                rec['usage/memory'] = rec2['usage']['memory']
+                rec['usage/mem'] = rec2['usage']['mem']
                 if changes:
-                    rec['modified'] = any(rec2['changes'][x] for x in ('modified', 'deleted', 'added'))
+                    if 'changes' in rec2:
+                        rec['modified'] = any(rec2['changes'][x] for x in ('modified', 'deleted', 'added'))
+                    else:
+                        rec['modified'] = 'n/a'
                 rec['node'] = rec2['node']
                 rec['k8s'] = rec2
-        nhead = ['usage/cpu', 'usage/memory', 'modified', 'node']
+        nhead = ['phase', 'usage/cpu', 'usage/mem', 'modified', 'restarts', 'since', 'node']
         if not changes:
             nhead.remove('modified')
         return nhead
@@ -1208,33 +1214,46 @@ class AEUserSession(AESessionBase):
         id, _ = self._id('runs', ident)
         self._delete(f'runs/{id}')
 
+    def pod_list(self, format=None):
+        records = []
+        for type in ('session', 'deployment', 'run'):
+            for rec in getattr(self, f'{type}_list')(format='json'):
+                value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id')}
+                value['type'] = type
+                records.append(value)
+        self._join_k8s(records, False)
+        return self._format_response(records, format=format)
+
     def node_list(self, internal=False, format=None):
         records = self._k8s('node_info')
         result = []
         for rec in records:
             result.append({
                 'name': rec['name'],
+                'role': rec['role'],
                 'ready': rec['ready'],
-                'cpu': rec['allocatable']['cpu'],
-                'memory': rec['allocatable']['memory'],
-                'usage/total/pods': rec['total']['pods'],
-                'usage/total/cpu': rec['total']['usage']['cpu'],
-                'usage/total/memory': rec['total']['usage']['memory'],
-                'usage/total/gpu': rec['total']['usage']['nvidia.com/gpu'],
-                'usage/sessions/pods': rec['sessions']['pods'],
-                'usage/sessions/cpu': rec['sessions']['usage']['cpu'],
-                'usage/sessions/memory': rec['sessions']['usage']['memory'],
-                'usage/sessions/gpu': rec['sessions']['usage']['nvidia.com/gpu'],
-                'usage/deployments/pods': rec['deployments']['pods'],
-                'usage/deployments/cpu': rec['deployments']['usage']['cpu'],
-                'usage/deployments/memory': rec['deployments']['usage']['memory'],
-                'usage/deployments/gpu': rec['deployments']['usage']['nvidia.com/gpu'],
-                'usage/middleware/pods': rec['middleware']['pods'],
-                'usage/middleware/cpu': rec['middleware']['usage']['cpu'],
-                'usage/middleware/memory': rec['middleware']['usage']['memory'],
-                'usage/system/pods': rec['system']['pods'],
-                'usage/system/cpu': rec['system']['usage']['cpu'],
-                'usage/system/memory': rec['system']['usage']['memory'],
+                'capacity/pod': rec['capacity']['pods'],
+                'capacity/mem': rec['capacity']['mem'],
+                'capacity/cpu': rec['capacity']['cpu'],
+                'capacity/gpu': rec['capacity']['gpu'],
+                'usage/pod': rec['total']['pods'],
+                'usage/mem': rec['total']['usage']['mem'],
+                'usage/cpu': rec['total']['usage']['cpu'],
+                'usage/gpu': rec['total']['usage']['gpu'],
+                'sessions/pod': rec['sessions']['pods'],
+                'sessions/mem': rec['sessions']['usage']['mem'],
+                'sessions/cpu': rec['sessions']['usage']['cpu'],
+                'sessions/gpu': rec['sessions']['usage']['gpu'],
+                'deployments/pod': rec['deployments']['pods'],
+                'deployments/mem': rec['deployments']['usage']['mem'],
+                'deployments/cpu': rec['deployments']['usage']['cpu'],
+                'deployments/gpu': rec['deployments']['usage']['gpu'],
+                'middleware/pod': rec['middleware']['pods'],
+                'middleware/mem': rec['middleware']['usage']['mem'],
+                'middleware/cpu': rec['middleware']['usage']['cpu'],
+                'system/pod': rec['system']['pods'],
+                'system/mem': rec['system']['usage']['mem'],
+                'system/cpu': rec['system']['usage']['cpu'],
                 'k8s': rec
             })
         return self._format_response(result, format=format)

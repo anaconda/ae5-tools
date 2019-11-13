@@ -27,6 +27,10 @@ def _to_datetime(rec):
 
 
 def _to_float(text):
+    if isinstance(text, dict):
+        return {k: _to_float(v) for k, v in text.items()}
+    elif not isinstance(text, str):
+        return text
     match = re.match(r'^([0-9]+(?:[.][0-9]*)?|inf)\s*(m|Ki|Mi|Gi|Ti)?$', text)
     if not match:
         return text
@@ -49,6 +53,10 @@ def _to_float(text):
 
 
 def _to_text(value):
+    if isinstance(value, dict):
+        return {k: _to_text(v) for k, v in value.items()}
+    elif not isinstance(value, (int, float)):
+        return value
     if not value:
         return '0'
     elif value == float('inf'):
@@ -65,9 +73,16 @@ def _to_text(value):
         mult, suffix = 1.0e3, 'Ki'
     else:
         mult, suffix = 1.0, ''
-    value = int(value / (mult / 1.0e3) + 0.5) * 1.0e-3
+    value = int(value / (mult / 1.0e2) + 0.5) * 1.0e-2
     value = f'{value:.3f}'.rstrip('0').rstrip('.') + suffix
     return value
+
+
+def _to_text2(value):
+    return _to_text(_to_float(value))
+
+
+FIELD_RENAMES = {'gpu': 'nvidia.com/gpu', 'mem': 'memory'}
 
 
 def _k8s_pod_to_record(pRec):
@@ -79,8 +94,8 @@ def _k8s_pod_to_record(pRec):
              'since': max(c['lastTransitionTime'] or '' for c in pRec['status']['conditions']),
              'restarts': 0,
              'containers': {},
-             'requests': {'memory': 0, 'cpu': 0, 'nvidia.com/gpu': 0},
-             'limits': {'memory': 0, 'cpu': 0, 'nvidia.com/gpu': 0}}
+             'requests': {'mem': 0, 'cpu': 0, 'gpu': 0},
+             'limits': {'mem': 0, 'cpu': 0, 'gpu': 0}}
     cMap = {}
     for cRec in pRec['status']['containerStatuses']:
         name = cRec['name']
@@ -111,7 +126,8 @@ def _k8s_pod_to_record(pRec):
             ncRec = cMap[cRec['name']]
             src = ncRec[which] = cRec['resources'][which]
             for key, value in dst.items():
-                dst[key] = value + _to_float(src.get(key, default))
+                skey = FIELD_RENAMES.get(key, key)
+                dst[key] = value + _to_float(src.get(skey, src.get(key, default)))
         for key, value in dst.items():
             dst[key] = _to_text(value)
     return npRec
@@ -122,16 +138,18 @@ def _pod_merge_metrics(pRec, mRec):
     pRec['window'] = mRec.get('window')
     pRec['timestamp'] = mRec.get('timestamp')
     cMap = {c['name']: c for c in pRec['containers'].values()}
-    dst = pRec['usage'] = {'memory': 0, 'cpu': 0, 'nvidia.com/gpu': 0}
+    dst = pRec['usage'] = {'mem': 0, 'cpu': 0, 'gpu': 0}
     for mcRec in mRec.get('containers', ()):
         cRec = cMap.get(mcRec['name'])
         src = cRec['usage'] = mcRec['usage']
-        src['nvidia.com/gpu'] = cRec['requests']['nvidia.com/gpu']
+        src['gpu'] = cRec['requests']['nvidia.com/gpu']
         for key, value in dst.items():
-            dst[key] = value + _to_float(src.get(key, "0"))
+            skey = FIELD_RENAMES.get(key, key)
+            dst[key] = value + _to_float(src.get(skey, src.get(key, "0")))
     for cRec in pRec['containers'].values():
-        if 'usage' not in cRec:
-            cRec['usage'] = {'memory': "0", 'cpu': "0", 'nvidia.com/gpu': "0"}
+        cRec.setdefault('usage', {})
+        for field in ('mem', 'cpu', 'gpu'):
+            cRec['usage'].setdefault(field, '0')
     for key, value in dst.items():
         dst[key] = _to_text(value)
 
@@ -304,8 +322,13 @@ class AE5K8STransformer(object):
         whiches = ('requests', 'limits', 'usage')
         for rec in resp1:
             nodeRec = {'name': rec['metadata']['name'],
-                       'capacity': rec['status']['capacity'],
-                       'allocatable': rec['status']['allocatable'],
+                       'role': rec['metadata']['labels']['role'],
+                       'capacity': {
+                            'pods': rec['status']['allocatable']['pods'],
+                            'mem': _to_text2(rec['status']['allocatable']['memory']),
+                            'cpu': rec['status']['allocatable']['cpu'],
+                            'gpu': rec['status']['allocatable'].get('nvidia.com/gpu', "0"),
+                       },
                        'ready': any(c['type'] == 'Ready' and c['status'] == "True" for c in rec['status']['conditions']),
                        'conditions': [c['type'] for c in rec['status']['conditions']
                                       if c['type'] != 'Ready' and c['status'] == "True"],
@@ -314,7 +337,7 @@ class AE5K8STransformer(object):
             for subset in subsets:
                 srec = nodeRec[subset] = {'pods': 0, 'pending': 0}
                 for which in whiches:
-                    srec[which] = {'memory': 0, 'cpu': 0, 'nvidia.com/gpu': 0}
+                    srec[which] = {'mem': 0, 'cpu': 0, 'gpu': 0}
             nodeMap[nodeRec['name']] = nodeRec
             nodeList.append(nodeRec)
     
@@ -344,9 +367,10 @@ class AE5K8STransformer(object):
                         src = container['resources'].get(which, {})
                         dst = subRec[which]
                         for key, value in dst.items():
-                            default = 'inf' if which == 'limits' and 'key' != 'nvidia.com/gpu' else '0'
-                            dst[key] = value + _to_float(src.get(key, default))
-                subRec['usage']['nvidia.com/gpu'] = subRec['requests']['nvidia.com/gpu']
+                            skey = FIELD_RENAMES.get(key, key)
+                            default = 'inf' if which == 'limits' and key != 'gpu' else '0'
+                            dst[key] = value + _to_float(src.get(skey, src.get(key, default)))
+                subRec['usage']['gpu'] = subRec['requests']['gpu']
                 
         for pod in resp3:
             podName = pod['metadata']['name']
@@ -360,8 +384,10 @@ class AE5K8STransformer(object):
                     subRec = nodeRec[subset]
                     dst = subRec['usage']
                     for container in pod['containers']:
-                        for key, value in container['usage'].items():
-                            dst[key] += _to_float(value)
+                        uRec = container['usage']
+                        for key, value in dst.items():
+                            skey = FIELD_RENAMES.get(key, key)
+                            dst[key] += _to_float(uRec.get(skey, uRec.get(key, "0")))
 
         for nodeRec in nodeList:
             for subset in subsets:

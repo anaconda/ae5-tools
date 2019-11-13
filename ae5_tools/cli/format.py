@@ -225,7 +225,7 @@ def print_csv(records, columns, header):
 
 def header_width(col):
     if '/' in col:
-        return len(col.rsplit('/', 1)[0])
+        return len(col.rsplit('/', 1)[1])
     if '_' not in col:
         return len(col)
     wid = max(len(chunk) for chunk in col.split('_')) + 1
@@ -279,11 +279,11 @@ def print_table(records, columns, header=True, width=0):
             columns2.append(split_header(columns[ndx], wid))
         widths.append(wid)
         for line, val in zip(lines, vals):
-            line.append((val, wid))
+            line.append(val)
         owidth, nwidth = nwidth, nwidth + wid + 2
         if nwidth >= width:
             break
-    lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v))) for v, w in line)
+    lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v))) for v, w in zip(line, widths))
              for line in lines]
     if header:
         lines.insert(0, '  '.join('-' * wid for wid in widths))
@@ -302,8 +302,8 @@ def print_table(records, columns, header=True, width=0):
             for ndx, (label, wid, multi) in enumerate(header):
                 nw = max(0, wid - len(label)) // 2
                 if multi:
-                    nd = min(3, nw - 1)
-                    label = '-' * nd + ' ' + label + ' ' + '-' * nd
+                    nd = max(0, min(3, nw - 1))
+                    label = '-' * nd + ' ' + label[:wid] + ' ' + '-' * nd
                     nw -= nd + 1
                 header[ndx] = ' ' * nw + label + ' ' * (wid - len(label) - nw)
             lines.insert(0, '  '.join(header))
