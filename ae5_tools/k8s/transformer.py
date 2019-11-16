@@ -73,9 +73,16 @@ def _to_text(value):
         mult, suffix = 1.0e3, 'Ki'
     else:
         mult, suffix = 1.0, ''
-    value = int(value / (mult / 1.0e2) + 0.5) * 1.0e-2
-    value = f'{value:.3f}'.rstrip('0').rstrip('.') + suffix
-    return value
+    value /= mult
+    if suffix == 'm':
+        value = str(int(value + 0.5))
+    elif value < 10.0:
+        value = f'{value:.3f}'
+    elif value < 100.0:
+        value = f'{value:.2f}'
+    else:
+        value = f'{value:.1f}'
+    return value + suffix
 
 
 def _to_text2(value):

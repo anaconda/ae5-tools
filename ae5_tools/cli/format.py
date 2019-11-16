@@ -9,6 +9,8 @@ from fnmatch import fnmatch
 from datetime import datetime
 
 from .utils import param_callback, click_text, get_options
+from ..k8s.transformer import _to_float
+
 
 IS_WIN = sys.platform.startswith('win')
 
@@ -178,7 +180,12 @@ def sort_df(records, columns, s_columns):
             ndxc = columns.index(col)
         except ValueError:
             raise click.UsageError(f'Invalid sort field: {col}')
-        vals = [_strsort(records[x][ndxc]) for x in ndxs]
+        # A bit of a hack here to allow these fields to be sorted semantically
+        if col in ('cpu', 'gpu', 'mem') or col.endswith(('/cpu', '/gpu', '/mem')):
+            sfunc = _to_float
+        else:
+            sfunc = _strsort
+        vals = [sfunc(records[x][ndxc]) for x in ndxs]
         ndx2 = sorted(ndx0, key=lambda x: vals[x], reverse=desc)
         ndxs = [ndxs[x] for x in ndx2]
     return [records[x] for x in ndxs]

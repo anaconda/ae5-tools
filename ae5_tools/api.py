@@ -47,6 +47,7 @@ _R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
 _ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
 _BR_COLUMNS = ['branch', 'sha1']
 _CH_COLUMNS = ['path', 'change_type', 'modified', 'conflicted', 'id']
+_PD_COLUMNS = ['name', 'owner', 'type', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'phase', 'since', 'resource_profile', 'id']
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
            'since': 'datetime', 'mtime': 'datetime', 'timestamp': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s',
@@ -835,17 +836,18 @@ class AEUserSession(AESessionBase):
             for rec, rec2 in zip(record, record2):
                 rec['phase'] = rec2['phase']
                 rec['since'] = rec2['since']
-                rec['restarts'] = rec2['restarts']
-                rec['usage/cpu'] = rec2['usage']['cpu']
+                rec['rst'] = rec2['restarts']
                 rec['usage/mem'] = rec2['usage']['mem']
+                rec['usage/cpu'] = rec2['usage']['cpu']
+                rec['usage/gpu'] = rec2['usage']['gpu']
                 if changes:
                     if 'changes' in rec2:
                         rec['modified'] = any(rec2['changes'][x] for x in ('modified', 'deleted', 'added'))
                     else:
                         rec['modified'] = 'n/a'
                 rec['node'] = rec2['node']
-                rec['k8s'] = rec2
-        nhead = ['phase', 'usage/cpu', 'usage/mem', 'modified', 'restarts', 'since', 'node']
+                rec['_k8s'] = rec2
+        nhead = ['phase', 'usage/mem', 'usage/cpu', 'usage/gpu', 'modified', 'rst', 'since', 'node']
         if not changes:
             nhead.remove('modified')
         return nhead
@@ -1217,12 +1219,17 @@ class AEUserSession(AESessionBase):
     def pod_list(self, format=None):
         records = []
         for type in ('session', 'deployment', 'run'):
-            for rec in getattr(self, f'{type}_list')(format='json'):
+            for rec in getattr(self, f'{type}_list')(format='json', internal=True):
                 value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id')}
-                value['type'] = type
+                value['type'] = type[:4]
                 records.append(value)
         self._join_k8s(records, False)
-        return self._format_response(records, format=format)
+        return self._format_response(records, format=format, columns=_PD_COLUMNS, record_type='pod')
+
+    def pod_info(self, pod, format=None):
+        records = []
+        for type in ('session', 'deployment', 'run'):
+            id, record = getattr(self, 'f{type}_info')(format='json', quiet=True)
 
     def node_list(self, internal=False, format=None):
         records = self._k8s('node_info')
@@ -1254,7 +1261,7 @@ class AEUserSession(AESessionBase):
                 'system/pod': rec['system']['pods'],
                 'system/mem': rec['system']['usage']['mem'],
                 'system/cpu': rec['system']['usage']['cpu'],
-                'k8s': rec
+                '_k8s': rec
             })
         return self._format_response(result, format=format)
 
