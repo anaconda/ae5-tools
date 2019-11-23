@@ -216,7 +216,7 @@ class AE5K8STransformer(object):
         resp1 = await self.get(path)
         resp1 = resp1['items']
         if len(resp1) != 1:
-            return _or_raise(KeyError(f'Pod not found: {id}', return_exceptions))
+            return _or_raise(KeyError(f'Pod not found: {id}'), return_exceptions)
         return _k8s_pod_to_record(resp1[0])
     
     async def _exec_pod(self, pod, namespace, container, command):
