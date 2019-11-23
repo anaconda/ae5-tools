@@ -1,0 +1,11 @@
+/versioneer.py
+/tests/
+/test_vars.sh
+/setup.py
+/setup.cfg
+/environment.yml
+/conda-recipe/
+/MANIFEST.in
+/test.tar.gz
+.travis.yml
+.gitattributes

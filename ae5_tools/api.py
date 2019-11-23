@@ -17,6 +17,7 @@ from .config import config
 from .identifier import Identifier
 from .docker import get_dockerfile, get_condarc
 from .docker import build_image
+from .archiver import create_tar_archive
 
 from http.cookiejar import LWPCookieJar
 from requests.packages import urllib3
@@ -740,8 +741,7 @@ class AEUserSession(AESessionBase):
                 raise RuntimeError(f'Project directory must include anaconda-project.yml')
             else:
                 f = io.BytesIO()
-                with tarfile.open(fileobj=f, mode='w|gz') as tf:
-                    tf.add(project_archive, arcname='project', recursive=True)
+                create_tar_archive(project_archive, 'project', f)
                 f.seek(0)
             data = {'name': name}
             if tag:

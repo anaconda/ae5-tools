@@ -1,0 +1,11 @@
+name: ae5-tools
+channels:
+  - ae5-admin
+  - defaults
+packages:
+  - python-dateutil
+  - requests
+  - click=7
+  - click-repl
+env_specs:
+  default: {}

@@ -71,3 +71,5 @@ test_vars.sh
 
 # ides
 .vscode
+.pytest_cache
+
