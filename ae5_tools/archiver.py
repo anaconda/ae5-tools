@@ -6,8 +6,6 @@ import fnmatch
 
 
 def _list_project(project_directory):
-    print(project_directory)
-    print(os.listdir(project_directory))
     anchors, nonanchors = ['.git/'], []
 
     gitdir = os.path.join(project_directory, ".git")
