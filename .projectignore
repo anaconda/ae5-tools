@@ -1,0 +1,15 @@
+/.coverage
+/.idea
+.ipynb_checkpoints
+/.pytest_cache
+/.travis.yml
+__pycache__
+/ae5_tools.egg-info
+/conda-recipe
+/environment.yml
+/setup.cfg
+/setup.py
+/test_vars.sh
+/tests
+/versioneer.py
+/test.tar.gz
