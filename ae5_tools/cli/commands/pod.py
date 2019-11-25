@@ -2,7 +2,7 @@ import sys
 import click
 
 from ..login import cluster_call, login_options
-from ..utils import add_param
+from ..utils import add_param, ident_filter
 from ..format import format_options
 
 
@@ -20,6 +20,7 @@ def pod():
 
 
 @pod.command()
+@ident_filter('pod')
 @format_options()
 @login_options()
 def list():
@@ -33,4 +34,4 @@ def list():
 @login_options()
 def info(pod):
     '''Get information about a specific pod.'''
-    cluster_call('pod_info', node, cli=True)
+    cluster_call('pod_info', pod, cli=True)

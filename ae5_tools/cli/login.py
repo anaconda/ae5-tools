@@ -155,6 +155,8 @@ def cluster(admin=False, retry=True):
 
 
 def cluster_call(method, *args, **kwargs):
+    opts = get_options()
+
     # Translate the user-supplied identifer string into an ID
     ident = kwargs.pop('ident', None)
     if ident:
@@ -165,6 +167,25 @@ def cluster_call(method, *args, **kwargs):
         result = cluster_call(id_class + '_info', ident, internal=True, format='json')
         ident = Identifier.from_record(result, ignore_revision=not revision)
         args = (result['id'],) + args
+
+    # Provide a standardized method for supplying the filter argument
+    # to the *_list api commands. This improves our performance when
+    if opts.get('ident_filter'):
+        filter_dict = {k: None for k in ('owner', 'id', 'pid', 'name', 'revision')}
+        new_filt = []
+        for filt in (opts.get('filter') or ()):
+            found = False
+            if '=' in filt:
+                name, value = filt.split('=', 1)
+                if (name in filter_dict and not filter_dict[name] and
+                    value not in ('*', '') and
+                    not any(x in value for x in (',', '&', '|'))):
+                    filter_dict[name] = value
+                    found = True
+            if not found:
+                new_filt.append(filt)
+        opts['filter'] = new_filt
+        kwargs['filter'] = Identifier(**filter_dict)
 
     # Provide a standardized method for providing interactive output
     # on the cli, including a confirmation prompt, a simple progress
@@ -184,7 +205,7 @@ def cluster_call(method, *args, **kwargs):
             return
         if prefix:
             click.echo(prefix, nl=False, err=True)
-        format = get_options().get('format')
+        format = opts.get('format')
         if format is None:
             # This is a special format that passes tabular json data
             # without error, but converts json data to a table

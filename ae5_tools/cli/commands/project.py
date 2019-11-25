@@ -38,15 +38,16 @@ def list(collaborators):
 
 @project.command()
 @click.argument('project')
+@click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
 @format_options()
 @login_options()
-def info(project):
+def info(project, collaborators):
     '''Retrieve information about a project.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('project_info', project, cli=True)
+    cluster_call('project_info', project, collaborators=collaborators, cli=True)
 
 
 @project.command()

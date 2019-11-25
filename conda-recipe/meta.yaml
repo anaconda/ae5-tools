@@ -25,6 +25,7 @@ requirements:
     - requests
     - click>=7
     - click-repl
+    - aiohttp
 
 test:
   source_files:

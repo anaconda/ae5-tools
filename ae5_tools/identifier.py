@@ -37,12 +37,18 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
                 revision = rev_parts[1]
             id_parts = rev_parts[0].split('/')
             name, owner, id, pid = '', '', '', ''
-            if id_parts and re.match(RE_ID, id_parts[-1]):
+            if id_parts and (len(id_parts) == 4 or re.match(RE_ID, id_parts[-1])):
                 pid = id_parts.pop()
-                self.id_type(pid)
-            if id_parts and re.match(RE_ID, id_parts[-1]):
+                if pid == '*':
+                    pid = ''
+                elif pid:
+                    self.id_type(pid)
+            if id_parts and (len(id_parts) == 3 or re.match(RE_ID, id_parts[-1])):
                 id = id_parts.pop()
-                self.id_type(id)
+                if id == '*':
+                    id = ''
+                elif id:
+                    self.id_type(id)
             if id and pid:
                 if self.id_type(id) == 'projects' and self.id_type(pid) != 'projects':
                     id, pid = pid, id
@@ -91,6 +97,11 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
     def revision_filter(self):
         if self.revision and self.revision != '*':
             return f'name={self.revision}'
+
+    def to_dict(self, drop_revision=False):
+        return {k: v for k, v in zip(self._fields, self)
+                if (k != 'revision' or not drop_revision)
+                and v and v != '*'}
 
     def to_string(self, drop_pid=False, drop_revision=False):
         parts = []

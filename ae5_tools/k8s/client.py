@@ -47,11 +47,10 @@ class AE5K8SRemoteClient(object):
         return self._get('nodes', format='json')
 
     def pod_info(self, ids):
-        if isinstance(ids, str):
-            path = f'pod/{ids}'
-        else:
-            path = f'pods?' + '&'.join('id=' + x for x in ids)
-        return self._get(path, format='json')
+        path = f'pods?' + '&'.join('id=' + x for x in ids)
+        result = self._get(path, format='json')
+        result = [result[x] for x in ids]
+        return result
 
     def pod_log(self, id, container=None, follow=False):
         follow_s = str(bool(follow)).lower()
