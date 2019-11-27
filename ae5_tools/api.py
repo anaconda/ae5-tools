@@ -144,7 +144,8 @@ class AESessionBase(object):
         # But fail silently if it does not work. In particular, if this
         # destructor is called too late in the shutdown process, the call
         # to requests will fail with an ImportError.
-        if sys.meta_path is not None and not self.persist and self.connected:
+        if (sys.meta_path is not None and hasattr(self, 'persist') and
+            not self.persist and self.connected):
             try:
                 self.disconnect()
             except Exception:
@@ -469,10 +470,7 @@ class AEUserSession(AESessionBase):
         record_type = kwargs.pop('record_type', None)
         if not record_type:
             record_type = endpoint.rsplit('/', 1)[-1].rstrip('s')
-        try:
-            records = self._get(endpoint, **kwargs)
-        except AEUnexpectedResponseError:
-            records = []
+        records = self._get(endpoint, **kwargs)
         records = self._fix_records(records, filter, record_type)
         return records
 
@@ -633,20 +631,27 @@ class AEUserSession(AESessionBase):
 
     def project_collaborator_add(self, ident, userid, group=False, read_only=False, format=None):
         prec = self._id('projects', ident)
-        collabs = self._get_records(f'projects/{id}/collaborators')
+        collabs = self.project_collaborator_list(prec)
+        cmap = {c['id']: (c['type'], c['permission']) for c in collabs}
         if not isinstance(userid, tuple):
             userid = userid,
-        ncollabs = [c for c in collabs if c['id'] not in userid]
-        if len(collabs) != ncollabs:
-            # For some reason, changing a collaborator permission
-            # requires deleting the existing records first
-            self.project_collaborator_list_set(prec, collabs)
-        collabs.extend({'id': u, 'type': type, 'permission': perm} for u in userid)
-        return self.project_collaborator_list_set(prec, collabs, format=format)
+        tp = ('group' if group else 'user', 'r' if read_only else 'rw')
+        nmap = {k: tp for k in userid if k not in cmap}
+        nmap.update((k, v) for k, v in cmap.items() if k not in userid or v == tp)
+        if nmap != cmap:
+            collabs = [{'id': k, 'type': t, 'permission': p}
+                       for k, (t, p) in nmap.items()]
+            collabs = self.project_collaborator_list_set(prec, collabs)
+        if any(k not in nmap for k in userid):
+            nmap.update((k, tp) for k in userid)
+            collabs = [{'id': k, 'type': t, 'permission': p}
+                       for k, (t, p) in nmap.items()]
+            collabs = self.project_collaborator_list_set(prec, collabs)
+        return self._format_response(collabs, format=format)
 
     def project_collaborator_remove(self, ident, userid, format=None):
         prec = self._id('projects', ident)
-        collabs = self.project_collaborator_list(prec["id"])
+        collabs = self.project_collaborator_list(prec)
         if not isinstance(userid, tuple):
             userid = userid,
         missing = set(userid) - set(c['id'] for c in collabs)

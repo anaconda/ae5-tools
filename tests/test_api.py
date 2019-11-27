@@ -9,7 +9,59 @@ import uuid
 
 from datetime import datetime
 
-from ae5_tools.api import AEUserSession, AEUnexpectedResponseError
+from ae5_tools.api import AEUserSession, AEUnexpectedResponseError, AEException
+
+
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+
+def test_unexpected_response(user_session):
+    with pytest.raises(AEUnexpectedResponseError) as excinfo:
+        raise AEUnexpectedResponseError('string', 'https://test.me', 'string')
+    exc = str(excinfo.value).strip()
+    assert 'Unexpected response: string' == exc
+    print(excinfo.value)
+    with pytest.raises(AEUnexpectedResponseError) as excinfo:
+        raise AEUnexpectedResponseError(AttrDict({
+                'status_code': 404,
+                'reason': 'reason',
+                'headers': 'headers',
+                'text': 'text'
+            }), 'get', 'https://test.me',
+            params='params', data='data', json='json')
+    exc = [x.strip() for x in str(excinfo.value).splitlines()]
+    assert 'Unexpected response: 404 reason' in exc
+    assert 'headers: headers' in exc
+    assert 'text: text' in exc
+    assert 'params: params' in exc
+    assert 'data: data' in exc
+    assert 'json: json' in exc
+
+
+def test_invalid_user_session():
+    with pytest.raises(ValueError) as excinfo:
+        AEUserSession('', '')
+    assert 'Must supply hostname and username' in str(excinfo.value)
+
+
+def test_project_list_df(user_session, project_list):
+    df = user_session.project_list(collaborators=True, format='dataframe')
+    assert len(df) == len(project_list)
+    mismatch = False
+    for row, row_df in zip(project_list, df.itertuples()):
+        for k, v in row.items():
+            if k.startswith('_'):
+                continue
+            v_df = getattr(row_df, k, None)
+            if k in ('created', 'updated'):
+                v = v.replace('T', ' ')
+            if str(v) != str(v_df):
+                print(f'{row["owner"]}/{row["name"]}, {k}: {v} != {v_df}')
+                mismatch = True
+    assert not mismatch
 
 
 def test_project_info(user_session, project_list):
@@ -24,13 +76,55 @@ def test_project_info(user_session, project_list):
         assert rec2 == rec3
 
 
+def test_project_info_errors(user_session):
+    with pytest.raises(AEException) as excinfo:
+        user_session.project_info('testproj1')
+    assert 'Multiple projects' in str(excinfo.value)
+    with pytest.raises(AEException) as excinfo:
+        user_session.project_info('testproj4')
+    assert 'No projects' in str(excinfo.value)
+
+
 def test_project_collaborators(user_session, project_list):
+    tested_with = tested_without = False
     for rec0 in project_list:
         collabs = rec0['collaborators']
         collabs = set(collabs.split(', ')) if collabs else set()
-        collab2 = user_session.project_collaborator_list(rec0['id'])
+        collab2 = user_session.project_collaborator_list(rec0)
         collab3 = set(c['id'] for c in collab2)
         assert collabs == collab3, collab2
+        if not tested_with and collabs:
+            for c in collabs:
+                crec = user_session.project_collaborator_info(rec0, c)
+                assert crec['id'] == c
+            tested_with = True
+        if not tested_without and not collabs:
+            with pytest.raises(AEException) as excinfo:
+                user_session.project_collaborator_info(rec0, 'xxx')
+            assert 'Collaborator not found: xxx' in str(excinfo.value)
+            tested_without = True
+    assert tested_with and tested_without
+
+
+def test_project_collaborators_add_remove(user_session, project_list):
+    uname = 'tooltest2'
+    rec = next(rec for rec in project_list if not rec['collaborators'])
+    clist = user_session.project_collaborator_add(rec, uname)
+    assert len(clist) == 1
+    clist = user_session.project_collaborator_add(rec, 'everyone', group=True, read_only=True)
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'rw' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    clist = user_session.project_collaborator_add(rec, uname, read_only=True)
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'r' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    clist = user_session.project_collaborator_remove(rec, uname)
+    assert len(clist) == 1
+    clist = user_session.project_collaborator_remove(rec, 'everyone')
+    assert len(clist) == 0
 
 
 def test_project_activity(user_session, project_list):

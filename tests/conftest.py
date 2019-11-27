@@ -43,7 +43,7 @@ def user_setup():
     assert set(len(p['collaborators'].split(', ')) if p['collaborators'] else 0
                for p in powned).issuperset((0, 1, 2))
     yield s, plist
-    s.disconnect()
+    del s
 
 
 @pytest.fixture(scope='session')
@@ -51,7 +51,7 @@ def admin_session():
     hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_ADMIN_USERNAME', 'AE5_ADMIN_PASSWORD')
     s = AEAdminSession(hostname, username, password)
     yield s
-    s.disconnect()
+    del s
 
 
 @pytest.fixture(scope='session')

@@ -13,9 +13,8 @@ import uuid
 from datetime import datetime
 from collections import namedtuple
 from ae5_tools.api import AEUnexpectedResponseError
-from subprocess import CalledProcessError
 
-from .utils import _cmd
+from .utils import _cmd, CMDException
 
 
 Session = namedtuple('Session', 'hostname username')
@@ -38,13 +37,56 @@ def test_project_info(project_list_cli):
         assert rec2 == rec3
 
 
+def test_project_info_errors(user_session):
+    with pytest.raises(CMDException) as excinfo:
+        _cmd('project info testproj1')
+    assert 'Multiple projects' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd('project info testproj4')
+    assert 'No projects' in str(excinfo.value)
+
+
 def test_project_collaborators(project_list_cli):
+    tested_with = tested_without = False
     for rec0 in project_list_cli:
         collabs = rec0['collaborators']
         collabs = set(collabs.split(', ')) if collabs else set()
         collab2 = _cmd(f'project collaborator list {rec0["id"]}')
         collab3 = set(c['id'] for c in collab2)
         assert collabs == collab3, collab2
+        if not tested_with and collabs:
+            for c in collabs:
+                crec = _cmd(f'project collaborator info {rec0["id"]} {c}')
+                assert crec['id'] == c
+            tested_with = True
+        if not tested_without and not collabs:
+            with pytest.raises(CMDException) as excinfo:
+                _cmd(f'project collaborator info {rec0["id"]} xxx')
+            assert 'Collaborator not found: xxx' in str(excinfo.value)
+            tested_without = True
+    assert tested_with and tested_without
+
+
+def test_project_collaborators_add_remove(user_session, project_list):
+    uname = 'tooltest2'
+    rec = next(rec for rec in project_list if not rec['collaborators'])
+    id = rec['id']
+    clist = _cmd(f'project collaborator add {id} {uname}')
+    assert len(clist) == 1
+    clist = _cmd(f'project collaborator add {id} everyone --group --read-only')
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'rw' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    clist = _cmd(f'project collaborator add {id} {uname} --read-only')
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'r' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    clist = _cmd(f'project collaborator remove {id} everyone')
+    assert len(clist) == 1
+    clist = _cmd(f'project collaborator remove {id} {uname}')
+    assert len(clist) == 0
 
 
 def test_project_activity(project_list_cli):
@@ -241,7 +283,7 @@ def test_deploy_duplicate(user_session, cli_deployment):
     uname = user_session.username
     id, ename = cli_deployment
     dname = 'testdeploy2'
-    with pytest.raises(CalledProcessError):
+    with pytest.raises(CMDException):
         _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command default --private --wait', table=False)
     drecs = [r for r in _cmd('deployment list')
              if r['owner'] == uname and r['name'] == dname]
@@ -251,7 +293,7 @@ def test_deploy_duplicate(user_session, cli_deployment):
 def test_deploy_broken(user_session):
     uname = user_session.username
     dname = 'testbroken'
-    with pytest.raises(CalledProcessError):
+    with pytest.raises(CMDException):
         _cmd(f'project deploy {uname}/testproj3 --name {dname} --command broken --private --stop-on-error', table=False)
     drecs = [r for r in _cmd('deployment list')
              if r['owner'] == uname and r['name'] == dname]
