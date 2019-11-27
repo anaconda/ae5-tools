@@ -17,7 +17,7 @@ def _get_vars(*vars):
 
 def _cmd(cmd, table=True):
     # We go through Pandas to CSV to JSON instead of directly to JSON to improve coverage
-    cmd = 'ae5 ' + cmd
+    cmd = 'coverage run -m ae5_tools.cli.main ' + cmd
     if table:
         cmd += f' --format csv'
     print(f'Executing: {cmd}')
