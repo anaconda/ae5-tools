@@ -17,10 +17,10 @@ def _get_vars(*vars):
 
 def _cmd(cmd, table=True):
     # We go through Pandas to CSV to JSON instead of directly to JSON to improve coverage
-    cmd = 'coverage run -m ae5_tools.cli.main ' + cmd
     if table:
         cmd += f' --format csv'
-    print(f'Executing: {cmd}')
+    print(f'Executing: ae5 {cmd}')
+    cmd = 'coverage run --append --source=ae5_tools -m ae5_tools.cli.main ' + cmd
     text = subprocess.check_output(shlex.split(cmd), stdin=open(os.devnull)).decode()
     if not table or not text.strip():
         return text

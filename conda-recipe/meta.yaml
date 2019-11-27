@@ -37,7 +37,7 @@ test:
     - pytest-cov
     - codecov
   commands:
-    - py.test --cov=ae5_tools -v tests
+    - py.test --cov=ae5_tools --cov-append -v tests
     - codecov -t $CODECOV_TOKEN
 
 about:
