@@ -290,7 +290,8 @@ def print_table(records, columns, header=True, width=0):
         owidth, nwidth = nwidth, nwidth + wid + 2
         if nwidth >= width:
             break
-    lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v))) for v, w in zip(line, widths))
+    lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v)))
+             for v, w in zip(line, widths))
              for line in lines]
     if header:
         lines.insert(0, '  '.join('-' * wid for wid in widths))
@@ -300,6 +301,7 @@ def print_table(records, columns, header=True, width=0):
             header = []
             for col, wid in zip(columns2, widths):
                 wid = min(wid, width - nwidth)
+                nwidth += wid + 2
                 if ndx > len(col):
                     header.append(('', wid, False))
                     continue
@@ -308,7 +310,6 @@ def print_table(records, columns, header=True, width=0):
                     header.append((label, wid, False))
                 else:
                     header[-1] = (label, wid + 2 + header[-1][1], True)
-                nwidth += wid + 2
             for ndx, (label, wid, multi) in enumerate(header):
                 nw = max(0, wid - len(label)) // 2
                 if multi:

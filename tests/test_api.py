@@ -5,6 +5,7 @@ import pytest
 import os
 import tarfile
 import glob
+import uuid
 
 from datetime import datetime
 
@@ -53,9 +54,12 @@ def downloaded_project(user_session):
         assert len(dnames) == 1
         dname = os.path.dirname(dnames[0])
         yield fname, fname2, dname
+    for r in user_session.session_list():
+        if r['owner'] == uname and r['name'].startswith('test_upload'):
+            user_session.session_stop(r)
     for r in user_session.project_list():
         if r['owner'] == uname and r['name'].startswith('test_upload'):
-            user_session.project_delete(r['id'])
+            user_session.project_delete(r)
     assert not any(r['owner'] == uname and r['name'].startswith('test_upload')
                    for r in user_session.project_list())
 
@@ -206,7 +210,7 @@ def test_deploy(user_session, api_deployment):
 def test_deploy_token(user_session, api_deployment):
     id, ename = api_deployment
     token = user_session.deployment_token(id)
-    resp = requests.get('https://testendpoint.' + user_session.hostname,
+    resp = requests.get(f'https://{ename}.' + user_session.hostname,
                         headers={'Authorization': f'Bearer {token}'})
     assert resp.status_code == 200
     assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
@@ -225,8 +229,8 @@ def test_deploy_logs(user_session, api_deployment):
 
 def test_deploy_duplicate(user_session, api_deployment):
     uname = user_session.username
+    id, ename = api_deployment
     dname = 'testdeploy2'
-    ename = 'testendpoint'
     with pytest.raises(RuntimeError) as excinfo:
         user_session.deployment_start(f'{uname}/testproj3', name=dname, endpoint=ename,
                                       command='default', public=False, wait=True)

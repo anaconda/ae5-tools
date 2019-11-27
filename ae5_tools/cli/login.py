@@ -166,7 +166,7 @@ def cluster_call(method, *args, **kwargs):
             id_class = method.split('_', 1)[0]
         result = cluster_call(id_class + '_info', ident, internal=True, format='json')
         ident = Identifier.from_record(result, ignore_revision=not revision)
-        args = (result['id'],) + args
+        args = (result,) + args
 
     # Provide a standardized method for supplying the filter argument
     # to the *_list api commands. This improves our performance when
@@ -220,7 +220,7 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=admin)
         result = getattr(c, method)(*args, **kwargs)
     except AEException as e:
-        if postfix or prefix:
+        if is_cli and (postfix or prefix):
             click.echo('', nl=True, err=True)
         raise click.ClickException(str(e))
 

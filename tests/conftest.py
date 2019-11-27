@@ -17,13 +17,13 @@ def user_setup():
     hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
     s = AEUserSession(hostname, username, password)
     for run in s.run_list():
-        s.run_delete(run['id'])
+        s.run_delete(run)
     for job in s.job_list():
-        s.job_delete(job['id'])
+        s.job_delete(job)
     for dep in s.deployment_list():
-        s.deployment_stop(dep['id'])
+        s.deployment_stop(dep)
     for sess in s.session_list():
-        s.session_stop(sess['id'])
+        s.session_stop(sess)
     plist = s.project_list(collaborators=True)
     for p in plist:
         if p['name'] not in {'testproj1', 'testproj2', 'testproj3'} and p['owner'] == username:

@@ -8,6 +8,7 @@ import pprint
 import requests
 import tarfile
 import glob
+import uuid
 
 from datetime import datetime
 from collections import namedtuple
@@ -206,7 +207,7 @@ def test_deploy(user_session, cli_deployment):
     id, ename = cli_deployment
     for attempt in range(3):
         try:
-            ldata = _cmd('call / --endpoint testendpoint', table=False)
+            ldata = _cmd(f'call / --endpoint {ename}', table=False)
             break
         except AEUnexpectedResponseError:
             time.sleep(attempt * 5)
@@ -219,7 +220,7 @@ def test_deploy(user_session, cli_deployment):
 def test_deploy_token(user_session, cli_deployment):
     id, ename = cli_deployment
     token = _cmd(f'deployment token {id}', table=False).strip()
-    resp = requests.get('https://testendpoint.' + user_session.hostname,
+    resp = requests.get(f'https://{ename}.' + user_session.hostname,
                         headers={'Authorization': f'Bearer {token}'})
     assert resp.status_code == 200
     assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
@@ -238,8 +239,8 @@ def test_deploy_logs(user_session, cli_deployment):
 
 def test_deploy_duplicate(user_session, cli_deployment):
     uname = user_session.username
+    id, ename = cli_deployment
     dname = 'testdeploy2'
-    ename = 'testendpoint'
     with pytest.raises(CalledProcessError):
         _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command default --private --wait', table=False)
     drecs = [r for r in _cmd('deployment list')
