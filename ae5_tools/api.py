@@ -578,7 +578,7 @@ class AEUserSession(AESessionBase):
                 else:
                     matches = [r["name"] for r in matches]
                 msg += ':\n  - ' + '\n  - '.join(matches)
-            raise ValueError(msg)
+            raise AEException(msg)
 
     def project_list(self, filter=None, internal=False, collaborators=False, format=None):
         records = self._get_records('projects', filter=filter)

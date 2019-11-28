@@ -47,6 +47,7 @@ def test_invalid_user_session():
     assert 'Must supply hostname and username' in str(excinfo.value)
 
 
+
 def test_project_list_df(user_session, project_list):
     df = user_session.project_list(collaborators=True, format='dataframe')
     assert len(df) == len(project_list)
@@ -111,14 +112,28 @@ def test_project_collaborators(user_session, project_list):
     assert f'Collaborator(s) not found: {uname}' in str(excinfo.value)
 
 
-def test_resource_profiles(user_session):
-    rlist = user_session.resource_profile_list()
-    for rec in rlist:
+@pytest.fixture(scope='module')
+def resource_profiles(user_session):
+    return user_session.resource_profile_list()
+
+
+def test_resource_profiles(user_session, resource_profiles):
+    for rec in resource_profiles:
         assert rec == user_session.resource_profile_info(rec['name'])
+    with pytest.raises(AEException) as excinfo:
+        user_session.resource_profile_info('*')
+    assert 'Multiple resource profiles found' in str(excinfo.value)
+    with pytest.raises(AEException) as excinfo:
+        user_session.resource_profile_info('')
+    assert 'No resource profiles found' in str(excinfo.value)
 
 
-def test_editors(user_session):
-    elist = user_session.editor_list()
+@pytest.fixture(scope='module')
+def editors(user_session):
+    return user_session.editor_list()
+
+
+def test_editors(user_session, editors):
     editors = set(rec['id'] for rec in elist)
     assert sum(rec['is_default'] for rec in elist) == 1
     assert editors.issuperset({'zeppelin', 'jupyterlab', 'notebook'})
@@ -137,7 +152,6 @@ def test_samples(user_session):
 
 
 def test_sample_clone(user_session):
-    uname = user_session.username
     cname = 'nlp_api'
     pname = 'testclone'
     rrec = user_session.sample_clone(cname, name=pname, wait=True)
@@ -146,11 +160,10 @@ def test_sample_clone(user_session):
 
 @pytest.fixture(scope='module')
 def downloaded_project(user_session):
-    uname = user_session.username
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob.tar.gz')
         fname2 = os.path.join(tempd, 'blob2.tar.gz')
-        user_session.project_download(f'{uname}/testproj1', filename=fname)
+        user_session.project_download(f'testproj3', filename=fname)
         with tarfile.open(fname, 'r') as tf:
             tf.extractall(path=tempd)
         dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
@@ -158,12 +171,12 @@ def downloaded_project(user_session):
         dname = os.path.dirname(dnames[0])
         yield fname, fname2, dname
     for r in user_session.session_list():
-        if r['owner'] == uname and r['name'].startswith('test_upload'):
+        if r['name'].startswith('test_upload'):
             user_session.session_stop(r)
     for r in user_session.project_list():
-        if r['owner'] == uname and r['name'].startswith('test_upload'):
+        if r['name'].startswith('test_upload'):
             user_session.project_delete(r)
-    assert not any(r['owner'] == uname and r['name'].startswith('test_upload')
+    assert not any(r['name'].startswith('test_upload')
                    for r in user_session.project_list())
 
 
@@ -191,10 +204,20 @@ def test_project_upload_as_directory(user_session, downloaded_project):
 
 @pytest.fixture(scope='module')
 def api_project(user_session):
-    uname = user_session.username
-    pname = 'testproj3'
-    prec = user_session.project_info(f'{uname}/{pname}')
-    yield prec
+    return user_session.project_info(f'testproj3')
+
+
+def test_project_patch(user_session, api_project, editors, resource_profiles):
+    prec = api_project
+    old, new = {}, {}
+    for what, wlist in (('resource_profile', (r['name'] for r in resource_profiles)),
+                        ('editor', (e['id'] for e in editors))):
+        old[what] = prec[what]
+        new[what] = next(v for v in wlist if v != old)
+    prec2 = user_session.project_patch(prec, **new)
+    assert {k: prec2[k] for k in new} == new
+    prec3 = user_session.project_patch(prec2, **old)
+    assert {k: prec3[k] for k in old} == old
 
 
 def test_project_activity(user_session, api_project):
@@ -386,12 +409,12 @@ def test_job_run1(user_session, api_project):
     user_session.job_create(prec, name='testjob1', command='run', make_unique=True, run=True, wait=True)
     jrecs = user_session.job_list()
     assert len(jrecs) == 2, jrecs
-    rrecs = user_session.run_list()
-    assert len(rrecs) == 2, rrecs
     jrecs2 = user_session.project_jobs(prec)
-    assert jrecs == jrecs2
+    assert {r['id']: r for r in jrecs} == {r['id']: r for r in jrecs2}
+    rrecs = user_session.run_list()
     rrecs2 = user_session.project_runs(prec)
-    assert rrecs == rrecs2
+    assert len(rrecs) == 2, rrecs
+    assert {r['id']: r for r in rrecs} == {r['id']: r for r in rrecs2}
     for rrec in rrecs:
         user_session.run_delete(rrec['id'])
     for jrec in jrecs:
@@ -400,11 +423,11 @@ def test_job_run1(user_session, api_project):
     assert not user_session.run_list()
 
 
-def test_job_run2(user_session):
-    uname = user_session.username
+def test_job_run2(user_session, api_project):
+    prec = api_project
     # Test cleanup mode and variables in jobs
     variables = {'INTEGRATION_TEST_KEY_1': 'value1', 'INTEGRATION_TEST_KEY_2': 'value2'}
-    user_session.job_create(f'{uname}/testproj3', name='testjob2', command='run_with_env_vars',
+    user_session.job_create(prec, name='testjob2', command='run_with_env_vars',
                             variables=variables, run=True, wait=True, cleanup=True)
     # The job record should have already been deleted
     assert not user_session.job_list()
