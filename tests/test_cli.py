@@ -17,9 +17,6 @@ from ae5_tools.api import AEUnexpectedResponseError
 from .utils import _cmd, CMDException
 
 
-Session = namedtuple('Session', 'hostname username')
-
-
 @pytest.fixture(scope='module')
 def project_list():
     return _cmd('project list --collaborators')
@@ -46,42 +43,13 @@ def test_project_info_errors():
     assert 'No projects' in str(excinfo.value)
 
 
-def test_project_collaborators(project_list):
-    uname = 'tooltest2'
-    rec = next(rec for rec in project_list if not rec['collaborators'])
-    id = rec['id']
-    with pytest.raises(CMDException) as excinfo:
-        _cmd(f'project collaborator info {id} {uname}')
-    assert f'Collaborator not found: {uname}' in str(excinfo.value)
-    clist = _cmd(f'project collaborator add {id} {uname}')
-    assert len(clist) == 1
-    clist = _cmd(f'project collaborator add {id} everyone --group --read-only')
-    assert len(clist) == 2
-    assert all(c['id'] == uname and c['permission'] == 'rw' and c['type'] == 'user' or
-               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
-               for c in clist)
-    clist = _cmd(f'project collaborator add {id} {uname} --read-only')
-    assert len(clist) == 2
-    assert all(c['id'] == uname and c['permission'] == 'r' and c['type'] == 'user' or
-               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
-               for c in clist)
-    for crec in clist:
-        crec2 = _cmd(f'project collaborator info {id} {crec["id"]}')
-        assert all(crec.get(k, '') == crec2.get(k, '') for k in set(crec) | set(crec2))
-    clist = _cmd(f'project collaborator remove {id} {uname} everyone')
-    assert len(clist) == 0
-    with pytest.raises(CMDException) as excinfo:
-        clist = _cmd(f'project collaborator remove {id} {uname}')
-    assert f'Collaborator(s) not found: {uname}' in str(excinfo.value)
-
-
 @pytest.fixture(scope='module')
 def resource_profiles():
     return _cmd('resource-profile list')
 
 
 def test_resource_profiles(resource_profiles):
-    for rec in rlist:
+    for rec in resource_profiles:
         rec2 = _cmd(f'resource-profile info {rec["name"]}')
         assert rec == rec2
     with pytest.raises(CMDException) as excinfo:
@@ -93,17 +61,15 @@ def test_resource_profiles(resource_profiles):
 
 
 @pytest.fixture(scope='module')
-def resource_profiles():
+def editors():
     return _cmd('editor list')
 
 
 def test_editors(editors):
-    editors = set(rec['id'] for rec in elist)
-    assert sum(rec['is_default'].lower() == 'true' for rec in elist) == 1
-    assert editors.issuperset({'zeppelin', 'jupyterlab', 'notebook'})
-    for rec in elist:
-        rec2 = _cmd(f'editor info {rec["id"]}')
-        assert rec == rec2
+    for rec in editors:
+        assert rec == _cmd(f'editor info {rec["id"]}')
+    assert sum(rec['is_default'].lower() == 'true' for rec in editors) == 1
+    assert set(rec['id'] for rec in editors).issuperset({'zeppelin', 'jupyterlab', 'notebook'})
 
 
 def test_samples():
@@ -165,31 +131,8 @@ def test_project_upload_as_directory(downloaded_project):
 
 
 @pytest.fixture(scope='module')
-def cli_project():
-    return _cmd(f'project info testproj3')
-
-
-def test_project_patch(cli_project, editors, resource_profiles):
-    prec = cli_project
-    old, new = {}, {}
-    for what, wlist in (('resource_profile', (r['name'] for r in resource_profiles)),
-                        ('editor', (e['id'] for e in editors))):
-        old[what] = prec[what]
-        new[what] = next(v for v in wlist if v != old)
-    prec2 = _cmd('project patch {prec["id"]} ' + ' '.join(f'--{k}={v}' for k, v in new.items()))
-    assert {k: prec2[k] for k in new} == new
-    prec3 = _cmd('project patch {prec["id"]} ' + ' '.join(f'--{k}={v}' for k, v in old.items()))
-    assert {k: prec3[k] for k in old} == old
-
-
-def test_project_activity(cli_project):
-    prec = cli_project
-    activity = _cmd(f'project activity --limit -1 {prec["id"]}')
-    assert activity[-1]['status'] == 'created'
-    assert activity[-1]['done']
-    assert activity[-1]['owner'] == prec['owner']
-    activity2 = _cmd(f'project activity --latest {prec["id"]}')
-    assert activity[0] == activity2
+def cli_project(project_list):
+    return next(rec for rec in project_list if rec['name'] == 'testproj3')
 
 
 def test_project_revisions(cli_project):
@@ -202,6 +145,58 @@ def test_project_revisions(cli_project):
     for rev in revs:
         revN = _cmd(f'project revision info {prec["id"]}:{rev["id"]}')
         assert rev == revN
+
+
+def test_project_patch(cli_project, editors, resource_profiles):
+    prec = cli_project
+    old, new = {}, {}
+    for what, wlist in (('resource-profile', (r['name'] for r in resource_profiles)),
+                        ('editor', (e['id'] for e in editors))):
+        old[what] = prec[what.replace('-', '_')]
+        new[what] = next(v for v in wlist if v != old)
+    prec2 = _cmd(f'project patch {prec["id"]} ' + ' '.join(f'--{k}={v}' for k, v in new.items()))
+    assert {k: prec2[k.replace('-', '_')] for k in new} == new
+    prec3 = _cmd(f'project patch {prec["id"]} ' + ' '.join(f'--{k}={v}' for k, v in old.items()))
+    assert {k: prec3[k.replace('-', '_')] for k in old} == old
+
+
+def test_project_collaborators(cli_project, project_list):
+    prec = cli_project
+    uname = next(rec['owner'] for rec in project_list if rec['owner'] != prec['owner'])
+    id = prec['id']
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project collaborator info {id} {uname}')
+    assert f'Collaborator not found: {uname}' in str(excinfo.value)
+    clist = _cmd(f'project collaborator add {id} {uname}')
+    assert len(clist) == 1
+    clist = _cmd(f'project collaborator add {id} everyone --group --read-only')
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'rw' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    clist = _cmd(f'project collaborator add {id} {uname} --read-only')
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'r' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    for crec in clist:
+        crec2 = _cmd(f'project collaborator info {id} {crec["id"]}')
+        assert all(crec.get(k, '') == crec2.get(k, '') for k in set(crec) | set(crec2))
+    clist = _cmd(f'project collaborator remove {id} {uname} everyone')
+    assert len(clist) == 0
+    with pytest.raises(CMDException) as excinfo:
+        clist = _cmd(f'project collaborator remove {id} {uname}')
+    assert f'Collaborator(s) not found: {uname}' in str(excinfo.value)
+
+
+def test_project_activity(cli_project):
+    prec = cli_project
+    activity = _cmd(f'project activity --limit -1 {prec["id"]}')
+    assert activity[-1]['status'] == 'created'
+    assert activity[-1]['done']
+    assert activity[-1]['owner'] == prec['owner']
+    activity2 = _cmd(f'project activity --latest {prec["id"]}')
+    assert activity[0] == activity2
 
 
 @pytest.fixture(scope='module')

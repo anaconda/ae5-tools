@@ -48,6 +48,11 @@ def test_invalid_user_session():
 
 
 
+@pytest.fixture(scope='module')
+def project_list(user_session):
+    return user_session.project_list(collaborators=True)
+
+
 def test_project_list_df(user_session, project_list):
     df = user_session.project_list(collaborators=True, format='dataframe')
     assert len(df) == len(project_list)
@@ -86,32 +91,6 @@ def test_project_info_errors(user_session):
     assert 'No projects' in str(excinfo.value)
 
 
-def test_project_collaborators(user_session, project_list):
-    uname = 'tooltest2'
-    rec = next(rec for rec in project_list if not rec['collaborators'])
-    with pytest.raises(AEException) as excinfo:
-        user_session.project_collaborator_info(rec, uname)
-    assert f'Collaborator not found: {uname}' in str(excinfo.value)
-    clist = user_session.project_collaborator_add(rec, uname)
-    assert len(clist) == 1
-    clist = user_session.project_collaborator_add(rec, 'everyone', group=True, read_only=True)
-    assert len(clist) == 2
-    assert all(c['id'] == uname and c['permission'] == 'rw' and c['type'] == 'user' or
-               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
-               for c in clist)
-    clist = user_session.project_collaborator_add(rec, uname, read_only=True)
-    assert len(clist) == 2
-    assert all(c['id'] == uname and c['permission'] == 'r' and c['type'] == 'user' or
-               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
-               for c in clist)
-    collabs = tuple(crec['id'] for crec in clist)
-    clist = user_session.project_collaborator_remove(rec, collabs)
-    assert len(clist) == 0
-    with pytest.raises(AEException) as excinfo:
-        user_session.project_collaborator_remove(rec, uname)
-    assert f'Collaborator(s) not found: {uname}' in str(excinfo.value)
-
-
 @pytest.fixture(scope='module')
 def resource_profiles(user_session):
     return user_session.resource_profile_list()
@@ -134,11 +113,10 @@ def editors(user_session):
 
 
 def test_editors(user_session, editors):
-    editors = set(rec['id'] for rec in elist)
-    assert sum(rec['is_default'] for rec in elist) == 1
-    assert editors.issuperset({'zeppelin', 'jupyterlab', 'notebook'})
-    for rec in elist:
+    for rec in editors:
         assert rec == user_session.editor_info(rec['id'])
+    assert sum(rec['is_default'] for rec in editors) == 1
+    assert set(rec['id'] for rec in editors).issuperset({'zeppelin', 'jupyterlab', 'notebook'})
 
 
 def test_samples(user_session):
@@ -203,8 +181,45 @@ def test_project_upload_as_directory(user_session, downloaded_project):
 
 
 @pytest.fixture(scope='module')
-def api_project(user_session):
-    return user_session.project_info(f'testproj3')
+def api_project(user_session, project_list):
+    return next(rec for rec in project_list if rec['name'] == 'testproj3')
+
+
+def _soft_equal(d1, d2):
+    if isinstance(d1, dict) and isinstance(d2, dict):
+        for k in (set(d1) | set(d2)):
+            if k in d1 and k in d2:
+                if not _soft_equal(d1[k], d2[k]):
+                    return False
+        return True
+    else:
+        return d1 == d2
+
+
+def test_project_revisions(user_session, api_project):
+    prec = api_project
+    revs = user_session.revision_list(prec)
+    rev0 = user_session.revision_info(prec)
+    # There are sometimes minor differences in the '_project'
+    # record due to the exact way it is retrieved. For instance,
+    # the project_create_status value will be missing in the
+    # info calls; and prec has the collaborators entries it.
+    # So we do a rougher verification that the project entry
+    # is correct.
+    assert _soft_equal(rev0['_project'], revs[0]['_project'])
+    rev0['_project'] = revs[0]['_project']
+    assert rev0 == revs[0]
+    rev0 = user_session.revision_info(f'{prec["id"]}:latest')
+    assert _soft_equal(rev0['_project'], revs[0]['_project'])
+    rev0['_project'] = revs[0]['_project']
+    assert revs[0] == rev0
+    for rev in revs:
+        revN = user_session.revision_info(f'{prec["id"]}:{rev["id"]}')
+        assert _soft_equal(revN['_project'], rev['_project'])
+        revN['_project'] = rev['_project']
+        assert rev == revN
+    commands = user_session.revision_commands(prec)
+    assert rev0['commands'] == ', '.join(c['id'] for c in commands)
 
 
 def test_project_patch(user_session, api_project, editors, resource_profiles):
@@ -220,6 +235,32 @@ def test_project_patch(user_session, api_project, editors, resource_profiles):
     assert {k: prec3[k] for k in old} == old
 
 
+def test_project_collaborators(user_session, api_project, project_list):
+    prec = api_project
+    uname = next(rec['owner'] for rec in project_list if rec['owner'] != prec['owner'])
+    with pytest.raises(AEException) as excinfo:
+        user_session.project_collaborator_info(prec, uname)
+    assert f'Collaborator not found: {uname}' in str(excinfo.value)
+    clist = user_session.project_collaborator_add(prec, uname)
+    assert len(clist) == 1
+    clist = user_session.project_collaborator_add(prec, 'everyone', group=True, read_only=True)
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'rw' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    clist = user_session.project_collaborator_add(prec, uname, read_only=True)
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'r' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    collabs = tuple(crec['id'] for crec in clist)
+    clist = user_session.project_collaborator_remove(prec, collabs)
+    assert len(clist) == 0
+    with pytest.raises(AEException) as excinfo:
+        user_session.project_collaborator_remove(prec, uname)
+    assert f'Collaborator(s) not found: {uname}' in str(excinfo.value)
+
+
 def test_project_activity(user_session, api_project):
     prec = api_project
     activity = user_session.project_activity(prec, limit=-1)
@@ -228,22 +269,6 @@ def test_project_activity(user_session, api_project):
     assert activity[-1]['owner'] == prec['owner']
     activity2 = user_session.project_activity(prec, latest=True)
     assert activity[0] == activity2
-
-
-def test_project_revisions(user_session, api_project):
-    prec = api_project
-    revs = user_session.revision_list(prec)
-    rev0 = user_session.revision_info(prec)
-    assert revs[0] == rev0
-    rev0 = user_session.revision_info(f'{prec["id"]}:latest')
-    rev0['_project'].setdefault('project_create_status', 'done')
-    assert revs[0] == rev0
-    for rev in revs:
-        revN = user_session.revision_info(f'{prec["id"]}:{rev["id"]}')
-        revN['_project'].setdefault('project_create_status', 'done')
-        assert rev == revN
-    commands = user_session.revision_commands(prec)
-    assert rev0['commands'] == ', '.join(c['id'] for c in commands)
 
 
 @pytest.fixture(scope='module')

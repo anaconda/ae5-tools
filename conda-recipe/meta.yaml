@@ -38,7 +38,7 @@ test:
     - codecov
     - pandas
   commands:
-    - py.test --cov=ae5_tools --cov-append -v tests
+    - py.test --cov=ae5_tools -v tests
     - codecov -t $CODECOV_TOKEN
 
 about:
