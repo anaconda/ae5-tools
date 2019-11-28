@@ -106,9 +106,10 @@ def deployments(project):
 @click.argument('project')
 @click.option('--limit', type=int, default=10, help='Limit the output to N records.')
 @click.option('--all', is_flag=True, default=False, help='Retrieve all possible records.')
+@click.option('--latest', is_flag=True, default=False, help='Return only the latest record.')
 @format_options()
 @login_options()
-def activity(project, limit, all):
+def activity(project, limit, all, latest):
     '''Retrieve the project's acitivty log.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -117,7 +118,9 @@ def activity(project, limit, all):
        By default, the latest 10 records will be returned. This behavior can be
        adjusted using the --limit or --all options.
     '''
-    cluster_call('project_activity', project, limit=0 if all else limit, cli=True)
+    if latest and all:
+        raise click.UsageError('cannot specify both --all and --latest')
+    cluster_call('project_activity', project, limit=0 if all else limit, latest=latest, cli=True)
 
 
 @project.command()

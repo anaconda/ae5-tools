@@ -24,7 +24,7 @@ def user_setup():
         s.deployment_stop(dep)
     for sess in s.session_list():
         s.session_stop(sess)
-    plist = s.project_list(collaborators=True)
+    plist = s.project_list()
     for p in plist:
         if p['name'] not in {'testproj1', 'testproj2', 'testproj3'} and p['owner'] == username:
             s.project_delete(p['id'])
@@ -40,6 +40,11 @@ def user_setup():
     # Make sure testproj3 is using the Jupyter editor
     assert any(p['editor'] == 'notebook' and p['name'] == 'testproj3' for p in powned)
     # Make sure we have 0, 1, and 2 collaborators represented
+    prec = next(p for p in powned if p['name'] == 'testproj1')
+    collabs = tuple(c['id'] for c in s.project_collaborator_list(prec))
+    if collabs:
+        s.project_collaborator_remove(prec, collabs) 
+        plist = s.project_list(collaborators=True)
     assert set(len(p['collaborators'].split(', ')) if p['collaborators'] else 0
                for p in powned).issuperset((0, 1, 2))
     yield s, plist

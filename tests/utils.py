@@ -8,8 +8,9 @@ from io import StringIO
 
 
 class CMDException(Exception):
-    def __init__(self, code, stdoutb, stderrb):
+    def __init__(self, cmd, code, stdoutb, stderrb):
         msg = [f'Command returned a non-zero status code {code}']
+        msg.append('Command: ' + cmd)
         if stdoutb:
             msg.append('--- STDOUT ---')
             msg.extend(x for x in stdoutb.decode().splitlines())
@@ -38,7 +39,7 @@ def _cmd(cmd, table=True):
                          stdin=open(os.devnull))
     stdoutb, stderrb = p.communicate()
     if p.returncode != 0:
-        raise CMDException(p.returncode, stdoutb, stderrb)
+        raise CMDException(cmd, p.returncode, stdoutb, stderrb)
     text = stdoutb.decode()
     if not table or not text.strip():
         return text

@@ -37,10 +37,10 @@ COLUMNS = {
     'revision': ['name', 'latest', 'owner', 'commands', 'created', 'id', 'project_id', 'project_name', 'updated', 'url'],
     'command': ['id', 'supports_http_options', 'unix', 'windows', 'env_spec'],
     'collaborator': ['id', 'permission', 'type', 'first_name', 'last_name', 'email'],
-    'session': ['name', 'owner', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'session_name', 'project_branch', 'iframe_hosts', 'url', 'project_url', 'iframe_hosts'],
+    'session': ['name', 'owner', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'session_name', 'project_branch', 'iframe_hosts', 'url', 'project_url'],
     'resource_profile': ['name', 'description', 'cpu', 'memory', 'gpu'],
     'editor': ['id', 'packages', 'name', 'is_default'],
-    'sample': ['name', 'id', 'template', 'default', 'description', 'download_url', 'owner', 'created', 'updated'],
+    'sample': ['name', 'id', 'is_template', 'is_default', 'description', 'download_url', 'owner', 'created', 'updated'],
     'deployment': ['endpoint', 'name', 'owner', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'public', 'collaborators', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name', 'project_owner'],
     'job': ['name', 'owner', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name'],
     'run': ['name', 'owner', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name'],
@@ -500,17 +500,16 @@ class AEUserSession(AESessionBase):
         if isinstance(ident, str):
             ident = Identifier.from_string(ident, no_revision=type != 'projects')
         filter = ident.to_dict(drop_revision=drop_revision)
-        if 'pid' in filter and type == 'projects':
-            if filter.get('id') != filter['pid']:
-                raise ValueError(f'Expected a {type} ID type, found a {idtype} ID: {ident}')
+        if 'pid' in filter:
+            if type != 'projects':
+                filter['project_id'] = filter['id']
+                if filter.get('id') == filter['pid']:
+                    del filter['id']
             del filter['pid']
         if 'id' in filter:
             idtype = ident.id_type(filter['id'])
             tval = 'deployments' if type in ('jobs', 'runs') else type
-            if idtype == 'projects' and type != 'projects':
-                filter['pid'] = filter['id']
-                del filter['id']
-            elif type != 'pods' and idtype != tval:
+            if type != 'pods' and idtype != tval:
                 raise ValueError(f'Expected a {type} ID type, found a {idtype} ID: {ident}')
         return filter
 
@@ -695,10 +694,8 @@ class AEUserSession(AESessionBase):
         for response, template in ((self._get('template_projects'), True),
                                    (self._get('sample_projects'), False)):
             for record in response:
-                record['template'] = template
-                record['default'] = record.get('is_default', False)
-                if 'is_default' in record:
-                    del record['is_default']
+                record['is_template'] = template
+                record.setdefault('is_default', False)
                 record['_record_type'] = 'sample'
                 result.append(record)
         return self._format_response(result, format=format)
@@ -960,22 +957,16 @@ class AEUserSession(AESessionBase):
         # helpful, even if understandable. So we call _join_projects even
         # when internal=True to replace this internal name with the project
         # name, providing a more consistent user experience
-        if isinstance(response, list) and len(response) == 1:
-            response = response[0]
         if isinstance(response, dict):
-            pid = 'a0-' + response['project_url'].rsplit('/', 1)[-1]
-            project = self._get(f'projects/{pid}')
-            response['session_name'] = response['name']
-            response['name'] = project['name']
-            response['project_id'] = pid
-        elif response:
-            pnames = {x['id']: x['name'] for x in self._get('projects')}
-            for rec in response:
-                pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
-                pname = pnames.get(pid, '')
-                rec['session_name'] = rec['name']
-                rec['name'] = pname
-                rec['project_id'] = pid
+            response = response[0]
+        precs = {x['id']: x for x in self._get_records('projects')}
+        for rec in response:
+            pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
+            prec = precs.get(pid, {})
+            rec['session_name'] = rec['name']
+            rec['name'] = prec['name']
+            rec['project_id'] = pid
+            rec['_project'] = prec
 
     def session_list(self, filter=None, internal=False, k8s=False, format=None):
         records = self._get_records('sessions', filter=filter)
@@ -1087,7 +1078,7 @@ class AEUserSession(AESessionBase):
 
     def deployment_collaborator_list(self, ident, format=None):
         id = self._id('deployments', ident)['id']
-        response = self._get_records(f'deployments/id/collaborators')
+        response = self._get_records(f'deployments/{id}/collaborators')
         return self._format_response(response, format=format)
 
     def deployment_collaborator_info(self, ident, userid, format=None, quiet=False):
@@ -1100,8 +1091,8 @@ class AEUserSession(AESessionBase):
 
     def deployment_collaborator_list_set(self, ident, collabs, format=None):
         id = self._id('deployments', ident)['id']
-        result = self._put_record(f'deployments/{id}/collaborators', json=collabs)
-        return self._format_response(result['collaborators'], format=format)
+        result = self._put(f'deployments/{id}/collaborators', json=collabs)
+        return self._format_response(result['collaborators'], format=format, record_type='collaborator')
 
     def deployment_collaborator_add(self, ident, userid, group=False, format=None):
         drec = self._id('deployments', ident)
@@ -1130,23 +1121,29 @@ class AEUserSession(AESessionBase):
     def deployment_start(self, ident, name=None, endpoint=None, command=None,
                          resource_profile=None, public=False,
                          collaborators=None, wait=True,
-                         stop_on_error=False, format=None):
+                         stop_on_error=False, format=None,
+                         _skip_endpoint_test=False):
         rrec = self._revision(ident, keep_latest=True)
         id, prec = rrec['project_id'], rrec['_project']
+        if command is None:
+            command = rrec['commands'].split(',', 1)[0]
+        if resource_profile is None:
+            resource_profile = prec['resource_profile']
         data = {'source': rrec['url'],
                 'revision': rrec['name'],
-                'resource_profile': resource_profile or prec['resource_profile'],
-                'command': command or rrec['commands'][0]['id'],
+                'resource_profile': resource_profile,
+                'command': command,
                 'public': bool(public),
                 'target': 'deploy'}
         if name:
             data['name'] = name
         if endpoint:
-            try:
-                self._head(f'/_errors/404.html', subdomain=endpoint)
-                raise AEException('endpoint "{}" is already in use'.format(endpoint))
-            except AEUnexpectedResponseError:
-                pass
+            if not _skip_endpoint_test:
+                try:
+                    self._head(f'/_errors/404.html', subdomain=endpoint)
+                    raise AEException('endpoint "{}" is already in use'.format(endpoint))
+                except AEUnexpectedResponseError:
+                    pass
             data['static_endpoint'] = endpoint
         response = self._post_record(f'projects/{id}/deployments', json=data)
         id = response['id']
@@ -1167,10 +1164,10 @@ class AEUserSession(AESessionBase):
 
     def deployment_restart(self, ident, wait=True, stop_on_error=False, format=None):
         drec = self._id('deployments', ident)
-        collab = self.deployment_collaborators(drec)
+        collab = self.deployment_collaborator_list(drec)
         if drec.get('url'):
             endpoint = drec['url'].split('/', 3)[2].split('.', 1)[0]
-            if id.endswith(endpoint):
+            if drec['id'].endswith(endpoint):
                 endpoint = None
         else:
             endpoint = None
@@ -1180,7 +1177,8 @@ class AEUserSession(AESessionBase):
                                      resource_profile=drec['resource_profile'],
                                      public=drec['public'],
                                      collaborators=collab, wait=wait,
-                                     stop_on_error=stop_on_error, format=format)
+                                     stop_on_error=stop_on_error, format=format,
+                                     _skip_endpoint_test=True)
 
     def deployment_patch(self, ident, format=None, **kwargs):
         drec = self._id('deployments', ident)
