@@ -18,7 +18,7 @@ from .utils import _cmd, CMDException
 
 
 @pytest.fixture(scope='module')
-def project_list():
+def project_list(user_session):
     return _cmd('project list --collaborators')
 
 
@@ -34,7 +34,7 @@ def test_project_info(project_list):
         assert rec2 == rec3
 
 
-def test_project_info_errors():
+def test_project_info_errors(project_list):
     with pytest.raises(CMDException) as excinfo:
         _cmd('project info testproj1')
     assert 'Multiple projects' in str(excinfo.value)
@@ -44,7 +44,7 @@ def test_project_info_errors():
 
 
 @pytest.fixture(scope='module')
-def resource_profiles():
+def resource_profiles(user_session):
     return _cmd('resource-profile list')
 
 
@@ -61,7 +61,7 @@ def test_resource_profiles(resource_profiles):
 
 
 @pytest.fixture(scope='module')
-def editors():
+def editors(user_session):
     return _cmd('editor list')
 
 
@@ -90,7 +90,7 @@ def test_sample_clone():
 
 
 @pytest.fixture(scope='module')
-def downloaded_project():
+def downloaded_project(user_session):
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob.tar.gz')
         fname2 = os.path.join(tempd, 'blob2.tar.gz')
@@ -135,9 +135,15 @@ def cli_project(project_list):
     return next(rec for rec in project_list if rec['name'] == 'testproj3')
 
 
-def test_project_revisions(cli_project):
+@pytest.fixture(scope='module')
+def cli_revisions(cli_project):
     prec = cli_project
     revs = _cmd(f'project revision list {prec["id"]}')
+    return prec, revs
+
+
+def test_project_revisions(cli_revisions):
+    prec, revs = cli_revisions
     rev0 = _cmd(f'project revision info {prec["id"]}')
     assert revs[0] == rev0
     rev0 = _cmd(f'project revision info {prec["id"]}:latest')
@@ -145,6 +151,22 @@ def test_project_revisions(cli_project):
     for rev in revs:
         revN = _cmd(f'project revision info {prec["id"]}:{rev["id"]}')
         assert rev == revN
+
+
+def test_project_revision_errors(cli_revisions):
+    prec, revs = cli_revisions
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project revision info testproj1')
+    assert 'Multiple projects' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project revision info testproj4')
+    assert 'No projects' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project revision info {prec["id"]}:0.*')
+    assert 'Multiple revisions' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project revision info {prec["id"]}:a.b.c')
+    assert 'No revisions' in str(excinfo.value)
 
 
 def test_project_patch(cli_project, editors, resource_profiles):
@@ -166,7 +188,7 @@ def test_project_collaborators(cli_project, project_list):
     id = prec['id']
     with pytest.raises(CMDException) as excinfo:
         _cmd(f'project collaborator info {id} {uname}')
-    assert f'Collaborator not found: {uname}' in str(excinfo.value)
+    assert f'No collaborators found matching id={uname}' in str(excinfo.value)
     clist = _cmd(f'project collaborator add {id} {uname}')
     assert len(clist) == 1
     clist = _cmd(f'project collaborator add {id} everyone --group --read-only')
@@ -179,9 +201,6 @@ def test_project_collaborators(cli_project, project_list):
     assert all(c['id'] == uname and c['permission'] == 'r' and c['type'] == 'user' or
                c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
                for c in clist)
-    for crec in clist:
-        crec2 = _cmd(f'project collaborator info {id} {crec["id"]}')
-        assert all(crec.get(k, '') == crec2.get(k, '') for k in set(crec) | set(crec2))
     clist = _cmd(f'project collaborator remove {id} {uname} everyone')
     assert len(clist) == 0
     with pytest.raises(CMDException) as excinfo:

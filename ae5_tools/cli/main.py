@@ -108,7 +108,7 @@ def call(path, endpoint, post):
     if endpoint and not path.startswith('/'):
         path = '/' + path
     method = 'post' if post else 'get'
-    cluster_call('_api', method, path, subdomain=endpoint, cli=True)
+    cluster_call('api', method, path, subdomain=endpoint, cli=True)
 
 
 cli.add_command(project)

@@ -171,21 +171,13 @@ def cluster_call(method, *args, **kwargs):
     # Provide a standardized method for supplying the filter argument
     # to the *_list api commands. This improves our performance when
     if opts.get('ident_filter'):
-        filter_dict = {k: None for k in ('owner', 'id', 'pid', 'name', 'revision')}
-        new_filt = []
-        for filt in (opts.get('filter') or ()):
-            found = False
-            if '=' in filt:
-                name, value = filt.split('=', 1)
-                if (name in filter_dict and not filter_dict[name] and
-                    value not in ('*', '') and
-                    not any(x in value for x in (',', '&', '|'))):
-                    filter_dict[name] = value
-                    found = True
-            if not found:
-                new_filt.append(filt)
-        opts['filter'] = new_filt
-        kwargs['filter'] = Identifier(**filter_dict)
+        itype, value = opts['ident_filter']
+        if Identifier.id_prefix(itype + 's', quiet=True):
+            value = Identifier.from_string(value).project_filter().split(',')
+        else:
+            value = [f'id={value}|name={value}']
+        kwargs['filter'] = tuple(value) + opts.get('filter', ())
+        opts['filter'] = ()
 
     # Provide a standardized method for providing interactive output
     # on the cli, including a confirmation prompt, a simple progress

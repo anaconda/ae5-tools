@@ -82,13 +82,15 @@ def test_project_info(user_session, project_list):
         assert rec2 == rec3
 
 
-def test_project_info_errors(user_session):
+def test_project_info_errors(user_session, project_list):
     with pytest.raises(AEException) as excinfo:
         user_session.project_info('testproj1')
     assert 'Multiple projects' in str(excinfo.value)
+    user_session.project_info('testproj1', quiet=True)
     with pytest.raises(AEException) as excinfo:
         user_session.project_info('testproj4')
     assert 'No projects' in str(excinfo.value)
+    user_session.project_info('testproj4', quiet=True)
 
 
 @pytest.fixture(scope='module')
@@ -137,11 +139,24 @@ def test_sample_clone(user_session):
 
 
 @pytest.fixture(scope='module')
-def downloaded_project(user_session):
+def api_project(user_session, project_list):
+    return next(rec for rec in project_list if rec['name'] == 'testproj3')
+
+
+@pytest.fixture(scope='module')
+def api_revisions(user_session, api_project):
+    prec = api_project
+    revs = user_session.revision_list(prec)
+    return prec, revs
+
+
+@pytest.fixture(scope='module')
+def downloaded_project(user_session, api_revisions):
+    prec, revs = api_revisions
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob.tar.gz')
         fname2 = os.path.join(tempd, 'blob2.tar.gz')
-        user_session.project_download(f'testproj3', filename=fname)
+        user_session.project_download(prec, filename=fname)
         with tarfile.open(fname, 'r') as tf:
             tf.extractall(path=tempd)
         dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
@@ -158,7 +173,8 @@ def downloaded_project(user_session):
                    for r in user_session.project_list())
 
 
-def test_project_download(downloaded_project):
+def test_project_download(user_session, downloaded_project):
+    # Use this to exercise a couple of branches in _api
     pass
 
 
@@ -180,11 +196,6 @@ def test_project_upload_as_directory(user_session, downloaded_project):
     user_session.project_download('test_upload2:1.3.4', filename=fname2)
 
 
-@pytest.fixture(scope='module')
-def api_project(user_session, project_list):
-    return next(rec for rec in project_list if rec['name'] == 'testproj3')
-
-
 def _soft_equal(d1, d2):
     if isinstance(d1, dict) and isinstance(d2, dict):
         for k in (set(d1) | set(d2)):
@@ -196,9 +207,8 @@ def _soft_equal(d1, d2):
         return d1 == d2
 
 
-def test_project_revisions(user_session, api_project):
-    prec = api_project
-    revs = user_session.revision_list(prec)
+def test_project_revisions(user_session, api_revisions):
+    prec, revs = api_revisions
     rev0 = user_session.revision_info(prec)
     # There are sometimes minor differences in the '_project'
     # record due to the exact way it is retrieved. For instance,
@@ -222,6 +232,26 @@ def test_project_revisions(user_session, api_project):
     assert rev0['commands'] == ', '.join(c['id'] for c in commands)
 
 
+def test_project_revision_errors(user_session, api_revisions):
+    prec, revs = api_revisions
+    with pytest.raises(AEException) as excinfo:
+        user_session.revision_info('testproj1')
+    user_session.revision_info('testproj1', quiet=True)
+    assert 'Multiple projects' in str(excinfo.value)
+    with pytest.raises(AEException) as excinfo:
+        user_session.revision_info('testproj4')
+    assert 'No projects' in str(excinfo.value)
+    user_session.revision_info('testproj4', quiet=True)
+    with pytest.raises(AEException) as excinfo:
+        user_session.revision_info(f'{prec["id"]}:0.*')
+    assert 'Multiple revisions' in str(excinfo.value)
+    user_session.revision_info(f'{prec["id"]}:0.*', quiet=True)
+    with pytest.raises(AEException) as excinfo:
+        user_session.revision_info(f'{prec["id"]}:a.b.c')
+    assert 'No revisions' in str(excinfo.value)
+    user_session.revision_info(f'{prec["id"]}:a.b.c', quiet=True)
+
+
 def test_project_patch(user_session, api_project, editors, resource_profiles):
     prec = api_project
     old, new = {}, {}
@@ -240,7 +270,7 @@ def test_project_collaborators(user_session, api_project, project_list):
     uname = next(rec['owner'] for rec in project_list if rec['owner'] != prec['owner'])
     with pytest.raises(AEException) as excinfo:
         user_session.project_collaborator_info(prec, uname)
-    assert f'Collaborator not found: {uname}' in str(excinfo.value)
+    assert f'No collaborators found matching id={uname}' in str(excinfo.value)
     clist = user_session.project_collaborator_add(prec, uname)
     assert len(clist) == 1
     clist = user_session.project_collaborator_add(prec, 'everyone', group=True, read_only=True)

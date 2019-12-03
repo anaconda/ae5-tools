@@ -1,5 +1,6 @@
 import click
 
+from ..utils import ident_filter
 from ..login import login_options, cluster_call
 from ..format import format_options
 
@@ -14,6 +15,7 @@ def editor():
 
 
 @editor.command()
+@ident_filter('editor')
 @format_options()
 @login_options()
 def list():

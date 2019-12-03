@@ -1,5 +1,6 @@
 import click
 
+from ..utils import ident_filter
 from ..login import login_options, cluster_call
 from ..format import format_options
 
@@ -14,6 +15,7 @@ def resource_profile():
 
 
 @resource_profile.command()
+@ident_filter('resource_profile')
 @format_options()
 @login_options()
 def list():
