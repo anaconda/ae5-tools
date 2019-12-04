@@ -86,7 +86,7 @@ def test_sample_clone():
     cname = 'nlp_api'
     pname = 'testclone'
     rrec = _cmd(f'sample clone {cname} --name {pname}')
-    _cmd(f'project delete {rrec["id"]} --yes', table=False)
+    _cmd(f'project delete {rrec["id"]} --yes')
 
 
 @pytest.fixture(scope='module')
@@ -94,7 +94,7 @@ def downloaded_project(user_session):
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob.tar.gz')
         fname2 = os.path.join(tempd, 'blob2.tar.gz')
-        _cmd(f'project download testproj3 --filename {fname}', table=False)
+        _cmd(f'project download testproj3 --filename {fname}')
         with tarfile.open(fname, 'r') as tf:
             tf.extractall(path=tempd)
         dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
@@ -103,7 +103,7 @@ def downloaded_project(user_session):
         yield fname, fname2, dname
     for r in _cmd('project list'):
         if r['name'].startswith('test_upload'):
-            _cmd(f'project delete {r["id"]} --yes', table=False)
+            _cmd(f'project delete {r["id"]} --yes')
     assert not any(r['name'].startswith('test_upload')
                    for r in _cmd('project list'))
 
@@ -118,7 +118,7 @@ def test_project_upload(downloaded_project):
     rrec = _cmd(f'project revision list test_upload1')
     assert len(rrec) == 1
     assert rrec[0]['name'] == '1.2.3'
-    _cmd(f'project download test_upload1 --filename {fname2}', table=False)
+    _cmd(f'project download test_upload1 --filename {fname2}')
 
 
 def test_project_upload_as_directory(downloaded_project):
@@ -127,7 +127,7 @@ def test_project_upload_as_directory(downloaded_project):
     rrec = _cmd(f'project revision list test_upload2')
     assert len(rrec) == 1
     assert rrec[0]['name'] == '1.2.3'
-    _cmd(f'project download test_upload2 --filename {fname2}', table=False)
+    _cmd(f'project download test_upload2 --filename {fname2}')
 
 
 @pytest.fixture(scope='module')
@@ -225,7 +225,7 @@ def cli_session(cli_project):
     srec2 = _cmd(f'session restart {srec["id"]} --wait')
     assert not any(r['id'] == srec['id'] for r in _cmd('session list'))
     yield prec, srec2
-    _cmd(f'session stop {srec2["id"]} --yes', table=False)
+    _cmd(f'session stop {srec2["id"]} --yes')
     assert not any(r['id'] == srec2['id'] for r in _cmd('session list'))
 
 
@@ -272,7 +272,7 @@ def cli_deployment(cli_project):
     drec2 = _cmd(f'deployment restart {drec["id"]} --wait')
     assert not any(r['id'] == drec['id'] for r in _cmd('deployment list'))
     yield prec, drec2
-    _cmd(f'deployment stop {drec2["id"]} --yes', table=False)
+    _cmd(f'deployment stop {drec2["id"]} --yes')
     assert not any(r['id'] == drec2['id'] for r in _cmd('deployment list'))
 
 
@@ -333,7 +333,7 @@ def test_deploy_duplicate(cli_deployment):
     prec, drec = cli_deployment
     dname = drec['name'] + '-dup'
     with pytest.raises(CMDException) as excinfo:
-        _cmd(f'project deploy {prec["id"]} --name {dname} --endpoint {drec["endpoint"]} --command default --private --wait', table=False)
+        _cmd(f'project deploy {prec["id"]} --name {dname} --endpoint {drec["endpoint"]} --command default --private --wait')
     assert f'endpoint "{drec["endpoint"]}" is already in use' in str(excinfo.value)
     assert not any(r['name'] == dname for r in _cmd(f'deployment list'))
 
@@ -361,7 +361,7 @@ def test_deploy_broken(cli_deployment):
     prec, drec = cli_deployment
     dname = drec['name'] + '-broken'
     with pytest.raises(CMDException) as excinfo:
-        _cmd(f'project deploy {prec["id"]} --name {dname} --command broken --private --stop-on-error', table=False)
+        _cmd(f'project deploy {prec["id"]} --name {dname} --command broken --private --stop-on-error')
     assert 'Error completing deployment start: App failed to run' in str(excinfo.value)
     assert not any(r['name'] == dname for r in _cmd('deployment list'))
 
@@ -385,9 +385,9 @@ def test_job_run1(cli_project):
     rrecs2 = _cmd(f'project runs {prec["id"]}')
     assert {r['id']: r for r in rrecs} == {r['id']: r for r in rrecs2}
     for rrec in rrecs:
-        _cmd(f'run delete {rrec["id"]} --yes', table=False)
+        _cmd(f'run delete {rrec["id"]} --yes')
     for jrec in jrecs:
-        _cmd(f'job delete {jrec["id"]} --yes', table=False)
+        _cmd(f'job delete {jrec["id"]} --yes')
     assert not _cmd('job list')
     assert not _cmd('run list')
 
@@ -408,7 +408,7 @@ def test_job_run2(cli_project):
                    for line in ldata2.splitlines()
                    if line.startswith('INTEGRATION_TEST_KEY_'))
     assert variables == outvars, outvars
-    _cmd(f'run delete {rrecs[0]["id"]} --yes', table=False)
+    _cmd(f'run delete {rrecs[0]["id"]} --yes')
     assert not _cmd('run list')
 
 
