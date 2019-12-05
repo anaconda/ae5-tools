@@ -104,17 +104,24 @@ output to the end user. This client can be utilized in one of two ways:
    `k8s` endpoint.
    
    The installation method will be improved in future
-   releases, but for now, it can be installed as follows:
-   1. Clone this source repository and `cd` to its root.
-   2. Activate a conda environment with a current version of `ae5-tools`.
-   3. Run the following commands as any normal AE5 user:
+   releases, but for now, it can be installed as follows.
+   1. First, obtain and install a valid Kubernetes API bearer token.
+      1. Log into the master node, and follow
+         [these instructions](https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-api/#without-kubectl-proxy)
+         to obtain a valid bearer token.
+      2. Follow [these instructions](https://enterprise-docs.anaconda.com/en/latest/data-science-workflows/user-settings.html#storing-secrets)
+         to install the token into your Anaconda Enterprise account.
+         Make sure to name the secret `k8s_token`.
+   2. Clone this source repository and `cd` to its root.
+   3. Activate a conda environment with a current version of `ae5-tools`.
+   4. Run the following commands as any normal AE5 user:
       1. `ae5 project upload . --name k8s`
       2. `ae5 deployment start k8s --endpoint k8s --private --wait`
       3. `ae5 deployment collaborator add k8s everyone --group`
       4. `ae5 call --endpoint k8s /`
       
       This last command should return the text `Alive and kicking`.
-   4. If you need to update the deployment, you should remove the existing
+   5. If you need to update the deployment, you should remove the existing
       deployment and project first:
       1. `ae5 deployment stop k8s --yes`
       2. `ae5 project delete k8s --yes`
