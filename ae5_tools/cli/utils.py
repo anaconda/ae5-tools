@@ -51,8 +51,7 @@ def param_callback(ctx, param, value):
 def ident_callback(ctx, param, value):
     if value in (None, '', ()):
         return
-    filter = Identifier.from_string(value).project_filter()
-    add_param('filter', filter)
+    add_param('ident_filter', (param.name.lower().replace('-', '_'), value))
 
 
 def ident_filter(name):

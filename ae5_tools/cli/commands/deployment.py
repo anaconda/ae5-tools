@@ -23,9 +23,10 @@ deployment.add_command(collaborator)
 @deployment.command()
 @ident_filter('deployment')
 @click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
+@click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
 @format_options()
 @login_options()
-def list(collaborators):
+def list(collaborators, k8s):
     '''List available deployments.
 
        By default, lists all deployments visible to the authenticated user.
@@ -33,20 +34,21 @@ def list(collaborators):
        supplying an optional DEPLOYMENT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    cluster_call('deployment_list', collaborators=collaborators, cli=True)
+    cluster_call('deployment_list', collaborators=collaborators, k8s=k8s, cli=True)
 
 
 @deployment.command()
 @click.argument('deployment')
+@click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
 @format_options()
 @login_options()
-def info(deployment):
+def info(deployment, k8s):
     '''Retrieve information about a single deployment.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('deployment_info', deployment, cli=True)
+    cluster_call('deployment_info', deployment, k8s=k8s, cli=True)
 
 
 @deployment.command()

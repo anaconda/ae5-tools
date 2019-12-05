@@ -5,6 +5,7 @@ from collections import namedtuple
 RE_ID = r'[a-f0-9]{2}-[a-f0-9]{32}'
 SLUG_MAP = {'a0': 'projects', 'a1': 'sessions', 'a2': 'deployments', 'a3': 'channels'}
 REVERSE_SLUG_MAP = {v: k for k, v in SLUG_MAP.items()}
+REVERSE_SLUG_MAP['jobs'] = REVERSE_SLUG_MAP['runs'] = 'a2'
 
 
 class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revision'])):
@@ -18,11 +19,16 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
             raise ValueError(f'Invalid identifier: {idstr}')
 
     @classmethod
-    def id_prefix(cls, type):
+    def id_prefix(cls, type, quiet=False):
         try:
             return REVERSE_SLUG_MAP[type]
         except KeyError:
-            return ValueError(f'Invalid identifier type: {type}')
+            if not quiet:
+                return ValueError(f'Invalid identifier type: {type}')
+
+    @classmethod
+    def has_prefix(cls, type):
+        return bool(cls.id_prefix(type, quiet=True))
 
     @classmethod
     def from_string(self, idstr, no_revision=False, quiet=False):
@@ -37,12 +43,18 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
                 revision = rev_parts[1]
             id_parts = rev_parts[0].split('/')
             name, owner, id, pid = '', '', '', ''
-            if id_parts and re.match(RE_ID, id_parts[-1]):
+            if id_parts and (len(id_parts) == 4 or re.match(RE_ID, id_parts[-1])):
                 pid = id_parts.pop()
-                self.id_type(pid)
-            if id_parts and re.match(RE_ID, id_parts[-1]):
+                if pid == '*':
+                    pid = ''
+                elif pid:
+                    self.id_type(pid)
+            if id_parts and (len(id_parts) == 3 or re.match(RE_ID, id_parts[-1])):
                 id = id_parts.pop()
-                self.id_type(id)
+                if id == '*':
+                    id = ''
+                elif id:
+                    self.id_type(id)
             if id and pid:
                 if self.id_type(id) == 'projects' and self.id_type(pid) != 'projects':
                     id, pid = pid, id
@@ -75,22 +87,40 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
         pid = id if self.id_type(id) == 'projects' else record.get('project_id', '')
         return Identifier(record['owner'], record['name'], id, pid, rev)
 
-    def project_filter(self, session=False):
+    def project_filter(self, itype=None, include_wildcards=False, ignore_revision=False):
         parts = []
-        if self.name and self.name != '*':
-            parts.append(f'name={self.name}')
-        if self.owner and self.owner != '*':
-            parts.append(f'owner={self.owner}')
-        if self.pid and self.pid != self.id:
-            parts.append(f'project_id={self.pid}')
-        if self.id:
+        if include_wildcards or self.name and self.name != '*':
+            parts.append(f'name={self.name or "*"}')
+        if include_wildcards or self.owner and self.owner != '*':
+            parts.append(f'owner={self.owner or "*"}')
+        if self.pid and self.pid != '*':
+            dual_id = self.id and self.id != '*' and self.id != self.pid
+            if dual_id or itype not in (None, 'projects'):
+                parts.append(f'project_id={self.pid}')
+        elif include_wildcards and itype not in (None, 'projects'):
+            parts.append(f'project_id=*')
+        if self.id and self.id != '*' and (self.id != self.pid or itype in (None, 'projects')):
+            if itype is not None:
+                ival = Identifier.id_type(self.id)
+                tval = 'deployments' if itype in ('jobs', 'runs') else itype
+                if itype != 'pods' and ival != tval:
+                    raise ValueError(f'Expected a {itype[:-1]} ID, not a {ival[:-1]} ID: {self.id}')
             parts.append(f'id={self.id}')
-        if parts:
-            return ','.join(parts)
+        elif include_wildcards:
+            parts.append(f'id=*')
+        if not ignore_revision:
+            if include_wildcards or self.revision and self.revision not in ('*', 'latest'):
+                parts.append(f'revision={self.revision or "*"}')
+        return ','.join(parts) or '*'
 
     def revision_filter(self):
         if self.revision and self.revision != '*':
             return f'name={self.revision}'
+
+    def to_dict(self, drop_revision=False):
+        return {k: v for k, v in zip(self._fields, self)
+                if (k != 'revision' or not drop_revision)
+                and v and v != '*'}
 
     def to_string(self, drop_pid=False, drop_revision=False):
         parts = []
@@ -110,3 +140,7 @@ class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revisi
 
     def __str__(self):
         return self.to_string()
+
+    def __bool__(self):
+        return bool(self.to_dict())
+

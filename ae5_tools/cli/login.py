@@ -47,6 +47,11 @@ _login_help = {
     'password': 'Password for standard access. (AE5_PASSWORD)',
     'admin-username': 'Username for Keycloak admin access. (AE5_ADMIN_USERNAME)',
     'admin-password': 'Password for Keycloak admin access. (AE5_ADMIN_PASSWORD)',
+    'k8s-endpoint': ('Static endpoint for the ae5-tools kubectl deployment. The default '
+                     'value is "k8s". If the value is of the form "ssh:<username>", then '
+                     'an SSH tunnel with the given username is used to reach kubectl '
+                     'instead. In this mode, the user must have passwordless access '
+                     'to the master node through that username. (AE5_K8S_ENDPOINT)'),
     'impersonate': ('Use the Keycloak administrator account to impersonate the '
                     'given user instead of requiring the user password. '
                     '(AE5_IMPERSONATE)'),
@@ -63,6 +68,7 @@ _login_options = [
     click.option('--password', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_PASSWORD', hidden=True),
     click.option('--admin-username', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_USERNAME', hidden=True),
     click.option('--admin-password', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_ADMIN_PASSWORD', hidden=True),
+    click.option('--k8s-endpoint', type=str, default=None, expose_value=False, callback=param_callback, envvar='AE5_K8S_ENDPOINT', hidden=True),
     click.option('--impersonate', is_flag=True, default=None, expose_value=False, callback=param_callback, envvar='AE5_IMPERSONATE', hidden=True),
     click.option('--no-saved-logins', is_flag=True, default=None, expose_value=False, callback=param_callback, envvar='AE5_NO_SAVED_LOGINS', hidden=True),
     click.option('--help-login', is_flag=True, callback=print_login_help, expose_value=False, is_eager=True,
@@ -126,7 +132,8 @@ def cluster_connect(hostname, username, admin):
                 else:
                     password = opts.get('password')
                 conn = AEUserSession(hostname, username, password,
-                                     persist=session_save)
+                                     persist=session_save,
+                                     k8s_endpoint=opts.get('k8s_endpoint'))
             SESSIONS[key] = conn
         except (ValueError, AEException) as e:
             raise click.ClickException(str(e))
@@ -148,6 +155,8 @@ def cluster(admin=False, retry=True):
 
 
 def cluster_call(method, *args, **kwargs):
+    opts = get_options()
+
     # Translate the user-supplied identifer string into an ID
     ident = kwargs.pop('ident', None)
     if ident:
@@ -157,7 +166,18 @@ def cluster_call(method, *args, **kwargs):
             id_class = method.split('_', 1)[0]
         result = cluster_call(id_class + '_info', ident, internal=True, format='json')
         ident = Identifier.from_record(result, ignore_revision=not revision)
-        args = (result['id'],) + args
+        args = (result,) + args
+
+    # Provide a standardized method for supplying the filter argument
+    # to the *_list api commands. This improves our performance when
+    if opts.get('ident_filter'):
+        itype, value = opts['ident_filter']
+        if Identifier.id_prefix(itype + 's', quiet=True):
+            value = Identifier.from_string(value).project_filter().split(',')
+        else:
+            value = [f'id={value}|name={value}']
+        kwargs['filter'] = tuple(value) + opts.get('filter', ())
+        opts['filter'] = ()
 
     # Provide a standardized method for providing interactive output
     # on the cli, including a confirmation prompt, a simple progress
@@ -177,7 +197,7 @@ def cluster_call(method, *args, **kwargs):
             return
         if prefix:
             click.echo(prefix, nl=False, err=True)
-        format = get_options().get('format')
+        format = opts.get('format')
         if format is None:
             # This is a special format that passes tabular json data
             # without error, but converts json data to a table
@@ -192,7 +212,7 @@ def cluster_call(method, *args, **kwargs):
         c = cluster(admin=admin)
         result = getattr(c, method)(*args, **kwargs)
     except AEException as e:
-        if postfix or prefix:
+        if is_cli and (postfix or prefix):
             click.echo('', nl=True, err=True)
         raise click.ClickException(str(e))
 

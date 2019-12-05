@@ -9,6 +9,8 @@ from fnmatch import fnmatch
 from datetime import datetime
 
 from .utils import param_callback, click_text, get_options
+from ..k8s.transformer import _to_float
+
 
 IS_WIN = sys.platform.startswith('win')
 
@@ -178,7 +180,12 @@ def sort_df(records, columns, s_columns):
             ndxc = columns.index(col)
         except ValueError:
             raise click.UsageError(f'Invalid sort field: {col}')
-        vals = [_strsort(records[x][ndxc]) for x in ndxs]
+        # A bit of a hack here to allow these fields to be sorted semantically
+        if col in ('cpu', 'gpu', 'mem') or col.endswith(('/cpu', '/gpu', '/mem')):
+            sfunc = _to_float
+        else:
+            sfunc = _strsort
+        vals = [sfunc(records[x][ndxc]) for x in ndxs]
         ndx2 = sorted(ndx0, key=lambda x: vals[x], reverse=desc)
         ndxs = [ndxs[x] for x in ndx2]
     return [records[x] for x in ndxs]
@@ -225,7 +232,7 @@ def print_csv(records, columns, header):
 
 def header_width(col):
     if '/' in col:
-        return len(col.rsplit('/', 1)[0])
+        return len(col.rsplit('/', 1)[1])
     if '_' not in col:
         return len(col)
     wid = max(len(chunk) for chunk in col.split('_')) + 1
@@ -279,18 +286,22 @@ def print_table(records, columns, header=True, width=0):
             columns2.append(split_header(columns[ndx], wid))
         widths.append(wid)
         for line, val in zip(lines, vals):
-            line.append((val, wid))
+            line.append(val)
         owidth, nwidth = nwidth, nwidth + wid + 2
         if nwidth >= width:
             break
-    lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v))) for v, w in line)
+    lines = ['  '.join(v[:w] + ' ' * max((0, w - len(v)))
+             for v, w in zip(line, widths))
              for line in lines]
     if header:
         lines.insert(0, '  '.join('-' * wid for wid in widths))
         nhead = max(len(col) for col in columns2)
         for ndx in range(1, nhead + 1):
+            nwidth = -2
             header = []
             for col, wid in zip(columns2, widths):
+                wid = min(wid, width - nwidth)
+                nwidth += wid + 2
                 if ndx > len(col):
                     header.append(('', wid, False))
                     continue
@@ -302,8 +313,8 @@ def print_table(records, columns, header=True, width=0):
             for ndx, (label, wid, multi) in enumerate(header):
                 nw = max(0, wid - len(label)) // 2
                 if multi:
-                    nd = min(3, nw - 1)
-                    label = '-' * nd + ' ' + label + ' ' + '-' * nd
+                    nd = max(0, min(3, nw - 1))
+                    label = '-' * nd + ' ' + label[:wid] + ' ' + '-' * nd
                     nw -= nd + 1
                 header[ndx] = ' ' * nw + label + ' ' * (wid - len(label) - nw)
             lines.insert(0, '  '.join(header))

@@ -1,7 +1,22 @@
+import pytest
+
 from .utils import _cmd
 
 
-def test_owner(user_session, project_list_cli):
+@pytest.fixture(scope='module')
+def project_list(user_session):
+    return _cmd('project list')
+
+
+@pytest.fixture(scope='module')
+def project_dup_names(project_list):
+    counts = {}
+    for p in project_list:
+        counts[p['name']] = counts.get(p['name'], 0) + 1
+    return sorted(p for p, v in counts.items() if v > 1)
+
+
+def test_owner(user_session, project_list):
     uname = user_session.username
     first_list = None
     for cmd in (f'project list {uname}/*',
@@ -128,8 +143,8 @@ def test_sort(user_session, project_dup_names):
     assert slist2 != sorted(slist2)
 
 
-def test_filter_comparison(project_list_cli):
-    owners = sorted(set(p['owner'] for p in project_list_cli))
+def test_filter_comparison(project_list):
+    owners = sorted(set(p['owner'] for p in project_list))
     plist1 = _cmd(f'project list --sort owner,name --filter "owner<{owners[1]}"')
     plist2 = _cmd(f'project list --sort owner,name --filter "owner<={owners[0]}"')
     assert plist1 == plist2

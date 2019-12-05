@@ -43,6 +43,20 @@ def info(revision):
 
 @revision.command()
 @click.argument('revision')
+@format_options()
+@login_options()
+def commands(revision):
+    '''List the commands for a given project revision.
+
+       The REVISION identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project. If the revision is not
+       specified, then the latest will be assumed.
+    '''
+    cluster_call('revision_commands', revision, cli=True)
+
+
+@revision.command()
+@click.argument('revision')
 @click.option('--filename', default='', help='Filename')
 @format_options()
 @login_options()

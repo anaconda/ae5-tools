@@ -14,10 +14,12 @@ from tempfile import TemporaryDirectory
 import tarfile
 
 from .config import config
+from .filter import filter_vars, split_filter, filter_list_of_dicts
 from .identifier import Identifier
 from .docker import get_dockerfile, get_condarc
 from .docker import build_image
 from .archiver import create_tar_archive
+from .k8s.client import AE5K8SLocalClient, AE5K8SRemoteClient
 
 from http.cookiejar import LWPCookieJar
 from requests.packages import urllib3
@@ -28,24 +30,55 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Maximum page size in keycloak
 KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
 
+# Default subdomain for kubectl service
+DEFAULT_K8S_ENDPOINT = 'k8s'
 
-_P_COLUMNS = [            'name', 'owner', 'editor',   'resource_profile',                           'id', 'created', 'updated', 'project_create_status',               'url']  # noqa: E241, E201
-_R_COLUMNS = [            'name', 'owner', 'commands',                                               'id', 'created', 'updated',                          'project_id', 'url']  # noqa: E241, E201
-_S_COLUMNS = [            'name', 'owner',             'resource_profile',                           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
-_D_COLUMNS = ['endpoint', 'name', 'owner', 'command',  'resource_profile', 'project_name', 'public', 'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
-_J_COLUMNS = [            'name', 'owner', 'command',  'resource_profile', 'project_name',           'id', 'created', 'updated', 'state',                 'project_id', 'url']  # noqa: E241, E201
-_C_COLUMNS = ['id',  'permission', 'type', 'first name', 'last name', 'email']  # noqa: E241, E201
-_U_COLUMNS = ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id']
-_T_COLUMNS = ['name', 'id', 'is_template', 'is_default', 'description', 'download_url', 'owner', 'created', 'updated']
-_A_COLUMNS = ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated']
-_E_COLUMNS = ['id', 'owner', 'name', 'deployment_id', 'project_name', 'project_id', 'project_url']
-_R_COLUMNS = ['name', 'description', 'cpu', 'memory', 'gpu']
-_ED_COLUMNS = ['id', 'packages', 'name', 'is_default']
-_BR_COLUMNS = ['branch', 'sha1']
-_CH_COLUMNS = ['path', 'change_type', 'modified', 'conflicted', 'id']
+K8S_COLUMNS = ('phase', 'since', 'rst', 'usage/mem', 'usage/cpu', 'usage/gpu', 'changes', 'modified', 'node')
+
+# Column labels prefixed with a '?' are not included in an initial empty record list.
+# For instance, if the --collaborators flag is not set, then projects do not include a
+# "collaborators" column. This allows us to provide a consistent header for record outputs
+# even when the list is empty.
+COLUMNS = {
+    'project': ['name', 'owner', '?collaborators', 'editor', 'resource_profile', 'id', 'created', 'updated', 'project_create_status', 's3_bucket', 's3_path', 'git_server', 'repository', 'repo_owned', 'git_repos', 'repo_url', 'url'],
+    'revision': ['name', 'latest', 'owner', 'commands', 'created', 'updated', 'id', 'url'],
+    'command': ['id', 'supports_http_options', 'unix', 'windows', 'env_spec'],
+    'collaborator': ['id', 'permission', 'type', 'first_name', 'last_name', 'email'],
+    'session': ['name', 'owner', '?usage/mem', '?usage/cpu', '?usage/gpu', '?modified', '?node', '?rst', 'resource_profile', 'id', 'created', 'updated', 'state', '?phase', '?since', '?rst', 'project_id', 'session_name', 'project_branch', 'iframe_hosts', 'url', 'project_url'],
+    'resource_profile': ['name', 'description', 'cpu', 'memory', 'gpu', 'id'],
+    'editor': ['name', 'id', 'is_default', 'packages'],
+    'sample': ['name', 'id', 'is_template', 'is_default', 'description', 'download_url', 'owner', 'created', 'updated'],
+    'deployment': ['endpoint', 'name', 'owner', '?usage/mem', '?usage/cpu', '?usage/gpu', '?node', '?rst', 'public', '?collaborators', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', '?phase', '?since', '?rst', 'project_id', 'project_name', 'project_owner'],
+    'job': ['name', 'owner', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name'],
+    'run': ['name', 'owner', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name'],
+    'branch': ['branch', 'sha1'],
+    'change': ['path', 'change_type', 'modified', 'conflicted', 'id'],
+    'user': ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id'],
+    'activity': ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated'],
+    'endpoint': ['id', 'owner', 'name', 'project_name', 'deployment_id', 'project_id', 'project_url'],
+    'pod': ['name', 'owner', 'type', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'modified', 'phase', 'since', 'resource_profile', 'id'],
+}
+
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
+           'since': 'datetime', 'mtime': 'datetime', 'timestamp': 'datetime',
            'createdTimestamp': 'timestamp/ms', 'notBefore': 'timestamp/s',
            'lastLogin': 'timestamp/ms', 'time': 'timestamp/ms'}
+
+
+class EmptyRecordList(list):
+    def __init__(self, record_type=None, columns=None):
+        if columns is not None:
+            self._columns = list(columns)
+            if isinstance(columns, dict) and '_record_type' in columns:
+                record_type = columns['_record_type']
+        elif record_type is not None:
+            self._columns = list(c for c in COLUMNS.get(record_type, ()) if not c.startswith('?'))
+        else:
+            self._columns = []
+        self._record_type = record_type
+        super(EmptyRecordList, self).__init__()
+    def __str__(self):
+        return f'EmptyRecordList: record_type={self._record_type}\n  - columns: ' + ','.join(self._columns)
 
 
 class AEException(RuntimeError):
@@ -128,7 +161,7 @@ class AESessionBase(object):
         # But fail silently if it does not work. In particular, if this
         # destructor is called too late in the shutdown process, the call
         # to requests will fail with an ImportError.
-        if sys.meta_path is not None and not self.persist and self.connected:
+        if sys.meta_path is not None and not getattr(self, 'persist', True) and self.connected:
             try:
                 self.disconnect()
             except Exception:
@@ -166,27 +199,21 @@ class AESessionBase(object):
             self._save()
         self.connected = False
 
-    def _format_table(self, response, columns, quiet=False):
-        if isinstance(response, dict):
-            is_series = True
-            response = [response]
-        elif isinstance(response, list) and all(isinstance(x, dict) for x in response):
-            is_series = False
-        elif quiet:
-            return response
-        else:
-            raise ValueError('Not a tabular data format')
-        clist = list(columns or ())
-        if not response:
-            return response, clist
-        csrc = set(clist)
-        for rec in response:
-            clist.extend(c for c in rec if c not in csrc)
-            csrc.update(rec)
-        for col, dtype in _DTYPES.items():
-            if col in csrc:
+    def _format_table(self, response, columns):
+        is_series = isinstance(response, dict)
+        rlist = [response] if is_series else response
+        csrc = list(rlist[0]) if rlist else getattr(response, '_columns', ())
+        columns = [c.lstrip('?') for c in (columns or ())]
+        cdst = [c for c in columns if c in csrc]
+        cdst.extend(c for c in csrc if c not in columns and not c.startswith('_'))
+        cdst.extend(c for c in csrc if c not in columns and c.startswith('_') and c != '_record_type')
+        if '_record_type' in csrc:
+            cdst.append('_record_type')
+        for col in cdst:
+            if col in _DTYPES:
+                dtype = _DTYPES[col]
                 if dtype == 'datetime':
-                    for rec in response:
+                    for rec in rlist:
                         if rec.get(col):
                             try:
                                 rec[col] = parser.isoparse(rec[col])
@@ -198,29 +225,38 @@ class AESessionBase(object):
                     for rec in response:
                         if rec.get(col):
                             rec[col] = datetime.fromtimestamp(rec[col] / fact)
+        result = [tuple(rec.get(k) for k in cdst) for rec in rlist]
         if is_series:
-            result = [(k, response[0].get(k)) for k in clist]
-            clist = ['field', 'value']
-        else:
-            result = [tuple(rec.get(k) for k in clist) for rec in response]
-        return (result, clist)
+            result = list(zip(cdst, result[0]))
+            cdst = ['field', 'value']
+        return (result, cdst)
 
     def _format_response(self, response, format, columns=None, record_type=None):
-        assert not isinstance(response, requests.models.Response)
+        if not isinstance(response, (list, dict)):
+            if response is not None and format == 'table':
+                raise AEException('Response is not a tabular format')
+            return response
+        rlist = [response] if isinstance(response, dict) else response
         if record_type is not None:
-            for rec in ([response] if isinstance(response, dict) else response):
+            for rec in rlist:
                 rec['_record_type'] = record_type
-        if format in ('table', 'tableif'):
-            return self._format_table(response, columns, quiet=format == 'tableif')
-        elif format == 'dataframe':
-            records, columns = self._format_table(response, columns)
+        if format not in ('table', 'tableif', 'dataframe'):
+            return response
+        if record_type is None:
+            if rlist and '_record_type' in rlist[0]:
+                record_type = rlist[0]['_record_type']
+            else:
+                record_type = getattr(response, '_record_type', None)
+        if columns is None and record_type is not None:
+            columns = COLUMNS.get(record_type, ())
+        records, columns = self._format_table(response, columns)
+        if format == 'dataframe':
             try:
                 import pandas as pd
             except ImportError:
                 raise ImportError('Pandas must be installed in order to use format="dataframe"')
             return pd.DataFrame(records, columns=columns)
-        else:
-            return response
+        return records, columns
 
     def _api(self, method, endpoint, **kwargs):
         format = kwargs.pop('format', None)
@@ -310,6 +346,11 @@ class AESessionBase(object):
         else:
             return response.content
 
+    def api(self, method, endpoint, **kwargs):
+        format = kwargs.pop('format', None)
+        response = self._api(method, endpoint, **kwargs)
+        return self._format_response(response, format=format)
+
     def _get(self, endpoint, **kwargs):
         return self._api('get', endpoint, **kwargs)
 
@@ -330,10 +371,29 @@ class AESessionBase(object):
 
 
 class AEUserSession(AESessionBase):
-    def __init__(self, hostname, username, password=None, persist=True):
+    def __init__(self, hostname, username, password=None, persist=True, k8s_endpoint=None):
         self._filename = os.path.join(config._path, 'cookies', f'{username}@{hostname}')
         super(AEUserSession, self).__init__(hostname, username, password=password,
                                             prefix='api/v2', persist=persist)
+        self._k8s_endpoint = k8s_endpoint or 'k8s'
+        self._k8s_client = None
+
+    def _k8s(self, method, *args, **kwargs):
+        quiet = kwargs.pop('quiet', False)
+        if self._k8s_endpoint:
+            if self._k8s_endpoint.startswith('ssh:'):
+                self._k8s_client = AE5K8SLocalClient(hostname, self._k8s_endpoint.split(':', 1)[1])
+            else:
+                try:
+                    response = self._head(f'/_errors/404.html', subdomain=self._k8s_endpoint, format='response')
+                    self._k8s_client = AE5K8SRemoteClient(self, self._k8s_endpoint)
+                except AEUnexpectedResponseError:
+                    self._k8s_endpoint = None
+                    raise AEException('No kubectl deployment was found')
+            if self._k8s_endpoint and not self._k8s_client.healthy():
+                self._k8s_endpoint = self._k8s_client = None
+                raise AEException('Error establishing kubectl connection')
+        return getattr(self._k8s_client, method)(*args, **kwargs)
 
     def _set_header(self):
         s = self.session
@@ -386,198 +446,161 @@ class AEUserSession(AESessionBase):
         self.session.cookies.save(self._filename, ignore_discard=True)
         os.chmod(self._filename, 0o600)
 
-    def _id(self, type, ident, quiet=False):
-        if isinstance(ident, str):
-            ident = Identifier.from_string(ident, no_revision=type != 'projects')
-        tval = 'deployments' if type in ('jobs', 'runs') else type
-        idtype = ident.id_type(ident.id) if ident.id else tval
-        if idtype not in ('projects', tval):
-            raise ValueError(f'Expected a {type} ID type, found a {idtype} ID: {ident}')
-        matches = []
-        # NOTE: we are retrieving all project records here, even if we have the unique
-        # id and could potentially retrieve the individual record, because the full
-        # listing includes a field the individual query does not (project_create_status)
-        # Also, we're using our wrapper around the list API calls instead of the direct
-        # call so we get the benefit of our record cleanup.
-        records = getattr(self, type.rstrip('s') + '_list')(internal=True)
-        owner, name, id, pid = (ident.owner or '*', ident.name or '*',
-                                ident.id if ident.id and tval == idtype else '*',
-                                ident.pid if ident.pid and type != 'projects' else '*')
-        for rec in records:
-            if (fnmatch(rec['owner'], owner) and fnmatch(rec['name'], name) and
-                fnmatch(rec['id'], id) and fnmatch(rec.get('project_id', ''), pid)): # noqa
-                matches.append(rec)
-        if len(matches) == 1:
-            rec = matches[0]
-            id = rec['id']
-        elif quiet:
-            id, rec = None, None
-        else:
-            pfx = 'Multiple' if len(matches) else 'No'
-            msg = f'{pfx} {type} found matching {owner}/{name}/{id}'
-            if matches:
-                matches = [str(Identifier.from_record(r, True)) for r in matches]
-                msg += ':\n  - ' + '\n  - '.join(matches)
-            raise ValueError(msg)
-        return rec['id'], rec
+    def _filter_records(self, filter, records):
+        if not filter or not records:
+            return records
+        rec0 = records[0]
+        records = filter_list_of_dicts(records, filter)
+        if not records:
+            records = EmptyRecordList(columns=rec0)
+        return records
 
-    def _revision(self, ident, keep_latest=False, quiet=False):
-        if isinstance(ident, str):
-            ident = Identifier.from_string(ident)
-        id, prec = self._id('projects', ident, quiet=quiet)
-        rrec, rev = None, None
-        if id:
-            revisions = self._get(f'projects/{id}/revisions')
-            if not ident.revision or ident.revision == 'latest':
-                matches = [revisions[0]]
+    def _fix_records(self, record_type, records, filter=None, **kwargs):
+        pre = f'_pre_{record_type}'
+        if isinstance(records, dict) and 'data' in records:
+            records = records['data']
+        is_single = isinstance(records, dict)
+        if is_single:
+            records = [records]
+        if hasattr(self, pre):
+            records = getattr(self, pre)(records)
+        for rec in records:
+            rec['_record_type'] = record_type
+        if not records:
+            records = EmptyRecordList(record_type=record_type)
+        if records and filter:
+            prefilt, postfilt = split_filter(filter, records[0])
+            records = self._filter_records(prefilt, records)
+        post = f'_post_{record_type}'
+        if hasattr(self, post):
+            records = getattr(self, post)(records, **kwargs)
+        if records and filter:
+            records = self._filter_records(postfilt, records)
+        if is_single:
+            return records[0] if records else None
+        return records
+
+    def _api_records(self, method, endpoint, filter=None, **kwargs):
+        record_type = kwargs.pop('record_type', None)
+        api_kwargs = kwargs.pop('api_kwargs', None) or {}
+        if not record_type:
+            record_type = endpoint.rsplit('/', 1)[-1].rstrip('s')
+        records = self._api(method, endpoint, **api_kwargs)
+        return self._fix_records(record_type, records, filter, **kwargs)
+
+    def _get_records(self, endpoint, filter=None, **kwargs):
+        return self._api_records('get', endpoint, filter=filter, **kwargs)
+
+    def _post_record(self, endpoint, filter=None, **kwargs):
+        return self._api_records('post', endpoint, filter=filter, **kwargs)
+
+    def _should_be_one(self, matches, filter, quiet):
+        if isinstance(matches, dict) or matches is None:
+            return matches
+        if len(matches) == 1:
+            return matches[0]
+        if quiet:
+            return None
+        if matches:
+            record_type = matches[0]['_record_type']
+        else:
+            record_type = getattr(matches, '_record_type', 'record')
+        pfx = 'Multiple' if len(matches) else 'No'
+        if isinstance(filter, (list, tuple)):
+            filter = ','.join(filter)
+        istr = record_type.replace('_', ' ') + 's'
+        msg = f'{pfx} {istr} found matching {filter}'
+        if matches:
+            if Identifier.has_prefix(record_type + 's'):
+                matches = [str(Identifier.from_record(r)) for r in matches]
             else:
-                matches = []
-                for response in revisions:
-                    if fnmatch(response['name'], ident.revision):
-                        matches.append(response)
-            if len(matches) == 1:
-                rrec = matches[0]
-                if not keep_latest or (ident.revision and ident.revision != 'latest'):
-                    rev = rrec['name']
-            elif not quiet:
-                pfx = 'Multiple' if len(matches) else 'No'
-                msg = f'{pfx} revisions found matching {ident.revision}'
-                if matches:
-                    msg += ':\n  - ' + '\n  - '.join(matches)
-                raise ValueError(msg)
-        return id, rev, prec, rrec
+                vars = filter_vars(filter)
+                matches = [','.join(f'{k}={r[k]}' for k in vars) for r in matches]
+            msg += ':\n  - ' + '\n  - '.join(matches)
+        raise AEException(msg)
 
-    def _id_or_name(self, type, ident, quiet=False):
-        matches = []
-        records = getattr(self, type.rstrip('s') + '_list')(internal=True)
-        has_id = any('id' in rec for rec in records)
-        for rec in records:
-            if (has_id and fnmatch(rec['id'], ident) or fnmatch(rec['name'], ident)):
-                matches.append(rec)
-        if len(matches) > 1 and has_id:
-            attempt = [rec for rec in matches if fnmatch(rec['id'], ident)]
-            if len(attempt) == 1:
-                matches = attempt
-        if len(matches) == 1:
-            rec = matches[0]
-            id = rec.get('id', rec['name'])
-        elif quiet:
-            id, rec = None, None
+    def _ident_record(self, record_type, ident, quiet=False, **kwargs):
+        if isinstance(ident, dict) and ident.get('_record_type', '') == record_type:
+            return ident
+        itype = record_type + 's'
+        if Identifier.has_prefix(itype):
+            if isinstance(ident, str):
+                ident = Identifier.from_string(ident, itype)
+            filter = ident.project_filter(itype=itype, ignore_revision=True)
         else:
-            tstr = type.replace('_', ' ')
-            pfx = 'Multiple' if len(matches) else 'No'
-            msg = f'{pfx} {tstr}s found matching "{ident}"'
-            if matches:
-                if has_id:
-                    matches = [f'{r["id"]}: {r["name"]}' for r in matches]
-                else:
-                    matches = [r["name"] for r in matches]
-                msg += ':\n  - ' + '\n  - '.join(matches)
-            raise ValueError(msg)
-        return id, rec
+            filter = ident
+        matches = getattr(self, f'{record_type}_list')(filter=filter, **kwargs)
+        return self._should_be_one(matches, filter, quiet)
 
-    def project_list(self, collaborators=False, internal=False, format=None):
-        records = self._get('projects')
-        headers = _P_COLUMNS
-        if collaborators and not internal:
+    def _post_project(self, records, collaborators=False):
+        if collaborators:
             self._join_collaborators('projects', records)
-            headers = _P_COLUMNS[:4] + ['collaborators'] + _P_COLUMNS[4:]
-        return self._format_response(records, format=format, columns=headers, record_type='project')
+        return records
 
-    def project_info(self, ident, collaborators=True, internal=False, format=None, quiet=False):
-        id, record = self._id('projects', ident, quiet=quiet)
-        headers = _P_COLUMNS
-        if record and (collaborators and not internal):
-            self._join_collaborators('projects', record)
-            headers = _P_COLUMNS[:4] + ['collaborators'] + _P_COLUMNS[4:]
-        return self._format_response(record, format=format, columns=headers, record_type='project')
+    def project_list(self, filter=None, internal=False, collaborators=False, format=None):
+        records = self._get_records('projects', filter,
+                                    collaborators=not internal and collaborators)
+        return self._format_response(records, format=format)
 
-    def resource_profile_list(self, internal=False, format=None):
-        response = self._get('projects/actions', params={'q': 'create_action'})
-        profiles = response[0]['resource_profiles']
-        for profile in profiles:
-            profile['description'], params = profile['description'].rsplit(' (', 1)
-            for param in params.rstrip(')').split(', '):
-                k, v = param.split(': ', 1)
-                profile[k.lower()] = v
-            if 'gpu' not in profile:
-                profile['gpu'] = 0
-        return self._format_response(profiles, format=format, columns=_R_COLUMNS, record_type='resource_profile')
+    def project_info(self, ident, internal=False, collaborators=False, format=None, quiet=False):
+        record = self._ident_record('project', ident, collaborators=not internal and collaborators, quiet=quiet)
+        return self._format_response(record, format=format)
 
-    def resource_profile_info(self, name, internal=False, format=None, quiet=False):
-        id, rec = self._id_or_name('resource_profile', name, quiet=quiet)
-        return self._format_response(rec, format=format, columns=_R_COLUMNS, record_type='resource_profile')
+    def project_patch(self, ident, format=None, **kwargs):
+        prec = self._ident_record('project', ident)
+        data = {k: v for k, v in kwargs.items() if v is not None}
+        if data:
+            id = prec["id"]
+            self._patch(f'projects/{id}', json=data)
+            prec = self._ident_record('project', id)
+        return self._format_response(prec, format=format)
 
-    def editor_list(self, internal=False, format=None):
-        response = self._get('projects/actions', params={'q': 'create_action'})[0]
-        editors = response['editors']
-        for rec in editors:
-            rec['packages'] = ' '.join(rec['packages'])
-        return self._format_response(editors, format=format, columns=_ED_COLUMNS, record_type='editor')
+    def project_delete(self, ident, format=None):
+        id = self._ident_record('project', ident)['id']
+        self._delete(f'projects/{id}')
 
-    def editor_info(self, name, internal=False, format=None, quiet=False):
-        id, rec = self._id_or_name('editor', name)
-        return self._format_response(rec, format=format, columns=_ED_COLUMNS, record_type='editor')
+    def project_collaborator_list(self, ident, filter=None, format=None):
+        id = self._ident_record('project', ident)['id']
+        response = self._get_records(f'projects/{id}/collaborators', filter)
+        return self._format_response(response, format=format)
 
-    def sample_list(self, internal=False, format=None):
-        result = []
-        for sample in self._get('template_projects'):
-            sample['is_template'] = True
-            result.append(sample)
-        for sample in self._get('sample_projects'):
-            sample['is_template'] = sample['is_default'] = False
-            result.append(sample)
-        return self._format_response(result, format=format, columns=_T_COLUMNS, record_type='template')
-
-    def sample_info(self, ident, internal=False, format=None, quiet=False):
-        id, record = self._id_or_name('sample', ident, quiet=quiet)
-        return self._format_response(record, format=format, columns=_T_COLUMNS, record_type='template')
-
-    def sample_clone(self, ident, name=None, tag=None,
-                     make_unique=None, wait=True, format=None):
-        id, record = self._id_or_name('sample', ident)
-        if name is None:
-            name = record['name']
-            if make_unique is None:
-                make_unique = True
-        return self.project_create(record['download_url'], name=name, tag=tag,
-                                   make_unique=make_unique, wait=wait, format=format)
-
-    def project_collaborator_list(self, ident, format=None):
-        id, _ = self._id('projects', ident)
-        response = self._get(f'projects/{id}/collaborators')
-        return self._format_response(response, format=format, columns=_C_COLUMNS, record_type='collaborator')
-
-    def project_collaborator_info(self, ident, userid, internal=False, format=None, quiet=False):
-        collabs = self.project_collaborator_list(ident)
-        for c in collabs:
-            if userid == c['id']:
-                return self._format_response(c, format=format, columns=_C_COLUMNS, record_type='collaborator')
-        if not quiet:
-            raise AEException(f'Collaborator not found: {userid}')
+    def project_collaborator_info(self, ident, userid, quiet=False, format=None):
+        filter = f'id={userid}'
+        response = self.project_collaborator_list(ident, filter=filter)
+        response = self._should_be_one(response, filter, quiet)
+        return self._format_response(response, format=format)
 
     def project_collaborator_list_set(self, ident, collabs, format=None):
-        id, _ = self._id('projects', ident)
+        id = self._ident_record('project', ident)['id']
         result = self._put(f'projects/{id}/collaborators', json=collabs)
-        return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS, record_type='collaborator')
+        if result['action']['error'] or 'collaborators' not in result:
+            raise AEException(f'Unexpected error adding collaborator: {result}')
+        result = self._fix_records('collaborator', result['collaborators'])
+        return self._format_response(result, format=format)
 
-    def project_collaborator_add(self, ident, userid, group=False, read_only=False):
-        id, _ = self._id('projects', ident)
-        collabs = self.project_collaborator_list(id)
-        ncollabs = len(collabs)
+    def project_collaborator_add(self, ident, userid, group=False, read_only=False, format=None):
+        prec = self._ident_record('project', ident)
+        collabs = self.project_collaborator_list(prec)
+        cmap = {c['id']: (c['type'], c['permission']) for c in collabs}
         if not isinstance(userid, tuple):
             userid = userid,
-        collabs = [c for c in collabs if c['id'] not in userid]
-        if len(collabs) != ncollabs:
-            self.project_collaborator_list_set(id, collabs)
-        type = 'group' if group else 'user'
-        perm = 'r' if read_only else 'rw'
-        collabs.extend({'id': u, 'type': type, 'permission': perm} for u in userid)
-        return self.project_collaborator_list_set(id, collabs, format=format)
+        tp = ('group' if group else 'user', 'r' if read_only else 'rw')
+        nmap = {k: tp for k in userid if k not in cmap}
+        nmap.update((k, v) for k, v in cmap.items() if k not in userid or v == tp)
+        if nmap != cmap:
+            collabs = [{'id': k, 'type': t, 'permission': p}
+                       for k, (t, p) in nmap.items()]
+            collabs = self.project_collaborator_list_set(prec, collabs)
+        if any(k not in nmap for k in userid):
+            nmap.update((k, tp) for k in userid)
+            collabs = [{'id': k, 'type': t, 'permission': p}
+                       for k, (t, p) in nmap.items()]
+            collabs = self.project_collaborator_list_set(prec, collabs)
+        return self._format_response(collabs, format=format)
 
     def project_collaborator_remove(self, ident, userid, format=None):
-        id, _ = self._id('projects', ident)
-        collabs = self.project_collaborator_list(id)
+        prec = self._ident_record('project', ident)
+        collabs = self.project_collaborator_list(prec)
         if not isinstance(userid, tuple):
             userid = userid,
         missing = set(userid) - set(c['id'] for c in collabs)
@@ -585,61 +608,160 @@ class AEUserSession(AESessionBase):
             missing = ', '.join(missing)
             raise AEException(f'Collaborator(s) not found: {missing}')
         collabs = [c for c in collabs if c['id'] not in userid]
-        return self.project_collaborator_list_set(id, collabs, format=format)
+        return self.project_collaborator_list_set(prec, collabs, format=format)
 
-    def project_patch(self, ident, **kwargs):
-        format = kwargs.pop('format', None)
-        id, _ = self._id('projects', ident)
-        data = {k: v for k, v in kwargs.items() if v is not None}
-        if data:
-            self._patch(f'projects/{id}', json=data)
-        return self.project_info(id, format=format)
+    def _pre_resource_profile(self, response):
+        for profile in response:
+            profile['description'], params = profile['description'].rsplit(' (', 1)
+            for param in params.rstrip(')').split(', '):
+                k, v = param.split(': ', 1)
+                profile[k.lower()] = v
+            if 'gpu' not in profile:
+                profile['gpu'] = 0
+        return response
+
+    def resource_profile_list(self, filter=None, internal=False, format=None):
+        response = self._get('projects/actions', params={'q': 'create_action'})
+        response = response[0]['resource_profiles']
+        response = self._fix_records('resource_profile', response, filter=filter)
+        return self._format_response(response, format=format)
+
+    def resource_profile_info(self, name, format=None, quiet=False):
+        response = self._ident_record('resource_profile', f'name={name}', quiet)
+        return self._format_response(response, format=format)
+
+    def _pre_editor(self, response):
+        for rec in response:
+            rec['packages'] = ', '.join(rec['packages'])
+        return response
+
+    def editor_list(self, filter=None, internal=False, format=None):
+        response = self._get('projects/actions', params={'q': 'create_action'})
+        response = response[0]['editors']
+        response = self._fix_records('editor', response, filter=filter)
+        return self._format_response(response, format=format)
+
+    def editor_info(self, name, format=None, quiet=False):
+        response = self._ident_record('editor', f'name={name}|id={name}', quiet)
+        return self._format_response(response, format=format)
+
+    def _pre_sample(self, records):
+        for record in records:
+            record['is_template'] = 'is_default' in record
+            record.setdefault('is_default', False)
+        return records
+
+    def sample_list(self, filter=None, internal=False, format=None):
+        records = self._get('template_projects') + self._get('sample_projects')
+        response = self._fix_records('sample', records, filter)
+        return self._format_response(response, format=format)
+
+    def sample_info(self, name, format=None, quiet=False):
+        response = self._ident_record('sample', f'name={name}|id={name}', quiet)
+        return self._format_response(response, format=format)
+
+    def sample_clone(self, ident, name=None, tag=None,
+                     make_unique=None, wait=True, format=None):
+        record = self.sample_info(ident)
+        if name is None:
+            name = record['name']
+            if make_unique is None:
+                make_unique = True
+        return self.project_create(record['download_url'], name=name, tag=tag,
+                                   make_unique=make_unique, wait=wait, format=format)
 
     def project_sessions(self, ident, format=None):
-        id, _ = self._id('projects', ident)
-        record = self._get(f'projects/{id}/sessions')
-        return self._format_response(record, format=format, columns=_D_COLUMNS, record_type='deployment')
+        id = self._ident_record('project', ident)["id"]
+        response = self._get_records(f'projects/{id}/sessions')
+        return self._format_response(response, format=format)    
 
     def project_deployments(self, ident, format=None):
-        id, _ = self._id('projects', ident)
-        response = self._get(f'projects/{id}/deployments')
-        self._fix_endpoints(response)
-        return self._format_response(response, format=format, columns=_D_COLUMNS, record_type='deployment')
+        id = self._ident_record('project', ident)["id"]
+        response = self._get_records(f'projects/{id}/deployments')
+        return self._format_response(response, format=format)
 
     def project_jobs(self, ident, format=None):
-        id, _ = self._id('projects', ident)
-        response = self._get(f'projects/{id}/jobs')
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
+        id = self._ident_record('project', ident)["id"]
+        response = self._get_records(f'projects/{id}/jobs')
+        return self._format_response(response, format=format)
 
     def project_runs(self, ident, format=None):
-        id, _ = self._id('projects', ident)
-        response = self._get(f'projects/{id}/runs')
-        return self._format_response(response, format=format, columns=_R_COLUMNS, record_type='run')
+        id = self._ident_record('project', ident)["id"]
+        response = self._get_records(f'projects/{id}/runs')
+        return self._format_response(response, format=format)
 
     def project_activity(self, ident, limit=0, latest=False, format=None):
-        id, _ = self._id('projects', ident)
+        id = self._ident_record('project', ident)["id"]
         limit = 1 if latest else (999999 if limit <= 0 else limit)
-        params = {'sort': '-updated', 'page[size]': limit}
-        response = self._get(f'projects/{id}/activity', params=params)['data']
+        api_kwargs = {'params': {'sort': '-updated', 'page[size]': limit}}
+        response = self._get_records(f'projects/{id}/activity', api_kwargs=api_kwargs)
         if latest:
             response = response[0]
-        return self._format_response(response, format=format, columns=_A_COLUMNS, record_type='activity')
+        return self._format_response(response, format=format)
 
-    def revision_list(self, ident, format=None):
-        id, _ = self._id('projects', ident)
-        response = self._get(f'projects/{id}/revisions')
-        for rec in response:
-            rec['project_id'] = 'a0-' + rec['url'].rsplit('/', 3)[-3]
-        return self._format_response(response, format=format, columns=_R_COLUMNS, record_type='revision')
+    def _pre_revision(self, records):
+        first = True
+        for rec in records:
+            rec['project_id'] = 'a0-' + rec['url'].rsplit('/', 3)[1]
+            rec['latest'], first = first, False
+            commands = rec['commands']
+            for c in commands:
+                c['_record_type'] = 'command'
+            rec['commands'] = ', '.join(c['id'] for c in commands)
+            rec['_commands'] = commands
+        return records
+
+    def _post_revision(self, records, project=None):
+        for rec in records:
+            rec['_project'] = project
+        return records
+
+    def _revisions(self, ident, filter=None, latest=False, single=False, quiet=False):
+        if isinstance(ident, dict):
+            revision = None
+        else:
+            if isinstance(ident, str):
+                ident = Identifier.from_string(ident)
+            revision = ident.revision
+        revision = revision or ('latest' if latest else None)
+        prec = self._ident_record('project', ident, quiet=quiet)
+        if prec is None:
+            return None
+        id = prec["id"]
+        if not filter:
+            filter = ()
+        elif isinstance(filter, str):
+            filter = filter,
+        if revision == 'latest':
+            filter = (f'latest=True',) + filter
+        elif revision and revision != '*':
+            filter = (f'name={revision}',) + filter
+        response = self._get_records(f'projects/{id}/revisions', filter=filter, project=prec)
+        if latest == 'keep' and response:
+            response[0]['name'] == 'latest'
+        if single:
+            response = self._should_be_one(response, filter, quiet)
+        return response
+
+    def _revision(self, ident, keep_latest=False, quiet=False):
+        latest = 'keep' if keep_latest else True
+        return self._revisions(ident, latest=latest, single=True, quiet=quiet)
+
+    def revision_list(self, ident, filter=None, internal=False, format=None):
+        response = self._revisions(ident, filter, quiet=False)
+        return self._format_response(response, format=format)
 
     def revision_info(self, ident, internal=False, format=None, quiet=False):
-        id, rev, prec, rrec = self._revision(ident, quiet=quiet)
-        if rrec:
-            rrec['project_id'] = prec['id']
-        return self._format_response(rrec, format=format, columns=_R_COLUMNS, record_type='revision')
+        rrec = self._revision(ident, quiet=quiet)
+        return self._format_response(rrec, format=format)
+
+    def revision_commands(self, ident, internal=False, format=None, quiet=False):
+        rrec = self._revision(ident, quiet=quiet)
+        return self._format_response(rrec['_commands'], format=format)
 
     def project_download(self, ident, filename=None):
-        id, rev, _, _ = self._revision(ident)
+        rrec = self._revision(ident)
+        id, rev = rrec['_project']['id'], rrec['id']
         response = self._get(f'projects/{id}/revisions/{rev}/archive', format='blob')
         if filename is None:
             return response
@@ -648,10 +770,10 @@ class AEUserSession(AESessionBase):
 
     def project_image(self, ident, command=None, condarc_path=None, dockerfile_path=None, debug=False, format=None):
         '''Build docker image'''
-        _, rev, _, rrec = self._revision(ident)
-        info = self.project_info(ident)
-        name = info['name'].replace(' ','').lower()
-        owner = info['owner'].replace('@','_at_')
+        rrec = self._revision(ident)
+        prec, rev = rrec['_project'], rrec['id']
+        name = prec['name'].replace(' ','').lower()
+        owner = prec['owner'].replace('@','_at_')
         tag = f'{owner}/{name}:{rev}'
 
         dockerfile = get_dockerfile(dockerfile_path)
@@ -688,21 +810,19 @@ class AEUserSession(AESessionBase):
             print('Starting image build. This may take several minutes.')
             build_image(tempdir, tag=tag, debug=debug)
 
-    def project_delete(self, ident, format=None):
-        id, _ = self._id('projects', ident)
-        return self._delete(f'projects/{id}', format=format or 'response')
-
-    def _wait(self, id, status):
+    def _wait(self, response):
         index = 0
+        id = response.get('project_id', response['id'])
+        status = response['action']
         while not status['done'] and not status['error']:
-            time.sleep(5)
+            time.sleep(1)
             params = {'sort': '-updated', 'page[size]': index + 1}
             activity = self._get(f'projects/{id}/activity', params=params)
             try:
                 status = next(s for s in activity['data'] if s['id'] == status['id'])
             except StopIteration:
                 index = index + 1
-        return status
+        response['action'] = status
 
     def project_create(self, url, name=None, tag=None,
                        make_unique=None, wait=True, format=None):
@@ -714,12 +834,11 @@ class AEUserSession(AESessionBase):
         params = {'name': name, 'source': url, 'make_unique': bool(make_unique)}
         if tag:
             params['tag'] = tag
-        response = self._post('projects', json=params)
+        response = self._post_record('projects', api_kwargs={'json': params})
         if response.get('error'):
             raise RuntimeError('Error creating project: {}'.format(response['error']['message']))
-        if not wait:
-            return self._format_response(response, format, columns=_P_COLUMNS)
-        response['action'] = self._wait(response['id'], response['action'])
+        if wait:
+            self._wait(response)
         if response['action']['error']:
             raise RuntimeError('Error processing creation: {}'.format(response['action']['message']))
         return self.project_info(response['id'], format=format)
@@ -746,195 +865,221 @@ class AEUserSession(AESessionBase):
             data = {'name': name}
             if tag:
                 data['tag'] = tag
-            response = self._post('projects/upload', files={'project_file': f}, data=data)
+            response = self._post_record('projects/upload', record_type='project',
+                                         api_kwargs={'files': {'project_file': f}, 'data': data})
         finally:
             if f is not None:
                 f.close()
         if response.get('error'):
             raise RuntimeError('Error uploading project: {}'.format(response['error']['message']))
-        if not wait:
-            return self._format_response(response, format, columns=_P_COLUMNS)
-        response['action'] = self._wait(response['id'], response['action'])
+        if wait:
+            self._wait(response)
         if response['action']['error']:
             raise RuntimeError('Error processing upload: {}'.format(response['action']['message']))
         return self.project_info(response['id'], format=format)
 
-    def _join_projects(self, response, nameprefix=None):
-        if isinstance(response, dict):
-            pid = 'a0-' + response['project_url'].rsplit('/', 1)[-1]
-            project = self._get(f'projects/{pid}')
-            if nameprefix or 'name' not in response:
-                if 'name' in response:
-                    response[f'{nameprefix}_name'] = response['name']
-                response['name'] = project['name']
-            else:
-                response['project_name'] = project['name']
-            response['project_id'] = pid
-        elif response:
-            pnames = {x['id']: x['name'] for x in self._get('projects')}
-            for rec in response:
-                pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
-                pname = pnames.get(pid, '')
-                if nameprefix or 'name' not in rec:
-                    if 'name' in rec:
-                        rec[f'{nameprefix}_name'] = rec['name']
-                    rec['name'] = pname
-                else:
-                    rec['project_name'] = pname
-                rec['project_id'] = pid if pname else ''
-
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
-            collabs = self._get(f'{what}/{response["id"]}/collaborators')
+            what, id = response['_record_type'], response['id']
+            collabs = self._get_records(f'{what}s/{id}/collaborators')
             response['collaborators'] = ', '.join(c['id'] for c in collabs)
+            response['_collaborators'] = collabs
         elif response:
             for rec in response:
                 self._join_collaborators(what, rec)
+        elif hasattr(response, '_columns'):
+            response._columns.extend(('collaborators', '_collaborators'))
 
-    def _fix_endpoints(self, response):
-        if isinstance(response, dict):
-            if response.get('url'):
-                response['endpoint'] = response['url'].split('/', 3)[2].split('.', 1)[0]
-        else:
-            for record in response:
-                self._fix_endpoints(record)
+    def _join_k8s(self, record, changes=False):
+        is_single = isinstance(record, dict)
+        rlist = [record] if is_single else record
+        if rlist:
+            record2 = self._k8s('pod_info', [r['id'] for r in rlist])
+            for rec, rec2 in zip(rlist, record2):
+                rec['phase'] = rec2['phase']
+                rec['since'] = rec2['since']
+                rec['rst'] = rec2['restarts']
+                rec['usage/mem'] = rec2['usage']['mem']
+                rec['usage/cpu'] = rec2['usage']['cpu']
+                rec['usage/gpu'] = rec2['usage']['gpu']
+                if changes:
+                    if 'changes' in rec2:
+                        chg = rec2['changes']
+                        chg = ','.join(chg['modified'] + chg['deleted'] + chg['added'])
+                        rec['changes'] = chg
+                        rec['modified'] = bool(chg)
+                    else:
+                        rec['modified'] = 'n/a'
+                        rec['changes'] = ''
+                rec['node'] = rec2['node']
+                rec['_k8s'] = rec2
+        elif hasattr(rlist, '_columns'):
+            rlist._columns.extend(('phase', 'since', 'rst', 'usage/mem', 'usage/cpu', 'usage/gpu'))
+            if changes:
+                rlist._columns.extend(('changes', 'modified'))
+            rlist._columns.extend(('node', '_k8s'))
 
-    def _join_changes(self, record):
-        for rec in ([record] if isinstance(record, dict) else record):
-            if rec['owner'] == self.username:
-                rec['modified'] = any(self.session_changes(rec['id'], format='json'))
-            else:
-                rec['modified'] = ''
+    def _pre_session(self, records):
+        # The "name" value in an internal AE5 session record is nothing
+        # more than the "id" value with the "a1-" stub removed. Not very
+        # helpful, even if understandable. So we call _join_projects even
+        # when internal=True to replace this internal name with the project
+        # name, providing a more consistent user experience
+        precs = {x['id']: x for x in self._get_records('projects')}
+        for rec in records:
+            pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
+            prec = precs.get(pid, {})
+            rec['session_name'] = rec['name']
+            rec['name'] = prec['name']
+            rec['project_id'] = pid
+            rec['_project'] = prec
+        return records
 
-    def session_list(self, internal=False, changes=False, format=None):
-        response = self._get('sessions')
-        # We need _join_projects even in internal mode to replace
-        # the internal session name with the project name
-        self._join_projects(response, 'session')
-        headers = _S_COLUMNS
-        if not internal and changes:
-            self._join_changes(response)
-            headers = headers[:2] + ['modified'] + headers[2:]
-        return self._format_response(response, format, columns=headers, record_type='session')
+    def _post_session(self, records, k8s=False):
+        if k8s:
+            self._join_k8s(records, True)
+        return records
 
-    def session_info(self, ident, internal=False, changes=False, format=None, quiet=False):
-        id, record = self._id('sessions', ident, quiet=quiet)
-        headers = _S_COLUMNS
-        if not internal and changes:
-            self._join_changes(record)
-            headers = headers[:2] + ['modified'] + headers[2:]
-        return self._format_response(record, format, columns=headers, record_type='session')
+    def session_list(self, filter=None, internal=False, k8s=False, format=None):
+        records = self._get_records('sessions', filter, k8s=not internal and k8s)
+        return self._format_response(records, format, record_type='session')
 
-    def session_changes(self, ident, master=False, format=None):
-        id, _ = self._id('sessions', ident)
-        which = 'master' if master else 'local'
-        result = self._get(f'sessions/{id}/changes/{which}')
-        return self._format_response(result['files'], format=format, columns=_CH_COLUMNS, record_type='changes')
-
-    def session_branches(self, ident, format=None):
-        id, _ = self._id('sessions', ident)
-        # Use master because it's more likely to be a smaller result (no changed files)
-        result = self._get(f'sessions/{id}/changes/master')
-        result = [{'branch': k, 'sha1': v} for k, v in result['branches'].items()]
-        return self._format_response(result, format=format, columns=_BR_COLUMNS, record_type='branches')
+    def session_info(self, ident, internal=False, k8s=False, format=None, quiet=False):
+        record = self._ident_record('session', ident, quiet=quiet, k8s=not internal and k8s)
+        return self._format_response(record, format)
 
     def session_start(self, ident, editor=None, resource_profile=None, wait=True, format=None):
-        id, record = self._id('projects', ident)
+        prec = self._ident_record('project', ident)
+        id = prec['id']
         patches = {}
-        for key, value in (('editor', editor), ('resource_profile', resource_profile)):
-            if value and record.get(key) != value:
-                patches[key] = value
+        if editor and prec['editor'] != editor:
+            patches['editor'] = editor
+        if resource_profile and prec['resource_profile'] != resource_profile:
+            patches['resource_profile'] = resource_profile
         if patches:
             self._patch(f'projects/{id}', json=patches)
-        response = self._post(f'projects/{id}/sessions')
+        response = self._post_record(f'projects/{id}/sessions')
         if response.get('error'):
             raise RuntimeError('Error starting project: {}'.format(response['error']['message']))
         if wait:
-            response['action'] = self._wait(id, response['action'])
+            self._wait(response)
         if response['action'].get('error'):
             raise RuntimeError('Error completing session start: {}'.format(response['action']['message']))
-        return self._format_response(response, format=format, columns=_S_COLUMNS, record_type='session')
+        return self._format_response(response, format=format)
 
     def session_stop(self, ident, format=format):
-        id, _ = self._id('sessions', ident)
-        return self._delete(f'sessions/{id}', format=format)
+        id = self._ident_record('session', ident)['id']
+        self._delete(f'sessions/{id}')
 
     def session_restart(self, ident, wait=True, format=None):
-        id, record = self._id('sessions', ident)
+        srec = self._ident_record('session', ident)
+        id, pid = srec['id'], srec['project_id']
         self._delete(f'sessions/{id}')
         # Unlike deployments I am not copying over the editor and resource profile
         # settings from the current session. That's because I want to support the use
         # case where the session settings are patched prior to restart
-        return self.session_start(record['project_id'], wait=wait, format=format)
+        return self.session_start(pid, wait=wait, format=format)
 
-    def deployment_list(self, collaborators=True, endpoints=True, internal=False, format=None):
-        response = self._get('deployments')
-        self._join_projects(response)
-        if not internal and collaborators:
-            self._join_collaborators('deployments', response)
-        if endpoints:
-            self._fix_endpoints(response)
-        return self._format_response(response, format, columns=_D_COLUMNS, record_type='deployment')
+    def session_changes(self, ident, master=False, format=None):
+        id = self._ident_record('session', ident)['id']
+        which = 'master' if master else 'local'
+        result = self._get(f'sessions/{id}/changes/{which}')
+        result = self._fix_records('change', result['files'])
+        return self._format_response(result, format=format)
 
-    def deployment_info(self, ident, collaborators=True, internal=False, format=None, quiet=False):
-        id, record = self._id('deployments', ident, quiet=quiet)
-        if record:
-            self._join_projects(record)
-            if collaborators and not internal:
-                self._join_collaborators('deployments', record)
+    def session_branches(self, ident, format=None):
+        id = self._ident_record('session', ident)['id']
+        # Use master because it's more likely to be a smaller result (no changed files)
+        result = self._get(f'sessions/{id}/changes/master')
+        result = [{'branch': k, 'sha1': v} for k, v in result['branches'].items()]
+        result = self._fix_records('branch', result)
+        return self._format_response(result, format=format)
+
+    def _pre_deployment(self, records):
+        # Add the project ID to the deployment record
+        for record in ([records] if isinstance(records, dict) else records):
+            pid = 'a0-' + record['project_url'].rsplit('/', 1)[-1]
+            record['project_id'] = pid
             if record.get('url'):
                 record['endpoint'] = record['url'].split('/', 3)[2].split('.', 1)[0]
-        return self._format_response(record, format, columns=_D_COLUMNS, record_type='deployment')
+        return records
 
-    def endpoint_list(self, format=None, internal=False):
-        response = self._get('/platform/deploy/api/v1/apps/static-endpoints')
-        response = response['data']
-        deps = self.deployment_list(internal=True)
-        dmap = {drec['endpoint']: drec for drec in deps if drec['endpoint']}
-        pnames = {prec['id']: prec['name'] for prec in self.project_list(internal=True)}
-        for rec in response:
+    def _post_deployment(self, records, collaborators=False, k8s=False):
+        if collaborators:
+             self._join_collaborators('deployments', records)
+        if k8s:
+            self._join_k8s(records, False)
+        return records
+
+    def deployment_list(self, filter=None, internal=False, collaborators=False, k8s=False, format=None):
+        response = self._get_records('deployments', filter=filter,
+                                     collaborators=not internal and collaborators,
+                                     k8s=not internal and k8s)
+        return self._format_response(response, format=format)
+
+    def deployment_info(self, ident, internal=False, collaborators=False, k8s=False, format=None, quiet=False):
+        record = self._ident_record('deployment', ident, quiet=quiet)
+        if record and not internal and collaborators:
+            self._join_collaborators('deployments', record)
+        if record and not internal and k8s:
+            self._join_k8s(record, False)
+        return self._format_response(record, format=format)
+
+    def _pre_endpoint(self, records):
+        dlist = self.deployment_list()
+        plist = self.project_list()
+        dmap = {drec['endpoint']: drec for drec in dlist if drec['endpoint']}
+        pmap = {prec['id']: prec for prec in plist}
+        newrecs = []
+        for rec in records:
             drec = dmap.get(rec['id'])
             if drec:
-                rec['project_url'] = drec['project_url']
-                rec['project_name'], rec['project_id'] = drec['project_name'], drec['project_id']
                 rec['name'], rec['deployment_id'] = drec['name'], drec['id']
+                rec['project_url'] = drec['project_url']
                 rec['owner'] = drec['owner']
+                rec['_deployment'] = drec
             else:
                 rec['name'], rec['deployment_id'] = '', ''
-                rec['project_id'] = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
-                rec['project_name'] = pnames.get(rec['project_id'], '')
-        return self._format_response(response, format=format, columns=_E_COLUMNS, record_type='endpoint')
+            rec['project_id'] = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
+            prec = pmap.get(rec['project_id'])
+            if prec:
+                rec['project_name'] = prec['name']
+                rec.setdefault('owner', prec['owner'])
+                rec['_project'] = prec
+                rec['_record_type'] = 'endpoint'
+                newrecs.append(rec)
+        return newrecs
 
-    def endpoint_info(self, ident, internal=False, format=None, quiet=False):
-        id, rec = self._id_or_name('endpoint', ident, quiet=quiet)
-        return self._format_response(rec, format=format, columns=_E_COLUMNS, record_type='endpoint')
+    def endpoint_list(self, filter=None, format=None):
+        response = self._get('/platform/deploy/api/v1/apps/static-endpoints')['data']
+        response = self._fix_records('endpoint', response, filter=filter)
+        return self._format_response(response, format=format)
 
-    def deployment_collaborators(self, ident, format=None):
-        id, _ = self._id('deployments', ident)
-        response = self._get(f'deployments/{id}/collaborators')
-        return self._format_response(response, format=format, columns=_C_COLUMNS, record_type='collaborators')
+    def endpoint_info(self, ident, format=None, quiet=False):
+        response = self._ident_record('endpoint', f'id={ident}')
+        return self._format_response(response, format=format)
 
-    def deployment_collaborator_list(self, ident, format=None):
-        id, _ = self._id('deployments', ident)
-        response = self._get(f'deployments/{id}/collaborators')
-        return self._format_response(response, format=format, columns=_C_COLUMNS, record_type='collaborators')
+    def deployment_collaborator_list(self, ident, filter=None, format=None):
+        id = self._ident_record('deployment', ident)['id']
+        response = self._get_records(f'deployments/{id}/collaborators', filter)
+        return self._format_response(response, format=format)
 
-    def deployment_collaborator_info(self, ident, userid, internal=False, format=None, quiet=False):
-        collabs = self.deployment_collaborator_list(ident)
-        for c in collabs:
-            if userid == c['id']:
-                return self._format_response(c, format=format, columns=_C_COLUMNS, record_type='collaborators')
-        if not quiet:
-            raise AEException(f'Collaborator not found: {userid}')
+    def deployment_collaborator_info(self, ident, userid, format=None, quiet=False):
+        response = self.deployment_collaborator_list(ident, quiet=quiet)
+        response = self._should_be_one(response, f'id={userid}', quiet)
+        return self._format_response(response, format=format)
 
     def deployment_collaborator_list_set(self, ident, collabs, format=None):
-        id, _ = self._id('deployments', ident)
+        id = self._ident_record('deployment', ident)['id']
         result = self._put(f'deployments/{id}/collaborators', json=collabs)
-        return self._format_response(result['collaborators'], format=format, columns=_C_COLUMNS, record_type='collaborators')
+        if result['action']['error'] or 'collaborators' not in result:
+            raise AEException(f'Unexpected error adding collaborator: {result}')
+        result = self._fix_records('collaborator', result['collaborators'])
+        return self._format_response(result, format=format)
 
     def deployment_collaborator_add(self, ident, userid, group=False, format=None):
-        id, _ = self._id('deployments', ident)
-        collabs = self.deployment_collaborator_list(id)
+        drec = self._ident_record('deployment', ident)
+        collabs = self.deployment_collaborator_list(drec)
         ncollabs = len(collabs)
         if not isinstance(userid, tuple):
             userid = userid,
@@ -942,11 +1087,11 @@ class AEUserSession(AESessionBase):
         if len(collabs) != ncollabs:
             self.deployment_collaborator_list_set(id, collabs)
         collabs.extend({'id': u, 'type': 'group' if group else 'user', 'permission': 'r'} for u in userid)
-        return self.deployment_collaborator_list_set(id, collabs, format=format)
+        return self.deployment_collaborator_list_set(drec, collabs, format=format)
 
     def deployment_collaborator_remove(self, ident, userid, format=None):
-        id, _ = self._id('deployments', ident)
-        collabs = self.deployment_collaborator_list(id)
+        drec = self._ident_record('deployment', ident)
+        collabs = self.deployment_collaborator_list(drec)
         if not isinstance(userid, tuple):
             userid = userid,
         missing = set(userid) - set(c['id'] for c in collabs)
@@ -954,120 +1099,123 @@ class AEUserSession(AESessionBase):
             missing = ', '.join(missing)
             raise AEException(f'Collaborator(s) not found: {missing}')
         collabs = [c for c in collabs if c['id'] not in userid]
-        return self.deployment_collaborator_list_set(id, collabs, format=format)
+        return self.deployment_collaborator_list_set(drec, collabs, format=format)
 
     def deployment_start(self, ident, name=None, endpoint=None, command=None,
                          resource_profile=None, public=False,
                          collaborators=None, wait=True,
-                         stop_on_error=False, format=None):
-        id, rev, prec, rrec = self._revision(ident)
+                         stop_on_error=False, format=None,
+                         _skip_endpoint_test=False):
+        rrec = self._revision(ident, keep_latest=True)
+        id, prec = rrec['project_id'], rrec['_project']
+        if command is None:
+            command = rrec['commands'].split(',', 1)[0]
+        if resource_profile is None:
+            resource_profile = prec['resource_profile']
         data = {'source': rrec['url'],
-                'revision': rrec['id'],
-                'resource_profile': resource_profile or prec['resource_profile'],
-                'command': command or rrec['commands'][0]['id'],
+                'revision': rrec['name'],
+                'resource_profile': resource_profile,
+                'command': command,
                 'public': bool(public),
                 'target': 'deploy'}
         if name:
             data['name'] = name
         if endpoint:
-            try:
-                self._head(f'/_errors/404.html', subdomain=endpoint)
-                raise AEException('endpoint "{}" is already in use'.format(endpoint))
-            except AEUnexpectedResponseError:
-                pass
+            if not _skip_endpoint_test:
+                try:
+                    self._head(f'/_errors/404.html', subdomain=endpoint)
+                    raise AEException('endpoint "{}" is already in use'.format(endpoint))
+                except AEUnexpectedResponseError:
+                    pass
             data['static_endpoint'] = endpoint
-        response = self._post(f'projects/{id}/deployments', json=data)
+        response = self._post_record(f'projects/{id}/deployments', api_kwargs={'json': data})
+        id = response['id']
         if response.get('error'):
             raise AEException('Error starting deployment: {}'.format(response['error']['message']))
         if collaborators:
-            self.deployment_collaborator_list_set(response['id'], collaborators)
+            self.deployment_collaborator_list_set(id, collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
         if wait or stop_on_error:
             while response['state'] in ('initial', 'starting'):
-                time.sleep(5)
-                response = self._get(f'deployments/{response["id"]}')
+                time.sleep(2)
+                response = self._get_records(f'deployments/{id}', record_type='deployment')
             if response['state'] != 'started':
                 if stop_on_error:
-                    self.deployment_stop(response["id"])
+                    self.deployment_stop(id)
                 raise AEException(f'Error completing deployment start: {response["status_text"]}')
-        response['project_id'] = id
-        return self._format_response(response, format=format, columns=_D_COLUMNS, record_type='deployment')
+        return self._format_response(response, format=format)
 
     def deployment_restart(self, ident, wait=True, stop_on_error=False, format=None):
-        id, record = self._id('deployments', ident)
-        collab = self.deployment_collaborators(id)
-        if record.get('url'):
-            endpoint = record['url'].split('/', 3)[2].split('.', 1)[0]
-            if id.endswith(endpoint):
+        drec = self._ident_record('deployment', ident)
+        collab = self.deployment_collaborator_list(drec)
+        if drec.get('url'):
+            endpoint = drec['url'].split('/', 3)[2].split('.', 1)[0]
+            if drec['id'].endswith(endpoint):
                 endpoint = None
         else:
             endpoint = None
-        self._delete(f'deployments/{id}')
-        return self.deployment_start(record['project_id'],
-                                     endpoint=endpoint, command=record['command'],
-                                     resource_profile=record['resource_profile'], public=record['public'],
+        self.deployment_stop(drec)
+        return self.deployment_start(drec['project_id'],
+                                     endpoint=endpoint, command=drec['command'],
+                                     resource_profile=drec['resource_profile'],
+                                     public=drec['public'],
                                      collaborators=collab, wait=wait,
-                                     stop_on_error=stop_on_error, format=format)
+                                     stop_on_error=stop_on_error, format=format,
+                                     _skip_endpoint_test=True)
 
-    def deployment_patch(self, ident, **kwargs):
-        format = kwargs.pop('format', None)
-        id, _ = self._id('deployments', ident)
+    def deployment_patch(self, ident, format=None, **kwargs):
+        drec = self._ident_record('deployment', ident)
         data = {k: v for k, v in kwargs.items() if v is not None}
         if data:
+            id = drec['id']
             self._patch(f'deployments/{id}', json=data)
-        return self.deployment_info(id, format=format)
+            drec = self._ident_record('deployment', id)
+        return self._format_response(drec, format=format)
 
     def deployment_stop(self, ident, format=None):
-        id, _ = self._id('deployments', ident)
-        response = self._delete(f'deployments/{id}')
-        return self._format_response(response, format=format)
+        id = self._ident_record('deployment', ident)['id']
+        self._delete(f'deployments/{id}')
 
     def deployment_logs(self, ident, which=None, format=None):
-        id, _ = self._id('deployments', ident)
-        result = self._get(f'deployments/{id}/logs')
+        id = self._ident_record('deployment', ident)['id']
+        response = self._get(f'deployments/{id}/logs')
         if which is not None:
-            result = result[which]
-        return self._format_response(result, format=format)
-
-    def deployment_token(self, ident, which=None, format=None):
-        id, _ = self._id('deployments', ident)
-        result = self._post(f'deployments/{id}/token', format='json')
-        if isinstance(result, dict) and set(result) == {'token'}:
-            result = result['token']
-        return self._format_response(result, format=format)
-
-    def job_list(self, internal=False, format=None):
-        response = self._get('jobs')
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
-
-    def job_info(self, ident, internal=False, format=None, quiet=False):
-        id, record = self._id('jobs', ident, quiet=quiet)
-        return self._format_response(record, format=format, columns=_J_COLUMNS, record_type='job')
-
-    def job_runs(self, ident, format=None):
-        id, record = self._id('jobs', ident)
-        response = self._get(f'jobs/{id}/runs')
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
-
-    def job_run(self, ident, format=None):
-        id, _ = self._id('jobs', ident)
-        response = self._post(f'jobs/{id}/runs')
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
-
-    def job_delete(self, ident, format=None):
-        id, _ = self._id('jobs', ident)
-        response = self._delete(f'jobs/{id}')
+            response = response[which]
         return self._format_response(response, format=format)
 
+    def deployment_token(self, ident, which=None, format=None):
+        id = self._ident_record('deployment', ident)['id']
+        response = self._post(f'deployments/{id}/token', format='json')
+        if isinstance(response, dict) and set(response) == {'token'}:
+            response = response['token']
+        return self._format_response(response, format=format)
+
+    def job_list(self, filter=None, internal=False, format=None):
+        response = self._get_records('jobs', filter=filter)
+        return self._format_response(response, format=format)
+
+    def job_info(self, ident, internal=False, format=None, quiet=False):
+        response = self._ident_record('job', ident, quiet=quiet)
+        return self._format_response(response, format=format)
+
+    def job_runs(self, ident, format=None):
+        id = self._ident_record('job', ident)['id']
+        response = self._get_records(f'jobs/{id}/runs')
+        return self._format_response(response, format=format)
+
+    def job_delete(self, ident, format=None):
+        id = self._ident_record('job', ident)['id']
+        self._delete(f'jobs/{id}')
+
     def job_pause(self, ident, format=None):
-        id, _ = self._id('jobs', ident)
-        response = self._post(f'jobs/{id}/pause')
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
+        id = self._ident_record('job', ident)['id']
+        response = self._post_record(f'jobs/{id}/pause', record_type='job')
+        return self._format_response(response, format=format)
 
     def job_unpause(self, ident, format=format):
-        id, _ = self._id('jobs', ident)
-        response = self._post(f'jobs/{id}/unpause')
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
+        id = self._ident_record('job', ident)['id']
+        response = self._post_record(f'jobs/{id}/unpause', record_type='job')
+        return self._format_response(response, format=format)
 
     def job_create(self, ident, schedule=None, name=None, command=None,
                    resource_profile=None, variables=None, run=False,
@@ -1077,16 +1225,19 @@ class AEUserSession(AESessionBase):
             raise ValueError('cannot use cleanup=True with a scheduled job')
         if cleanup and (not run or not wait):
             raise ValueError('must specify run=wait=True with cleanup=True')
-        id, rev, prec, rrec = self._revision(ident, keep_latest=True)
+        rrec = self._revision(ident, keep_latest=True)
+        prec, id = rrec['_project'], rrec['project_id']
         if not command:
             command = rrec['commands'][0]['id']
+        if not resource_profile:
+            resource_profile = rrec['_project']['resource_profile']
         # AE5's default name generator unfortunately uses colons
         # in the creation of its job names which causes confusion for
         # ae5-tools, which uses them to mark a revision identifier.
         # Furthermore, creating a job with the same name as an deleted
         # job that still has run listings causes an error.
         if not name:
-            name = f'{command}-{prec["name"]}'
+            name = f'{command}-{rrec["project_name"]}'
             if make_unique is None:
                 make_unique = True
         if make_unique:
@@ -1099,68 +1250,136 @@ class AEUserSession(AESessionBase):
                     if name not in jnames:
                         break
         data = {'source': rrec['url'],
-                'resource_profile': resource_profile or prec['resource_profile'],
+                'resource_profile': resource_profile,
                 'command': command,
                 'target': 'deploy',
                 'schedule': schedule,
                 'autorun': run,
-                'revision': rev or 'latest',
+                'revision': rrec['name'],
                 'name': name}
         if variables:
             data['variables'] = variables
-        response = self._post(f'projects/{id}/jobs', json=data)
+        response = self._post_record(f'projects/{id}/jobs', api_kwargs={'json': data})
         if response.get('error'):
             raise AEException('Error starting job: {}'.format(response['error']['message']))
-        response['project_id'] = id
         if run:
-            run = self._get(f'jobs/{response["id"]}/runs')[-1]
+            jid = response['id']
+            run = self._get_records(f'jobs/{jid}/runs')[-1]
             if wait:
+                rid = run['id']
                 while run['state'] not in ('completed', 'error'):
                     time.sleep(5)
-                    run = self._get(f'runs/{run["id"]}')
+                    run = self._get(f'runs/{rid}')
                 if cleanup:
-                    self._delete(f'jobs/{response["id"]}')
+                    self._delete(f'jobs/{jid}')
             if show_run:
                 response = run
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
+        return self._format_response(response, format=format)
 
     def job_patch(self, ident, name=None, command=None, schedule=None,
                   resource_profile=None, variables=None, format=None):
-        id, jrec = self._id('jobs', ident)
+        jrec = self._ident_record('job', ident)
+        id = jrec['id']
         data = {}
-        if name:
+        if name and name != jrec['name']:
             data['name'] = name
-        if command:
+        if command and command != jrec['command']:
             data['command'] = command
-        if schedule:
+        if schedule and schedule != jrec['schedule']:
             data['schedule'] = schedule
-        if resource_profile:
+        if resource_profile and resource_profile != jrec['resource_profile']:
             data['resource_profile'] = resource_profile
-        if variables is not None:
+        if variables is not None and data['variables'] != jrec['variables']:
             data['variables'] = variables
-        response = self._patch(f'jobs/{id}', json=data)
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
+        if data:
+            self._patch_record(f'jobs/{id}', json=data)
+            jrec = self._ident_record('job', id)
+        return self._format_response(jrec, format=format)
 
-    def run_list(self, internal=False, format=None):
-        response = self._get('runs')
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
+    def run_list(self, filter=None, internal=False, format=None):
+        response = self._get_records('runs', filter=filter)
+        return self._format_response(response, format=format)
 
     def run_info(self, ident, internal=False, format=None, quiet=False):
-        id, record = self._id('runs', ident, quiet=quiet)
-        return self._format_response(record, format=format, columns=_J_COLUMNS, record_type='job')
+        response = self._ident_record('run', ident, quiet=quiet)
+        return self._format_response(response, format=format)
 
     def run_log(self, ident, format=None):
-        id, _ = self._id('runs', ident)
-        return self._get(f'runs/{id}/logs')['job']
+        id = self._ident_record('run', ident)['id']
+        response = self._get(f'runs/{id}/logs')['job']
+        return response
 
     def run_stop(self, ident, format=None):
-        id, _ = self._id('runs', ident)
+        id = self._ident_record('run', ident)['id']
         response = self._post(f'runs/{id}/stop')
-        return self._format_response(response, format=format, columns=_J_COLUMNS, record_type='job')
+        return self._format_response(response, format=format)
 
     def run_delete(self, ident, format=None):
-        id, _ = self._id('runs', ident)
+        id = self._ident_record('run', ident)['id']
         self._delete(f'runs/{id}')
+
+    def _pre_pod(self, records):
+        for ndx, rec in enumerate(records):
+            type = rec['_record_type']
+            value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id')}
+            value['type'] = type
+            records[ndx] = value
+        return records
+
+    def _post_pod(self, records, internal=False):
+        if not internal:
+            self._join_k8s(records, True)
+        return records
+
+    def pod_list(self, filter=None, internal=False, format=None):
+        post_kwargs = {'internal': internal}
+        records = (self.session_list(filter=filter) + 
+                   self.deployment_list(filter=filter) +
+                   self.run_list(filter=filter))
+        records = self._fix_records('pod', records)
+        return self._format_response(records, format=format)
+
+    def pod_info(self, pod, internal=False, format=None, quiet=False):
+        record = self._ident_record('pods', pod, quiet=quiet, internal=internal)
+        return self._format_response(record, format=format)
+
+    def node_list(self, filter=None, internal=False, format=None):
+        result = []
+        for rec in self._k8s('node_info'):
+            result.append({
+                'name': rec['name'],
+                'role': rec['role'],
+                'ready': rec['ready'],
+                'capacity/pod': rec['capacity']['pods'],
+                'capacity/mem': rec['capacity']['mem'],
+                'capacity/cpu': rec['capacity']['cpu'],
+                'capacity/gpu': rec['capacity']['gpu'],
+                'usage/pod': rec['total']['pods'],
+                'usage/mem': rec['total']['usage']['mem'],
+                'usage/cpu': rec['total']['usage']['cpu'],
+                'usage/gpu': rec['total']['usage']['gpu'],
+                'sessions/pod': rec['sessions']['pods'],
+                'sessions/mem': rec['sessions']['usage']['mem'],
+                'sessions/cpu': rec['sessions']['usage']['cpu'],
+                'sessions/gpu': rec['sessions']['usage']['gpu'],
+                'deployments/pod': rec['deployments']['pods'],
+                'deployments/mem': rec['deployments']['usage']['mem'],
+                'deployments/cpu': rec['deployments']['usage']['cpu'],
+                'deployments/gpu': rec['deployments']['usage']['gpu'],
+                'middleware/pod': rec['middleware']['pods'],
+                'middleware/mem': rec['middleware']['usage']['mem'],
+                'middleware/cpu': rec['middleware']['usage']['cpu'],
+                'system/pod': rec['system']['pods'],
+                'system/mem': rec['system']['usage']['mem'],
+                'system/cpu': rec['system']['usage']['cpu'],
+                '_k8s': rec,
+                '_record_type': 'node'
+            })
+        return self._format_response(result, format=format)
+
+    def node_info(self, node, internal=False, format=None, quiet=False):
+        record = self._ident_record('@node', node, quiet=quiet)
+        return self._format_response(record, format=format)
 
 
 class AEAdminSession(AESessionBase):
@@ -1243,7 +1462,7 @@ class AEAdminSession(AESessionBase):
             users = list(users.values())
             for urec in users:
                 urec.setdefault('lastLogin', 0)
-        return self._format_response(users, format=format, columns=_U_COLUMNS, record_type='user')
+        return self._format_response(users, format=format, record_type='user')
 
     def user_info(self, user_or_id, internal=False, format=None, quiet=False):
         if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
@@ -1264,7 +1483,7 @@ class AEAdminSession(AESessionBase):
             events = self.user_events(client='anaconda-platform', type='LOGIN', user=response['id'])
             response['lastLogin'] = next((e['time'] for e in events
                                          if 'response_mode' not in e['details']), 0)
-        return self._format_response(response, format, columns=_U_COLUMNS, record_type='user')
+        return self._format_response(response, format, record_type='user')
 
     def impersonate(self, user_or_id):
         record = self.user_info(user_or_id, internal=True)

@@ -8,25 +8,22 @@ import pprint
 import requests
 import tarfile
 import glob
+import uuid
 
 from datetime import datetime
 from collections import namedtuple
 from ae5_tools.api import AEUnexpectedResponseError
-from subprocess import CalledProcessError
 
-from .utils import _cmd
-
-
-Session = namedtuple('Session', 'hostname username')
+from .utils import _cmd, CMDException
 
 
-@pytest.fixture
-def project_list_cli(user_session):
+@pytest.fixture(scope='module')
+def project_list(user_session):
     return _cmd('project list --collaborators')
 
 
-def test_project_info(project_list_cli):
-    for rec0 in project_list_cli:
+def test_project_info(project_list):
+    for rec0 in project_list:
         id = rec0['id']
         pair = '{}/{}'.format(rec0['owner'], rec0['name'])
         rec1 = _cmd(f'project info {id}')
@@ -37,40 +34,77 @@ def test_project_info(project_list_cli):
         assert rec2 == rec3
 
 
-def test_project_collaborators(project_list_cli):
-    for rec0 in project_list_cli:
-        collabs = rec0['collaborators']
-        collabs = set(collabs.split(', ')) if collabs else set()
-        collab2 = _cmd(f'project collaborator list {rec0["id"]}')
-        collab3 = set(c['id'] for c in collab2)
-        assert collabs == collab3, collab2
+def test_project_info_errors(project_list):
+    with pytest.raises(CMDException) as excinfo:
+        _cmd('project info testproj1')
+    assert 'Multiple projects' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd('project info testproj4')
+    assert 'No projects' in str(excinfo.value)
 
 
-def test_project_activity(project_list_cli):
-    for rec0 in project_list_cli:
-        activity = _cmd(f'project activity --limit -1 {rec0["owner"]}/{rec0["name"]}')
-        assert activity[-1]['status'] == 'created'
-        assert activity[-1]['done'] == 'True'
-        assert activity[-1]['owner'] == rec0['owner']
+@pytest.fixture(scope='module')
+def resource_profiles(user_session):
+    return _cmd('resource-profile list')
+
+
+def test_resource_profiles(resource_profiles):
+    for rec in resource_profiles:
+        rec2 = _cmd(f'resource-profile info {rec["name"]}')
+        assert rec == rec2
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'resource-profile info *')
+    assert 'Multiple resource profiles found' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'resource-profile info abcdefg')
+    assert 'No resource profiles found' in str(excinfo.value)
+
+
+@pytest.fixture(scope='module')
+def editors(user_session):
+    return _cmd('editor list')
+
+
+def test_editors(editors):
+    for rec in editors:
+        assert rec == _cmd(f'editor info {rec["id"]}')
+    assert sum(rec['is_default'].lower() == 'true' for rec in editors) == 1
+    assert set(rec['id'] for rec in editors).issuperset({'zeppelin', 'jupyterlab', 'notebook'})
+
+
+def test_samples():
+    slist = _cmd(f'sample list')
+    assert sum(rec['is_default'].lower() == 'true' for rec in slist) == 1
+    assert sum(rec['is_template'].lower() == 'true' for rec in slist) > 1
+    for rec in slist:
+        rec2 = _cmd(f'sample info "{rec["id"]}"')
+        rec3 = _cmd(f'sample info "{rec["name"]}"')
+        assert rec == rec2 and rec == rec3
+
+
+def test_sample_clone():
+    cname = 'nlp_api'
+    pname = 'testclone'
+    rrec = _cmd(f'sample clone {cname} --name {pname}')
+    _cmd(f'project delete {rrec["id"]} --yes')
 
 
 @pytest.fixture(scope='module')
 def downloaded_project(user_session):
-    uname = user_session.username
     with tempfile.TemporaryDirectory() as tempd:
         fname = os.path.join(tempd, 'blob.tar.gz')
         fname2 = os.path.join(tempd, 'blob2.tar.gz')
-        _cmd(f'project download {uname}/testproj1 --filename {fname}', table=False)
+        _cmd(f'project download testproj3 --filename {fname}')
         with tarfile.open(fname, 'r') as tf:
             tf.extractall(path=tempd)
         dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
         assert len(dnames) == 1
         dname = os.path.dirname(dnames[0])
         yield fname, fname2, dname
-    for r in user_session.project_list():
-        if r['owner'] == uname and r['name'].startswith('test_upload'):
-            _cmd(f'project delete {r["id"]} --yes', table=False)
-    assert not any(r['owner'] == uname and r['name'].startswith('test_upload')
+    for r in _cmd('project list'):
+        if r['name'].startswith('test_upload'):
+            _cmd(f'project delete {r["id"]} --yes')
+    assert not any(r['name'].startswith('test_upload')
                    for r in _cmd('project list'))
 
 
@@ -78,60 +112,304 @@ def test_project_download(downloaded_project):
     pass
 
 
-def test_project_upload(user_session, downloaded_project):
+def test_project_upload(downloaded_project):
     fname, fname2, dname = downloaded_project
     _cmd(f'project upload {fname} --name test_upload1 --tag 1.2.3')
     rrec = _cmd(f'project revision list test_upload1')
     assert len(rrec) == 1
     assert rrec[0]['name'] == '1.2.3'
-    _cmd(f'project download test_upload1 --filename {fname2}', table=False)
+    _cmd(f'project download test_upload1 --filename {fname2}')
 
 
-def test_project_upload_as_directory(user_session, downloaded_project):
+def test_project_upload_as_directory(downloaded_project):
     fname, fname2, dname = downloaded_project
     _cmd(f'project upload {dname} --name test_upload2 --tag 1.2.3')
     rrec = _cmd(f'project revision list test_upload2')
     assert len(rrec) == 1
     assert rrec[0]['name'] == '1.2.3'
-    _cmd(f'project download test_upload2 --filename {fname2}', table=False)
+    _cmd(f'project download test_upload2 --filename {fname2}')
 
 
-def test_project_create_from_sample(user_session):
-    uname = user_session.username
-    cname = 'nlp_api'
-    pname = 'testclone'
-    rrec = _cmd(f'sample clone {cname} --name {pname}')
-    _cmd(f'project delete {rrec["id"]} --yes', table=False)
+@pytest.fixture(scope='module')
+def cli_project(project_list):
+    return next(rec for rec in project_list if rec['name'] == 'testproj3')
 
 
-def test_job_run1(user_session):
-    uname = user_session.username
-    _cmd(f'job create {uname}/testproj3 --name testjob1 --command run --run --wait')
+@pytest.fixture(scope='module')
+def cli_revisions(cli_project):
+    prec = cli_project
+    revs = _cmd(f'project revision list {prec["id"]}')
+    return prec, revs
+
+
+def test_project_revisions(cli_revisions):
+    prec, revs = cli_revisions
+    rev0 = _cmd(f'project revision info {prec["id"]}')
+    assert revs[0] == rev0
+    rev0 = _cmd(f'project revision info {prec["id"]}:latest')
+    assert revs[0] == rev0
+    for rev in revs:
+        revN = _cmd(f'project revision info {prec["id"]}:{rev["id"]}')
+        assert rev == revN
+
+
+def test_project_revision_errors(cli_revisions):
+    prec, revs = cli_revisions
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project revision info testproj1')
+    assert 'Multiple projects' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project revision info testproj4')
+    assert 'No projects' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project revision info {prec["id"]}:0.*')
+    assert 'Multiple revisions' in str(excinfo.value)
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project revision info {prec["id"]}:a.b.c')
+    assert 'No revisions' in str(excinfo.value)
+
+
+def test_project_patch(cli_project, editors, resource_profiles):
+    prec = cli_project
+    old, new = {}, {}
+    for what, wlist in (('resource-profile', (r['name'] for r in resource_profiles)),
+                        ('editor', (e['id'] for e in editors))):
+        old[what] = prec[what.replace('-', '_')]
+        new[what] = next(v for v in wlist if v != old)
+    prec2 = _cmd(f'project patch {prec["id"]} ' + ' '.join(f'--{k}={v}' for k, v in new.items()))
+    assert {k: prec2[k.replace('-', '_')] for k in new} == new
+    prec3 = _cmd(f'project patch {prec["id"]} ' + ' '.join(f'--{k}={v}' for k, v in old.items()))
+    assert {k: prec3[k.replace('-', '_')] for k in old} == old
+
+
+def test_project_collaborators(cli_project, project_list):
+    prec = cli_project
+    uname = next(rec['owner'] for rec in project_list if rec['owner'] != prec['owner'])
+    id = prec['id']
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project collaborator info {id} {uname}')
+    assert f'No collaborators found matching id={uname}' in str(excinfo.value)
+    clist = _cmd(f'project collaborator add {id} {uname}')
+    assert len(clist) == 1
+    clist = _cmd(f'project collaborator add {id} everyone --group --read-only')
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'rw' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    clist = _cmd(f'project collaborator add {id} {uname} --read-only')
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['permission'] == 'r' and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['permission'] == 'r' and c['type'] == 'group'
+               for c in clist)
+    clist = _cmd(f'project collaborator remove {id} {uname} everyone')
+    assert len(clist) == 0
+    with pytest.raises(CMDException) as excinfo:
+        clist = _cmd(f'project collaborator remove {id} {uname}')
+    assert f'Collaborator(s) not found: {uname}' in str(excinfo.value)
+
+
+def test_project_activity(cli_project):
+    prec = cli_project
+    activity = _cmd(f'project activity --limit -1 {prec["id"]}')
+    assert activity[-1]['status'] == 'created'
+    assert activity[-1]['done']
+    assert activity[-1]['owner'] == prec['owner']
+    activity2 = _cmd(f'project activity --latest {prec["id"]}')
+    assert activity[0] == activity2
+
+
+@pytest.fixture(scope='module')
+def cli_session(cli_project):
+    prec = cli_project
+    srec = _cmd(f'session start {prec["owner"]}/{prec["name"]}')
+    srec2 = _cmd(f'session restart {srec["id"]} --wait')
+    assert not any(r['id'] == srec['id'] for r in _cmd('session list'))
+    yield prec, srec2
+    _cmd(f'session stop {srec2["id"]} --yes')
+    assert not any(r['id'] == srec2['id'] for r in _cmd('session list'))
+
+
+def test_session(cli_session):
+    prec, srec = cli_session
+    assert srec['owner'] == prec['owner'], srec
+    assert srec['name'] == prec['name'], srec
+    # Ensure that the session can be retrieved by its project ID as well
+    srec2 = _cmd(f'session info {srec["owner"]}/*/{prec["id"]}')
+    assert srec2['id'] == srec['id']
+    endpoint = srec['id'].rsplit("-", 1)[-1]
+    sdata = _cmd(f'call / --endpoint={endpoint}', table=False)
+    assert 'Jupyter Notebook requires JavaScript.' in sdata, sdata
+
+
+def test_project_sessions(cli_session):
+    prec, srec = cli_session
+    slist = _cmd(f'project sessions {prec["id"]}')
+    assert len(slist) == 1 and slist[0]['id'] == srec['id']
+
+
+def test_session_branches(cli_session):
+    prec, srec = cli_session
+    branches = _cmd(f'session branches {prec["id"]}')
+    bdict = {r['branch']: r['sha1'] for r in branches}
+    assert set(bdict) == {'local', 'origin/local', 'master'}, branches
+    assert bdict['local'] == bdict['master'], branches
+
+
+def test_session_before_changes(cli_session):
+    prec, srec = cli_session
+    changes1 = _cmd(f'session changes {prec["id"]}')
+    assert changes1 == [], changes1
+    changes2 = _cmd(f'session changes --master {prec["id"]}')
+    assert changes2 == [], changes2
+
+
+@pytest.fixture(scope='module')
+def cli_deployment(cli_project):
+    prec = cli_project
+    dname = 'testdeploy'
+    ename = 'testendpoint'
+    drec = _cmd(f'project deploy {prec["owner"]}/{prec["name"]} --name {dname} --endpoint {ename} --command default --private')
+    drec2 = _cmd(f'deployment restart {drec["id"]} --wait')
+    assert not any(r['id'] == drec['id'] for r in _cmd('deployment list'))
+    yield prec, drec2
+    _cmd(f'deployment stop {drec2["id"]} --yes')
+    assert not any(r['id'] == drec2['id'] for r in _cmd('deployment list'))
+
+
+def test_deploy(cli_deployment):
+    prec, drec = cli_deployment
+    assert drec['owner'] == prec['owner'], drec
+    assert drec['project_name'] == prec['name'], drec
+    for attempt in range(3):
+        try:
+            ldata = _cmd(f'call / --endpoint {drec["endpoint"]}', table=False)
+            break
+        except AEUnexpectedResponseError:
+            time.sleep(attempt * 5)
+            pass
+    else:
+        raise RuntimeError("Could not get the endpoint to respond")
+    assert ldata.strip() == 'Hello Anaconda Enterprise!', ldata
+
+
+def test_project_deployments(cli_deployment):
+    prec, drec = cli_deployment
+    dlist = _cmd(f'project deployments {prec["id"]}')
+    assert len(dlist) == 1 and dlist[0]['id'] == drec['id']
+
+
+def test_deploy_patch(cli_deployment):
+    prec, drec = cli_deployment
+    flag = '--private' if drec['public'].lower() == 'true' else '--public'
+    drec2 = _cmd(f'deployment patch {flag} {drec["id"]}')
+    assert drec2['public'] != drec['public']
+    flag = '--private' if drec2['public'].lower() == 'true' else '--public'
+    drec3 = _cmd(f'deployment patch {flag} {drec["id"]}')
+    assert drec3['public'] == drec['public']
+
+
+def test_deploy_token(user_session, cli_deployment):
+    prec, drec = cli_deployment
+    token = _cmd(f'deployment token {drec["id"]}', table=False).strip()
+    resp = requests.get(f'https://{drec["endpoint"]}.' + user_session.hostname,
+                        headers={'Authorization': f'Bearer {token}'})
+    assert resp.status_code == 200
+    assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
+
+
+def test_deploy_logs(cli_deployment):
+    prec, drec = cli_deployment
+    id = drec['id']
+    app_prefix = 'anaconda-app-' + id.rsplit("-", 1)[-1] + '-'
+    app_logs = _cmd(f'deployment logs {id}', table=False)
+    event_logs = _cmd(f'deployment logs {id} --events', table=False)
+    proxy_logs = _cmd(f'deployment logs {id} --proxy', table=False)
+    assert 'The project is ready to run commands.' in app_logs
+    assert app_prefix in event_logs, event_logs
+    assert 'App Proxy is fully operational!' in proxy_logs, proxy_logs
+
+
+def test_deploy_duplicate(cli_deployment):
+    prec, drec = cli_deployment
+    dname = drec['name'] + '-dup'
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project deploy {prec["id"]} --name {dname} --endpoint {drec["endpoint"]} --command default --private --wait')
+    assert f'endpoint "{drec["endpoint"]}" is already in use' in str(excinfo.value)
+    assert not any(r['name'] == dname for r in _cmd(f'deployment list'))
+
+
+def test_deploy_collaborators(cli_deployment):
+    uname = 'tooltest2'
+    prec, drec = cli_deployment
+    clist = _cmd(f'deployment collaborator list {drec["id"]}')
+    assert len(clist) == 0
+    clist = _cmd(f'deployment collaborator add {drec["id"]} {uname}')
+    assert len(clist) == 1
+    clist = _cmd(f'deployment collaborator add {drec["id"]} everyone --group')
+    assert len(clist) == 2
+    assert all(c['id'] == uname and c['type'] == 'user' or
+               c['id'] == 'everyone' and c['type'] == 'group'
+               for c in clist)
+    clist = _cmd(f'deployment collaborator remove {drec["id"]} {uname} everyone')
+    assert len(clist) == 0
+    with pytest.raises(CMDException) as excinfo:
+        clist = _cmd(f'deployment collaborator remove {drec["id"]} {uname}')
+    assert f'Collaborator(s) not found: {uname}' in str(excinfo.value)
+
+
+def test_deploy_broken(cli_deployment):
+    prec, drec = cli_deployment
+    dname = drec['name'] + '-broken'
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project deploy {prec["id"]} --name {dname} --command broken --private --stop-on-error')
+    assert 'Error completing deployment start: App failed to run' in str(excinfo.value)
+    assert not any(r['name'] == dname for r in _cmd('deployment list'))
+
+
+def test_k8s(user_session, cli_session, cli_deployment):
+    _, srec = cli_session
+    _, drec = cli_deployment
+    plist = _cmd('pod list')
+    assert any(prec['id'] == srec['id'] for prec in plist)
+    assert any(prec['id'] == drec['id'] for prec in plist)
+    srec2 = _cmd(f'session info {srec["id"]} --k8s')
+    assert srec2['id'] == srec['id']
+    drec2 = _cmd(f'deployment info {drec["id"]} --k8s')
+    assert drec2['id'] == drec['id']
+
+
+def test_job_run1(cli_project):
+    prec = cli_project
+    _cmd(f'job create {prec["id"]} --name testjob1 --command run --run --wait')
     jrecs = _cmd('job list')
     assert len(jrecs) == 1, jrecs
     rrecs = _cmd('run list')
     assert len(rrecs) == 1, rrecs
     ldata1 = _cmd(f'run log {rrecs[0]["id"]}', table=False)
     assert ldata1.strip().endswith('Hello Anaconda Enterprise!'), repr(ldata1)
-    _cmd(f'job create {uname}/testproj3 --name testjob1 --make-unique --command run --run --wait')
+    _cmd(f'job create {prec["id"]} --name testjob1 --make-unique --command run --run --wait')
     jrecs = _cmd('job list')
     assert len(jrecs) == 2, jrecs
+    jrecs2 = _cmd(f'project jobs {prec["id"]}')
+    assert {r['id']: r for r in jrecs} == {r['id']: r for r in jrecs2}
     rrecs = _cmd('run list')
     assert len(rrecs) == 2, rrecs
+    rrecs2 = _cmd(f'project runs {prec["id"]}')
+    assert {r['id']: r for r in rrecs} == {r['id']: r for r in rrecs2}
     for rrec in rrecs:
-        _cmd(f'run delete {rrec["id"]} --yes', table=False)
+        _cmd(f'run delete {rrec["id"]} --yes')
     for jrec in jrecs:
-        _cmd(f'job delete {jrec["id"]} --yes', table=False)
+        _cmd(f'job delete {jrec["id"]} --yes')
     assert not _cmd('job list')
     assert not _cmd('run list')
 
 
-def test_job_run2(user_session):
-    uname = user_session.username
+def test_job_run2(cli_project):
+    prec = cli_project
     # Test cleanup mode and variables in jobs
     variables = {'INTEGRATION_TEST_KEY_1': 'value1', 'INTEGRATION_TEST_KEY_2': 'value2'}
     vars = ' '.join(f'--variable {k}={v}' for k, v in variables.items())
-    _cmd(f'project run {uname}/testproj3 --command run_with_env_vars --name testjob2 {vars}')
+    _cmd(f'project run {prec["id"]} --command run_with_env_vars --name testjob2 {vars}')
     # The job record should have already been deleted
     assert not _cmd('job list')
     rrecs = _cmd('run list')
@@ -142,119 +420,8 @@ def test_job_run2(user_session):
                    for line in ldata2.splitlines()
                    if line.startswith('INTEGRATION_TEST_KEY_'))
     assert variables == outvars, outvars
-    _cmd(f'run delete {rrecs[0]["id"]} --yes', table=False)
+    _cmd(f'run delete {rrecs[0]["id"]} --yes')
     assert not _cmd('run list')
-
-
-@pytest.fixture(scope='module')
-def cli_session(user_session):
-    uname = user_session.username
-    pname = 'testproj3'
-    _cmd(f'session start {uname}/{pname} --wait', table=False)
-    srecs = [r for r in _cmd('session list')
-             if r['owner'] == uname and r['name'] == pname]
-    assert len(srecs) == 1, srecs
-    yield srecs[0]['id'], pname
-    _cmd(f'session stop {uname}/{pname} --yes', table=False)
-    srecs = [r for r in _cmd('session list')
-             if r['owner'] == uname and r['name'] == dname
-             or r['id'] == srecs[0]['id']]
-    assert len(srecs) == 0, srecs
-
-
-def test_session(user_session, cli_session):
-    id, pname = cli_session
-    endpoint = id.rsplit("-", 1)[-1]
-    sdata = _cmd(f'call / --endpoint={endpoint}', table=False)
-    assert 'Jupyter Notebook requires JavaScript.' in sdata, sdata
-
-
-def test_session_branches(user_session, cli_session):
-    id, pname = cli_session
-    branches = _cmd(f'session branches {id}')
-    bdict = {r['branch']: r['sha1'] for r in branches}
-    assert set(bdict) == {'local', 'origin/local', 'master'}, branches
-    assert bdict['local'] == bdict['master'], branches
-
-
-def test_session_before_changes(user_session, cli_session):
-    id, pname = cli_session
-    changes1 = _cmd(f'session changes {id}')
-    assert changes1 == [], changes1
-    changes2 = _cmd(f'session changes --master {id}')
-    assert changes2 == [], changes2
-
-
-@pytest.fixture(scope='module')
-def cli_deployment(user_session):
-    uname = user_session.username
-    dname = 'testdeploy'
-    ename = 'testendpoint'
-    _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command default --private --wait', table=False)
-    drecs = [r for r in _cmd('deployment list')
-             if r['owner'] == uname and r['name'] == dname]
-    assert len(drecs) == 1, drecs
-    yield drecs[0]['id'], ename
-    _cmd(f'deployment stop {drecs[0]["id"]} --yes', table=False)
-    drecs = [r for r in _cmd('deployment list')
-             if r['owner'] == uname and r['name'] == dname
-             or r['id'] == drecs[0]['id']]
-    assert len(drecs) == 0, drecs
-
-
-def test_deploy(user_session, cli_deployment):
-    id, ename = cli_deployment
-    for attempt in range(3):
-        try:
-            ldata = _cmd('call / --endpoint testendpoint', table=False)
-            break
-        except AEUnexpectedResponseError:
-            time.sleep(attempt * 5)
-            pass
-    else:
-        raise RuntimeError("Could not get the endpoint to respond")
-    assert ldata.strip() == 'Hello Anaconda Enterprise!', ldata
-
-
-def test_deploy_token(user_session, cli_deployment):
-    id, ename = cli_deployment
-    token = _cmd(f'deployment token {id}', table=False).strip()
-    resp = requests.get('https://testendpoint.' + user_session.hostname,
-                        headers={'Authorization': f'Bearer {token}'})
-    assert resp.status_code == 200
-    assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
-
-
-def test_deploy_logs(user_session, cli_deployment):
-    id, ename = cli_deployment
-    app_prefix = 'anaconda-app-' + id.rsplit("-", 1)[-1] + '-'
-    app_logs = _cmd(f'deployment logs {id}', table=False)
-    event_logs = _cmd(f'deployment logs {id} --events', table=False)
-    proxy_logs = _cmd(f'deployment logs {id} --proxy', table=False)
-    assert 'The project is ready to run commands.' in app_logs
-    assert app_prefix in event_logs, event_logs
-    assert 'App Proxy is fully operational!' in proxy_logs, proxy_logs
-
-
-def test_deploy_duplicate(user_session, cli_deployment):
-    uname = user_session.username
-    dname = 'testdeploy2'
-    ename = 'testendpoint'
-    with pytest.raises(CalledProcessError):
-        _cmd(f'project deploy {uname}/testproj3 --name {dname} --endpoint {ename} --command default --private --wait', table=False)
-    drecs = [r for r in _cmd('deployment list')
-             if r['owner'] == uname and r['name'] == dname]
-    assert len(drecs) == 0, drecs
-
-
-def test_deploy_broken(user_session):
-    uname = user_session.username
-    dname = 'testbroken'
-    with pytest.raises(CalledProcessError):
-        _cmd(f'project deploy {uname}/testproj3 --name {dname} --command broken --private --stop-on-error', table=False)
-    drecs = [r for r in _cmd('deployment list')
-             if r['owner'] == uname and r['name'] == dname]
-    assert len(drecs) == 0, drecs
 
 
 def test_login_time(admin_session, user_session):

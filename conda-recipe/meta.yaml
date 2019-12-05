@@ -25,6 +25,7 @@ requirements:
     - requests
     - click>=7
     - click-repl
+    - aiohttp
 
 test:
   source_files:
@@ -35,6 +36,7 @@ test:
     - pytest
     - pytest-cov
     - codecov
+    - pandas
   commands:
     - py.test --cov=ae5_tools -v tests
     - codecov -t $CODECOV_TOKEN

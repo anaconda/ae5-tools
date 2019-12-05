@@ -24,6 +24,8 @@ from .commands.resource_profile import resource_profile
 from .commands.job import job
 from .commands.run import run
 from .commands.user import user
+from .commands.node import node
+from .commands.pod import pod
 
 from .login import login_options, cluster_call, cluster_disconnect
 from .format import format_options
@@ -106,7 +108,7 @@ def call(path, endpoint, post):
     if endpoint and not path.startswith('/'):
         path = '/' + path
     method = 'post' if post else 'get'
-    cluster_call('_api', method, path, subdomain=endpoint, cli=True)
+    cluster_call('api', method, path, subdomain=endpoint, cli=True)
 
 
 cli.add_command(project)
@@ -120,7 +122,8 @@ cli.add_command(account)
 cli.add_command(user)
 cli.add_command(resource_profile)
 cli.add_command(editor)
-
+cli.add_command(node)
+cli.add_command(pod)
 
 
 def main():
