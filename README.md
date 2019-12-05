@@ -118,6 +118,7 @@ output to the end user. This client can be utilized in one of two ways:
       deployment and project first:
       1. `ae5 deployment stop k8s --yes`
       2. `ae5 project delete k8s --yes`
+      
       Note that Kubernetes sometimes takes 1-2 minutes to reclaim a
       static endpoint for reuse. So if you immediately re-run the installation
       steps here, you may receive errors of the form
@@ -132,6 +133,4 @@ commands will reveal information only about the sessions, deployments,
 and job runs that would ordinarily be visible to them.
 
 Your feedback on the value of this new capability would be greatly appreciated!
-Please feel free to file an issue on the
-[`ae5-tools` issue tracker](https://github.com/Anaconda-Platform/ae5-tools/issues)
-with your requests.
+Please feel free to file an issue on the [`ae5-tools` issue tracker](https://github.com/Anaconda-Platform/ae5-tools/issues) with your requests.
