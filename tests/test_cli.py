@@ -366,6 +366,18 @@ def test_deploy_broken(cli_deployment):
     assert not any(r['name'] == dname for r in _cmd('deployment list'))
 
 
+def test_k8s(user_session, cli_session, cli_deployment):
+    _, srec = cli_session
+    _, drec = cli_deployment
+    plist = _cmd('pod list')
+    assert any(prec['id'] == srec['id'] for prec in plist)
+    assert any(prec['id'] == drec['id'] for prec in plist)
+    srec2 = _cmd(f'session info {srec["id"]} --k8s')
+    assert srec2['id'] == srec['id']
+    drec2 = _cmd(f'deployment info {drec["id"]} --k8s')
+    assert drec2['id'] == drec['id']
+
+
 def test_job_run1(cli_project):
     prec = cli_project
     _cmd(f'job create {prec["id"]} --name testjob1 --command run --run --wait')

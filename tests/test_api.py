@@ -451,6 +451,18 @@ def test_deploy_broken(user_session, api_deployment):
     assert not any(r['name'] == dname for r in user_session.deployment_list())
 
 
+def test_k8s(user_session, api_session, api_deployment):
+    _, srec = api_session
+    _, drec = api_deployment
+    plist = user_session.pod_list()
+    assert any(prec['id'] == srec['id'] for prec in plist)
+    assert any(prec['id'] == drec['id'] for prec in plist)
+    srec2 = user_session.session_info(srec['id'], k8s=True)
+    assert srec2['id'] == srec['id']
+    drec2 = user_session.deployment_info(drec['id'], k8s=True)
+    assert drec2['id'] == drec['id']
+
+
 def test_job_run1(user_session, api_project):
     prec = api_project
     uname = user_session.username
