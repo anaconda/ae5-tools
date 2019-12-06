@@ -1,15 +1,13 @@
 import click
 import webbrowser
 
-from ..login import cluster_call, login_options
-from ..utils import ident_filter
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import ident_filter, global_options
 
 
 @click.group(short_help='info, list, open, start, stop',
              epilog='Type "ae5 session <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def session():
     '''Commands related to project development sessions.'''
     pass
@@ -18,8 +16,7 @@ def session():
 @session.command(short_help='List active sessions.')
 @ident_filter('session')
 @click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
-@format_options()
-@login_options()
+@global_options
 def list(k8s):
     '''List sessions.
 
@@ -34,8 +31,7 @@ def list(k8s):
 @session.command()
 @click.argument('session')
 @click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
-@format_options()
-@login_options()
+@global_options
 def info(session, k8s):
     '''Retreive information about a single session.
 
@@ -47,8 +43,7 @@ def info(session, k8s):
 
 @session.command()
 @click.argument('session')
-@format_options()
-@login_options()
+@global_options
 def branches(session):
     '''Retreive information about the git branches for a session.
 
@@ -61,8 +56,7 @@ def branches(session):
 @session.command()
 @click.argument('session')
 @click.option('--master', is_flag=True, help='Get changes from upstream/master instead of the local session')
-@format_options()
-@login_options()
+@global_options
 def changes(session, master):
     '''Retreive information about uncommited files in a session.
 
@@ -91,8 +85,7 @@ def _open(record, frame):
 @click.option('--wait', is_flag=True, help='Wait for the session to complete initialization before exiting.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame/--no-frame', default=True, help='Include the AE banner when opening.')
-@format_options()
-@login_options()
+@global_options
 @click.pass_context
 def start(ctx, project, editor, resource_profile, wait, open, frame):
     '''Start a session for a project.
@@ -116,8 +109,7 @@ def start(ctx, project, editor, resource_profile, wait, open, frame):
 @session.command(short_help='Stop a session.')
 @click.argument('session')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
-@format_options()
-@login_options()
+@global_options
 def stop(session, yes):
     '''Stop a session.
 
@@ -135,8 +127,7 @@ def stop(session, yes):
 @click.option('--wait', is_flag=True, help='Wait for the session to complete initialization before exiting.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame/--no-frame', default=True, help='Include the AE banner when opening.')
-@format_options()
-@login_options()
+@global_options
 @click.pass_context
 def restart(ctx, session, wait, open, frame):
     '''Restart a deployment for a project.
@@ -155,8 +146,7 @@ def restart(ctx, session, wait, open, frame):
 @session.command(short_help='Open an existing session in a browser.')
 @click.argument('session')
 @click.option('--frame/--no-frame', default=True, help='Include the AE banner when opening.')
-@format_options()
-@login_options()
+@global_options
 def open(session, frame):
     '''Opens a session in the default browser.
 

@@ -2,6 +2,16 @@ import click
 
 from ..identifier import Identifier
 
+GLOBAL_OPTIONS = [
+    click.option('--yes', is_flag=True, expose_value=False, hidden=True)
+]
+
+
+def global_options(func):
+    for option in reversed(GLOBAL_OPTIONS):
+        func = option(func)
+    return func
+
 
 def add_param(param, value):
     ctx = click.get_current_context()

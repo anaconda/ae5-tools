@@ -1,14 +1,12 @@
 import click
 
-from ..login import cluster_call, login_options
-from ..utils import ident_filter
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import ident_filter, global_options
 
 
 @click.group(short_help='create, delete, info, list, patch, pause, run, runs, unpause',
              epilog='Type "ae5 job <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def job():
     '''Commands related to jobs.'''
     pass
@@ -16,8 +14,7 @@ def job():
 
 @job.command()
 @ident_filter('job')
-@format_options()
-@login_options()
+@global_options
 def list():
     '''List all available jobs.
 
@@ -31,8 +28,7 @@ def list():
 
 @job.command()
 @click.argument('job')
-@format_options()
-@login_options()
+@global_options
 def info(job):
     '''Retrieve information about a single job.
 
@@ -44,8 +40,7 @@ def info(job):
 
 @job.command()
 @click.argument('job')
-@format_options()
-@login_options()
+@global_options
 def runs(job):
     '''List the run records available for a single job.
 
@@ -57,8 +52,7 @@ def runs(job):
 
 @job.command(short_help='Pause a job.')
 @click.argument('job')
-@format_options()
-@login_options()
+@global_options
 def pause(job):
     '''Pause a scheduled job.
 
@@ -74,8 +68,7 @@ def pause(job):
 
 @job.command(short_help='Unpause a job.')
 @click.argument('job')
-@format_options()
-@login_options()
+@global_options
 def unpause(job):
     '''Unpause or resume a scheduled job.
 
@@ -110,8 +103,7 @@ def _variables(variable, clear_variables):
 @click.option('--resource-profile', help='The resource profile to use for this job.')
 @click.option('--variable', multiple=True, help='A variable setting in the form <key>=<value>. Multiple --variable options can be supplied.')
 @click.option('--clear-variables', is_flag=True, help='Clear any variables in the job.')
-@format_options()
-@login_options()
+@global_options
 def patch(job, name, command, schedule, resource_profile, variable, clear_variables):
     '''Modify one or more of the parameters of a job.
 
@@ -141,8 +133,7 @@ def patch(job, name, command, schedule, resource_profile, variable, clear_variab
 @click.option('--wait', is_flag=True, help='Wait for the completion of the job. Relevant only if --run is active.')
 @click.option('--show-run', is_flag=True, help='Display the run record instead of the job record. Relevant only if --run is active.')
 @click.option('--cleanup', is_flag=True, help='Run the job immediately, wait for its completion, delete the job record, and return the run record. Implies --run, --wait, and --show-run. Only valid for run-once jobs.')
-@format_options()
-@login_options()
+@global_options
 def create(project, schedule, command, name, resource_profile, variable, run, wait, make_unique, show_run, cleanup):
     '''Create a new job.
 
@@ -178,8 +169,7 @@ def create(project, schedule, command, name, resource_profile, variable, run, wa
 
 @job.command()
 @click.argument('job')
-@format_options()
-@login_options()
+@global_options
 def run(job):
     '''Executes an existing job.
 
@@ -196,8 +186,7 @@ def run(job):
 @job.command()
 @click.argument('job')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
-@format_options()
-@login_options()
+@global_options
 def delete(job, yes):
     '''Deletes a job.
 

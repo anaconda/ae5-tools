@@ -8,7 +8,7 @@ import click
 from fnmatch import fnmatch
 from datetime import datetime
 
-from .utils import param_callback, click_text, get_options
+from .utils import param_callback, click_text, get_options, GLOBAL_OPTIONS
 from ..k8s.transformer import _to_float
 
 
@@ -101,6 +101,9 @@ _format_options = [
     click.option('--help-filter', is_flag=True, default=None, callback=print_filter_help, expose_value=False, is_eager=True,
                  help='Get help on the row filtering options.')
 ]
+
+
+GLOBAL_OPTIONS.extend(_format_options)
 
 
 def format_options():

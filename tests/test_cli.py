@@ -86,7 +86,7 @@ def test_sample_clone():
     cname = 'nlp_api'
     pname = 'testclone'
     rrec = _cmd(f'sample clone {cname} --name {pname}')
-    _cmd(f'project delete {rrec["id"]} --yes')
+    _cmd(f'project delete {rrec["id"]}')
 
 
 @pytest.fixture(scope='module')
@@ -103,7 +103,7 @@ def downloaded_project(user_session):
         yield fname, fname2, dname
     for r in _cmd('project list'):
         if r['name'].startswith('test_upload'):
-            _cmd(f'project delete {r["id"]} --yes')
+            _cmd(f'project delete {r["id"]}')
     assert not any(r['name'].startswith('test_upload')
                    for r in _cmd('project list'))
 
@@ -225,7 +225,7 @@ def cli_session(cli_project):
     srec2 = _cmd(f'session restart {srec["id"]} --wait')
     assert not any(r['id'] == srec['id'] for r in _cmd('session list'))
     yield prec, srec2
-    _cmd(f'session stop {srec2["id"]} --yes')
+    _cmd(f'session stop {srec2["id"]}')
     assert not any(r['id'] == srec2['id'] for r in _cmd('session list'))
 
 
@@ -272,7 +272,7 @@ def cli_deployment(cli_project):
     drec2 = _cmd(f'deployment restart {drec["id"]} --wait')
     assert not any(r['id'] == drec['id'] for r in _cmd('deployment list'))
     yield prec, drec2
-    _cmd(f'deployment stop {drec2["id"]} --yes')
+    _cmd(f'deployment stop {drec2["id"]}')
     assert not any(r['id'] == drec2['id'] for r in _cmd('deployment list'))
 
 
@@ -397,9 +397,9 @@ def test_job_run1(cli_project):
     rrecs2 = _cmd(f'project runs {prec["id"]}')
     assert {r['id']: r for r in rrecs} == {r['id']: r for r in rrecs2}
     for rrec in rrecs:
-        _cmd(f'run delete {rrec["id"]} --yes')
+        _cmd(f'run delete {rrec["id"]}')
     for jrec in jrecs:
-        _cmd(f'job delete {jrec["id"]} --yes')
+        _cmd(f'job delete {jrec["id"]}')
     assert not _cmd('job list')
     assert not _cmd('run list')
 
@@ -420,7 +420,7 @@ def test_job_run2(cli_project):
                    for line in ldata2.splitlines()
                    if line.startswith('INTEGRATION_TEST_KEY_'))
     assert variables == outvars, outvars
-    _cmd(f'run delete {rrecs[0]["id"]} --yes')
+    _cmd(f'run delete {rrecs[0]["id"]}')
     assert not _cmd('run list')
 
 

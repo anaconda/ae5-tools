@@ -1,21 +1,19 @@
 import click
 
-from ..login import login_options, cluster_call
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import global_options
 
 
 @click.group(short_help='info, list',
              epilog='Type "ae5 endpoint <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def endpoint():
     '''Commands related to static endpoints.'''
     pass
 
 
 @endpoint.command()
-@format_options()
-@login_options()
+@global_options
 def list():
     '''List the static endpoints on this cluster.
     '''
@@ -24,8 +22,7 @@ def list():
 
 @endpoint.command()
 @click.argument('endpoint')
-@format_options()
-@login_options()
+@global_options
 def info(endpoint):
     '''Retrieve the record of a single endpoint.
 

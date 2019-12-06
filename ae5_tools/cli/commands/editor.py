@@ -1,14 +1,12 @@
 import click
 
-from ..utils import ident_filter
-from ..login import login_options, cluster_call
-from ..format import format_options
+from ..utils import ident_filter, global_options
+from ..login import cluster_call
 
 
 @click.group(short_help='info, list',
              epilog='Type "ae5 editor <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def editor():
     '''Commands related to development editors.'''
     pass
@@ -16,8 +14,7 @@ def editor():
 
 @editor.command()
 @ident_filter('editor')
-@format_options()
-@login_options()
+@global_options
 def list():
     '''List the available editors.
     '''
@@ -26,8 +23,7 @@ def list():
 
 @editor.command()
 @click.argument('name')
-@format_options()
-@login_options()
+@global_options
 def info(name):
     '''Retrieve the record of a single editor.
 

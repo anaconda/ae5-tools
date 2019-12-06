@@ -1,15 +1,13 @@
 import click
 
-from ..login import cluster_call, login_options
-from ..utils import add_param
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import add_param, global_options
 from ...identifier import Identifier
 
 
 @click.group(short_help='delete, info, list, log, stop',
              epilog='Type "ae5 run <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def run():
     '''Commands related to run records.'''
     pass
@@ -17,8 +15,7 @@ def run():
 
 @run.command()
 @click.argument('run', required=False)
-@format_options()
-@login_options()
+@global_options
 def list(run):
     '''List all available run records.
 
@@ -35,8 +32,7 @@ def list(run):
 
 @run.command()
 @click.argument('run')
-@format_options()
-@login_options()
+@global_options
 def info(run):
     '''Retrieve information about a single run.
 
@@ -48,8 +44,7 @@ def info(run):
 
 @run.command(short_help='Retrieve the log for a single run.')
 @click.argument('run')
-@format_options()
-@login_options()
+@global_options
 def log(run):
     '''Retrieve the log file for a particular run.
 
@@ -62,8 +57,7 @@ def log(run):
 @run.command()
 @click.argument('run')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
-@format_options()
-@login_options()
+@global_options
 def stop(run, yes):
     '''Stop a run.
 
@@ -81,8 +75,7 @@ def stop(run, yes):
 @run.command()
 @click.argument('run')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
-@format_options()
-@login_options()
+@global_options
 def delete(run, yes):
     '''Delete a run record.
 

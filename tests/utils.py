@@ -31,6 +31,7 @@ def _get_vars(*vars):
 
 def _cmd(cmd, table=True):
     # We go through Pandas to CSV to JSON instead of directly to JSON to improve coverage
+    cmd += ' --yes'
     if table:
         cmd += f' --format csv'
     print(f'Executing: ae5 {cmd}')

@@ -29,13 +29,12 @@ from .commands.pod import pod
 
 from .login import login_options, cluster_call, cluster_disconnect
 from .format import format_options
-from .utils import stash_defaults
+from .utils import stash_defaults, global_options
 
 
 @click.group(invoke_without_command=True,
              epilog='Type "ae5 <command> --help" for help on a specific command.')
-@login_options()
-@format_options()
+@global_options
 @click.pass_context
 def cli(ctx):
     if ctx.invoked_subcommand is None:
@@ -43,8 +42,7 @@ def cli(ctx):
 
 
 @cli.command(hidden=True)
-@login_options()
-@format_options()
+@global_options
 @click.pass_context
 def repl(ctx):
     stash_defaults()
@@ -56,7 +54,7 @@ def repl(ctx):
 
 @cli.command()
 @click.option('--admin', is_flag=True, help='Perform a KeyCloak admin login instead of a user login.')
-@login_options()
+@global_options
 def login(admin):
     '''Log into the cluster.
 
@@ -71,7 +69,7 @@ def login(admin):
 
 @cli.command()
 @click.option('--admin', is_flag=True, help='Perform a KeyCloak admin login instead of a user login.')
-@login_options()
+@global_options
 def logout(admin):
     '''Log out of the cluster.
 
@@ -85,8 +83,7 @@ def logout(admin):
 @click.argument('path')
 @click.option('--endpoint', help='An endpoint to connect to instead of the default API.')
 @click.option('--post', is_flag=True, help='Do a POST instead of a GET.')
-@login_options()
-@format_options()
+@global_options
 def call(path, endpoint, post):
     '''Make a generic API call. This is useful for experimentation with the
        AE5 API. However, it is particularly useful for accessing REST APIs
