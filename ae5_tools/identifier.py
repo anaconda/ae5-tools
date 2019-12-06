@@ -5,7 +5,8 @@ from collections import namedtuple
 RE_ID = r'[a-f0-9]{2}-[a-f0-9]{32}'
 SLUG_MAP = {'a0': 'projects', 'a1': 'sessions', 'a2': 'deployments', 'a3': 'channels'}
 REVERSE_SLUG_MAP = {v: k for k, v in SLUG_MAP.items()}
-REVERSE_SLUG_MAP['jobs'] = REVERSE_SLUG_MAP['runs'] = 'a2'
+# pods can be a1- or a2- so we have to handle them specially in the code below
+REVERSE_SLUG_MAP.update({'jobs': 'a2', 'runs': 'a2', 'pods': 'a2'})
 
 
 class Identifier(namedtuple('Identifier', ['owner', 'name', 'id', 'pid', 'revision'])):

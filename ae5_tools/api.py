@@ -56,7 +56,7 @@ COLUMNS = {
     'user': ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id'],
     'activity': ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated'],
     'endpoint': ['id', 'owner', 'name', 'project_name', 'deployment_id', 'project_id', 'project_url'],
-    'pod': ['name', 'owner', 'type', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'modified', 'phase', 'since', 'resource_profile', 'id'],
+    'pod': ['name', 'owner', 'type', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'modified', 'phase', 'since', 'resource_profile', 'id', 'project_id'],
 }
 
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
@@ -198,6 +198,40 @@ class AESessionBase(object):
         if self.persist:
             self._save()
         self.connected = False
+
+    def _filter_records(self, filter, records):
+        if not filter or not records:
+            return records
+        rec0 = records[0]
+        records = filter_list_of_dicts(records, filter)
+        if not records:
+            records = EmptyRecordList(columns=rec0)
+        return records
+
+    def _fix_records(self, record_type, records, filter=None, **kwargs):
+        pre = f'_pre_{record_type}'
+        if isinstance(records, dict) and 'data' in records:
+            records = records['data']
+        is_single = isinstance(records, dict)
+        if is_single:
+            records = [records]
+        if hasattr(self, pre):
+            records = getattr(self, pre)(records)
+        for rec in records:
+            rec['_record_type'] = record_type
+        if not records:
+            records = EmptyRecordList(record_type=record_type)
+        if records and filter:
+            prefilt, postfilt = split_filter(filter, records[0])
+            records = self._filter_records(prefilt, records)
+        post = f'_post_{record_type}'
+        if hasattr(self, post):
+            records = getattr(self, post)(records, **kwargs)
+        if records and filter:
+            records = self._filter_records(postfilt, records)
+        if is_single:
+            return records[0] if records else None
+        return records
 
     def _format_table(self, response, columns):
         is_series = isinstance(response, dict)
@@ -445,40 +479,6 @@ class AEUserSession(AESessionBase):
         os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)
         self.session.cookies.save(self._filename, ignore_discard=True)
         os.chmod(self._filename, 0o600)
-
-    def _filter_records(self, filter, records):
-        if not filter or not records:
-            return records
-        rec0 = records[0]
-        records = filter_list_of_dicts(records, filter)
-        if not records:
-            records = EmptyRecordList(columns=rec0)
-        return records
-
-    def _fix_records(self, record_type, records, filter=None, **kwargs):
-        pre = f'_pre_{record_type}'
-        if isinstance(records, dict) and 'data' in records:
-            records = records['data']
-        is_single = isinstance(records, dict)
-        if is_single:
-            records = [records]
-        if hasattr(self, pre):
-            records = getattr(self, pre)(records)
-        for rec in records:
-            rec['_record_type'] = record_type
-        if not records:
-            records = EmptyRecordList(record_type=record_type)
-        if records and filter:
-            prefilt, postfilt = split_filter(filter, records[0])
-            records = self._filter_records(prefilt, records)
-        post = f'_post_{record_type}'
-        if hasattr(self, post):
-            records = getattr(self, post)(records, **kwargs)
-        if records and filter:
-            records = self._filter_records(postfilt, records)
-        if is_single:
-            return records[0] if records else None
-        return records
 
     def _api_records(self, method, endpoint, filter=None, **kwargs):
         record_type = kwargs.pop('record_type', None)
@@ -1237,7 +1237,7 @@ class AEUserSession(AESessionBase):
         # Furthermore, creating a job with the same name as an deleted
         # job that still has run listings causes an error.
         if not name:
-            name = f'{command}-{rrec["project_name"]}'
+            name = f'{command}-{prec["name"]}'
             if make_unique is None:
                 make_unique = True
         if make_unique:
@@ -1321,7 +1321,7 @@ class AEUserSession(AESessionBase):
     def _pre_pod(self, records):
         for ndx, rec in enumerate(records):
             type = rec['_record_type']
-            value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id')}
+            value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id', 'project_id')}
             value['type'] = type
             records[ndx] = value
         return records
@@ -1340,7 +1340,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(records, format=format)
 
     def pod_info(self, pod, internal=False, format=None, quiet=False):
-        record = self._ident_record('pods', pod, quiet=quiet, internal=internal)
+        record = self._ident_record('pod', pod, quiet=quiet, internal=internal)
         return self._format_response(record, format=format)
 
     def node_list(self, filter=None, internal=False, format=None):
@@ -1378,7 +1378,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(result, format=format)
 
     def node_info(self, node, internal=False, format=None, quiet=False):
-        record = self._ident_record('@node', node, quiet=quiet)
+        record = self._ident_record('node', node, quiet=quiet)
         return self._format_response(record, format=format)
 
 
@@ -1449,7 +1449,7 @@ class AEAdminSession(AESessionBase):
         records = self._get_paginated('events', limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=[])
 
-    def user_list(self, internal=False, format=None):
+    def user_list(self, filter=None, internal=False, format=None):
         users = self._get_paginated('users')
         if not internal:
             users = {u['id']: u for u in users}
@@ -1462,7 +1462,8 @@ class AEAdminSession(AESessionBase):
             users = list(users.values())
             for urec in users:
                 urec.setdefault('lastLogin', 0)
-        return self._format_response(users, format=format, record_type='user')
+        users = self._fix_records('user', users, filter)
+        return self._format_response(users, format=format)
 
     def user_info(self, user_or_id, internal=False, format=None, quiet=False):
         if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):

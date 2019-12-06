@@ -1,7 +1,7 @@
 import click
 
 from ..login import cluster_call
-from ..utils import add_param, global_options
+from ..utils import add_param, global_options, ident_filter
 from ...identifier import Identifier
 
 
@@ -14,9 +14,9 @@ def run():
 
 
 @run.command()
-@click.argument('run', required=False)
+@ident_filter('run')
 @global_options
-def list(run):
+def list():
     '''List all available run records.
 
        By default, lists all runs visible to the authenticated user.
@@ -24,9 +24,6 @@ def list(run):
        supplying an optional RUN argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    if run:
-        ident = Identifier.from_string(run, no_revision=True)
-        add_param('filter', ident.project_filter())
     cluster_call('run_list', cli=True)
 
 

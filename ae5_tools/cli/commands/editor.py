@@ -13,7 +13,7 @@ def editor():
 
 
 @editor.command()
-@ident_filter('editor')
+@ident_filter('editor', 'id={value}|name={value}')
 @global_options
 def list():
     '''List the available editors.

@@ -58,14 +58,17 @@ def param_callback(ctx, param, value):
     add_param(param.name.lower().replace('-', '_'), value)
 
 
-def ident_callback(ctx, param, value):
-    if value in (None, '', ()):
-        return
-    add_param('ident_filter', (param.name.lower().replace('-', '_'), value))
+def ident_callback(type):
+    def _callback(ctx, param, value):
+        if value in (None, '', ()):
+            return
+        add_param('ident_filter', (param.name.lower().replace('-', '_'), value, type))
+    return _callback
 
 
-def ident_filter(name):
-    return click.argument(name, expose_value=False, callback=ident_callback, required=False)
+def ident_filter(name, type=None, required=False):
+    callback = ident_callback(type)
+    return click.argument(name, expose_value=False, callback=callback, required=required)
 
 
 def click_text(text):

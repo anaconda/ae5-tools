@@ -2,7 +2,7 @@ import sys
 import click
 
 from ..login import cluster_call
-from ..utils import add_param, global_options
+from ..utils import add_param, global_options, ident_filter
 
 
 @click.group(short_help='info, list',
@@ -17,23 +17,21 @@ def user():
 
 
 @user.command()
-@click.argument('username', required=False)
+@ident_filter('uname', 'username={value}|id={value}')
 @global_options
-def list(username):
+def list():
     '''List all users.'''
-    if username:
-        add_param('filter', f'username={username}')
     cluster_call('user_list', cli=True, admin=True)
 
 
 @user.command()
-@click.argument('username')
+@click.argument('uname')
 @global_options
-def info(username):
+def info(uname):
     '''Retrieve information about a single user.
 
-    USERNAME must exactly match either one username or one KeyCloak user ID.'''
-    cluster_call('user_info', username, cli=True, admin=True)
+    UNAME must exactly match either one username or one KeyCloak user ID.'''
+    cluster_call('user_info', uname, cli=True, admin=True)
 
 
 @user.command()

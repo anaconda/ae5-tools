@@ -1,7 +1,7 @@
 import click
 
 from ..login import cluster_call
-from ..utils import global_options
+from ..utils import global_options, ident_filter
 
 
 @click.group(short_help='info, list',
@@ -13,6 +13,7 @@ def endpoint():
 
 
 @endpoint.command()
+@ident_filter('endpoint', 'id={value}')
 @global_options
 def list():
     '''List the static endpoints on this cluster.

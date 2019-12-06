@@ -13,7 +13,7 @@ def resource_profile():
 
 
 @resource_profile.command()
-@ident_filter('resource_profile')
+@ident_filter('resource_profile', 'name={value}')
 @global_options
 def list():
     '''List all availables resource profiles.

@@ -1,7 +1,7 @@
 import click
 
 from ..login import cluster_call
-from ..utils import global_options
+from ..utils import global_options, ident_filter
 
 
 @click.group(short_help='info, list',
@@ -13,6 +13,7 @@ def sample():
 
 
 @sample.command()
+@ident_filter('sample', 'name={value}|id={value}')
 @global_options
 def list():
     '''List the sample projects.
@@ -21,15 +22,15 @@ def list():
 
 
 @sample.command()
-@click.argument('project')
+@click.argument('sample')
 @global_options
-def info(project):
+def info(sample):
     '''Retrieve the record of a single sample project.
 
-       The PROJECT identifier must match exactly one name or id of a sample project.
+       The SAMPLE identifier must match exactly one name or id of a sample project.
        Wildcards may be included.
     '''
-    cluster_call('sample_info', project, cli=True)
+    cluster_call('sample_info', sample, cli=True)
 
 
 @sample.command()

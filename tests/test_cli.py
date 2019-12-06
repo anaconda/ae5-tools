@@ -366,12 +366,22 @@ def test_deploy_broken(cli_deployment):
     assert not any(r['name'] == dname for r in _cmd('deployment list'))
 
 
-def test_k8s(user_session, cli_session, cli_deployment):
+def test_k8s_node(user_session):
+    nlist = _cmd('node list')
+    for nrec in nlist:
+        nrec2 = _cmd(f'node info {nrec["name"]}')
+        assert nrec2['name'] == nrec['name']
+
+
+def test_k8s_pod(user_session, cli_session, cli_deployment):
     _, srec = cli_session
     _, drec = cli_deployment
     plist = _cmd('pod list')
     assert any(prec['id'] == srec['id'] for prec in plist)
     assert any(prec['id'] == drec['id'] for prec in plist)
+    for prec in plist:
+        prec2 = _cmd(f'pod info {prec["id"]}')
+        assert prec2['id'] == prec['id']
     srec2 = _cmd(f'session info {srec["id"]} --k8s')
     assert srec2['id'] == srec['id']
     drec2 = _cmd(f'deployment info {drec["id"]} --k8s')

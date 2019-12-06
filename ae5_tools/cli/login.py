@@ -174,12 +174,13 @@ def cluster_call(method, *args, **kwargs):
     # Provide a standardized method for supplying the filter argument
     # to the *_list api commands. This improves our performance when
     if opts.get('ident_filter'):
-        itype, value = opts['ident_filter']
-        if Identifier.id_prefix(itype + 's', quiet=True):
-            value = Identifier.from_string(value).project_filter().split(',')
+        record_type, value, filter = opts['ident_filter']
+        if filter is None:
+            itype = record_type.rstrip('s') + 's'
+            filter = Identifier.from_string(value).project_filter(itype)
         else:
-            value = [f'id={value}|name={value}']
-        kwargs['filter'] = tuple(value) + opts.get('filter', ())
+            filter = filter.format(value=value)
+        kwargs['filter'] = tuple(filter.split(','))  + opts.get('filter', ())
         opts['filter'] = ()
 
     # Provide a standardized method for providing interactive output
