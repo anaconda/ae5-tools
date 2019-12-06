@@ -1,14 +1,12 @@
 import click
 
-from ..utils import ident_filter
-from ..login import login_options, cluster_call
-from ..format import format_options
+from ..utils import ident_filter, global_options
+from ..login import cluster_call
 
 
 @click.group(short_help='info, list',
              epilog='Type "ae5 resource-profile <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def resource_profile():
     '''Commands related to resource profiles.'''
     pass
@@ -16,8 +14,7 @@ def resource_profile():
 
 @resource_profile.command()
 @ident_filter('resource_profile')
-@format_options()
-@login_options()
+@global_options
 def list():
     '''List all availables resource profiles.
     '''
@@ -26,8 +23,7 @@ def list():
 
 @resource_profile.command()
 @click.argument('name')
-@format_options()
-@login_options()
+@global_options
 def info(name):
     '''Retrieve the record of a single resource profile.
 

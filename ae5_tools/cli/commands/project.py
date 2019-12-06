@@ -1,16 +1,14 @@
 import click
 
-from ..utils import ident_filter
-from ..login import login_options, cluster_call
-from ..format import format_options
+from ..utils import ident_filter, global_options
+from ..login import cluster_call
 from .project_collaborator import collaborator
 from .project_revision import revision
 
 
 @click.group(short_help='activity, collaborator, delete, deploy, deployments, download, image, info, jobs, list, patch, revision, run, runs, schedule, sessions, status, upload',
              epilog='Type "ae5 project <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def project():
     '''Commands related to user projects.'''
     pass
@@ -23,8 +21,7 @@ project.add_command(revision)
 @project.command()
 @ident_filter('project')
 @click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
-@format_options()
-@login_options()
+@global_options
 def list(collaborators):
     '''List available projects.
 
@@ -39,8 +36,7 @@ def list(collaborators):
 @project.command()
 @click.argument('project')
 @click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
-@format_options()
-@login_options()
+@global_options
 def info(project, collaborators):
     '''Retrieve information about a project.
 
@@ -52,8 +48,7 @@ def info(project, collaborators):
 
 @project.command()
 @click.argument('project')
-@format_options()
-@login_options()
+@global_options
 def jobs(project):
     '''Retrieve a list of a project's jobs.
 
@@ -65,8 +60,7 @@ def jobs(project):
 
 @project.command()
 @click.argument('project')
-@format_options()
-@login_options()
+@global_options
 def runs(project):
     '''Retrieve a list of a project's runs.
 
@@ -78,8 +72,7 @@ def runs(project):
 
 @project.command()
 @click.argument('project')
-@format_options()
-@login_options()
+@global_options
 def sessions(project):
     '''Retrieve a list of a project's sessions.
 
@@ -91,8 +84,7 @@ def sessions(project):
 
 @project.command()
 @click.argument('project')
-@format_options()
-@login_options()
+@global_options
 def deployments(project):
     '''Retrieve a list of a project's deployments.
 
@@ -107,8 +99,7 @@ def deployments(project):
 @click.option('--limit', type=int, default=10, help='Limit the output to N records.')
 @click.option('--all', is_flag=True, default=False, help='Retrieve all possible records.')
 @click.option('--latest', is_flag=True, default=False, help='Return only the latest record.')
-@format_options()
-@login_options()
+@global_options
 def activity(project, limit, all, latest):
     '''Retrieve the project's acitivty log.
 
@@ -128,8 +119,7 @@ def activity(project, limit, all, latest):
 @click.option('--name', help='A new name for the project.')
 @click.option('--editor', help='The editor to use for future sessions.')
 @click.option('--resource-profile', help='The resource profile to use for future sessions.')
-@format_options()
-@login_options()
+@global_options
 def patch(project, **kwargs):
     '''Change the project's name, editor, or resource profile.
 
@@ -141,8 +131,7 @@ def patch(project, **kwargs):
 
 @project.command()
 @click.argument('project')
-@format_options()
-@login_options()
+@global_options
 def status(project):
     '''Retrieve the project's latest activity entry.
 
@@ -155,8 +144,7 @@ def status(project):
 @project.command()
 @click.argument('project')
 @click.option('--filename', default='', help='Filename to save to. If not supplied, the filename is constructed from the name of the project.')
-@format_options()
-@login_options()
+@global_options
 @click.pass_context
 def download(ctx, project, filename):
     '''Download an archive of a project.
@@ -177,8 +165,7 @@ def download(ctx, project, filename):
 @click.option('--condarc', default='', help='Path to custom condarc.')
 @click.option('--dockerfile', default='', help='Path to custom Dockerfile.')
 @click.option('--debug', is_flag=True, help='Show docker image build logs.')
-@login_options()
-@format_options()
+@global_options
 @click.pass_context
 def image(ctx, project, command, condarc, dockerfile, debug):
     '''Build a Docker Image of a project.
@@ -201,8 +188,7 @@ def image(ctx, project, command, condarc, dockerfile, debug):
 @click.option('--name', default='', help='Name of the project.')
 @click.option('--tag', default='', help='Commit tag to use for initial revision of project.')
 @click.option('--no-wait', is_flag=True, help='Do not wait for the creation seesion to complete before exiting.')
-@format_options()
-@login_options()
+@global_options
 def upload(filename, name, tag, no_wait):
     '''Upload a project.
 
@@ -225,8 +211,7 @@ def upload(filename, name, tag, no_wait):
 @click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
-@format_options()
-@login_options()
+@global_options
 @click.pass_context
 def deploy(ctx, project, name, endpoint, command, resource_profile, public, private, wait, stop_on_error, open, frame):
     '''Start a deployment for a project.
@@ -258,8 +243,7 @@ def deploy(ctx, project, name, endpoint, command, resource_profile, public, priv
 @click.option('--command', help='The command to use for this job.')
 @click.option('--resource-profile', help='The resource profile to use for this job.')
 @click.option('--variable', multiple=True, help='A variable setting in the form <key>=<value>. Multiple --variable options can be supplied.')
-@format_options()
-@login_options()
+@global_options
 @click.pass_context
 def schedule(ctx, project, schedule, command, name, make_unique, resource_profile, variable):
     '''Create a run schedule for a project.
@@ -283,8 +267,7 @@ def schedule(ctx, project, schedule, command, name, make_unique, resource_profil
 @click.option('--command', help='The command to use for this job.')
 @click.option('--resource-profile', help='The resource profile to use for this job.')
 @click.option('--variable', multiple=True, help='A variable setting in the form <key>=<value>. Multiple --variable options can be supplied.')
-@format_options()
-@login_options()
+@global_options
 @click.pass_context
 def run(ctx, project, command, name, make_unique, resource_profile, variable):
     '''Execute a project as a run-once job.
@@ -303,8 +286,7 @@ def run(ctx, project, command, name, make_unique, resource_profile, variable):
 @project.command()
 @click.argument('project')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
-@format_options()
-@login_options()
+@global_options
 def delete(project, yes):
     '''Delete a project.
 

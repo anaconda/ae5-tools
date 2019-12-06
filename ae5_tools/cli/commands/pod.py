@@ -1,15 +1,13 @@
 import sys
 import click
 
-from ..login import cluster_call, login_options
-from ..utils import add_param, ident_filter
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import add_param, ident_filter, global_options
 
 
 @click.group(short_help='info, list',
              epilog='Type "ae5 user <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def pod():
     '''Commands related to the AE5 pods (sessions, deployments, runs).
 
@@ -21,8 +19,7 @@ def pod():
 
 @pod.command()
 @ident_filter('pod')
-@format_options()
-@login_options()
+@global_options
 def list():
     '''List all nodes.'''
     cluster_call('pod_list', cli=True)
@@ -30,8 +27,7 @@ def list():
 
 @pod.command()
 @click.argument('pod')
-@format_options()
-@login_options()
+@global_options
 def info(pod):
     '''Get information about a specific pod.'''
     cluster_call('pod_info', pod, cli=True)

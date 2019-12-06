@@ -1,15 +1,13 @@
 import sys
 import click
 
-from ..login import cluster_call, login_options
-from ..utils import add_param
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import add_param, global_options
 
 
 @click.group(short_help='info, list',
              epilog='Type "ae5 user <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def user():
     '''Commands related to user accounts.
 
@@ -20,8 +18,7 @@ def user():
 
 @user.command()
 @click.argument('username', required=False)
-@format_options()
-@login_options()
+@global_options
 def list(username):
     '''List all users.'''
     if username:
@@ -31,8 +28,7 @@ def list(username):
 
 @user.command()
 @click.argument('username')
-@format_options()
-@login_options()
+@global_options
 def info(username):
     '''Retrieve information about a single user.
 
@@ -44,8 +40,7 @@ def info(username):
 @click.argument('param', nargs=-1)
 @click.option('--limit', type=click.IntRange(1), default=sys.maxsize, help='The maximum number of events to return.')
 @click.option('--first', type=click.IntRange(0), default=0, help='The index of the first element to return.')
-@format_options()
-@login_options()
+@global_options
 def events(param, limit, first):
     '''Retrieve KeyCloak events.
 

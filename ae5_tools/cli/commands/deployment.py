@@ -2,16 +2,14 @@ import click
 import webbrowser
 import re
 
-from ..login import cluster_call, login_options
-from ..utils import ident_filter
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import ident_filter, global_options
 from .deployment_collaborator import collaborator
 
 
 @click.group(short_help='collaborator, info, list, open, patch, restart, start, stop',
              epilog='Type "ae5 deployment <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def deployment():
     '''Commands related to project deployments.'''
     pass
@@ -24,8 +22,7 @@ deployment.add_command(collaborator)
 @ident_filter('deployment')
 @click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
 @click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
-@format_options()
-@login_options()
+@global_options
 def list(collaborators, k8s):
     '''List available deployments.
 
@@ -40,8 +37,7 @@ def list(collaborators, k8s):
 @deployment.command()
 @click.argument('deployment')
 @click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
-@format_options()
-@login_options()
+@global_options
 def info(deployment, k8s):
     '''Retrieve information about a single deployment.
 
@@ -55,8 +51,7 @@ def info(deployment, k8s):
 @click.argument('deployment')
 @click.option('--proxy', is_flag=True, help='Return the proxy log instead of the app log.')
 @click.option('--events', is_flag=True, help='Return the event log instead of the app log.')
-@format_options()
-@login_options()
+@global_options
 def logs(deployment, proxy, events):
     '''Retrieve the logs for a deployment.
 
@@ -71,8 +66,7 @@ def logs(deployment, proxy, events):
 
 @deployment.command()
 @click.argument('deployment')
-@format_options()
-@login_options()
+@global_options
 def token(deployment):
     '''Retrieve a bearer token to access a private deployment.
 
@@ -86,8 +80,7 @@ def token(deployment):
 @click.argument('deployment')
 @click.option('--public', is_flag=True, help='Make the deployment public.')
 @click.option('--private', is_flag=True, help='Make the deployment private.')
-@format_options()
-@login_options()
+@global_options
 def patch(deployment, public, private):
     '''Change a deployment's public/private status.
 
@@ -124,8 +117,7 @@ def _open(record, frame):
 @click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
-@format_options()
-@login_options()
+@global_options
 @click.pass_context
 def start(ctx, project, name, endpoint, command, resource_profile, public, private, wait, stop_on_error, open, frame):
     '''Start a deployment for a project.
@@ -168,8 +160,7 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
 @click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
-@format_options()
-@login_options()
+@global_options
 @click.pass_context
 def restart(ctx, deployment, wait, stop_on_error, open, frame):
     '''Restart a deployment for a project.
@@ -188,8 +179,7 @@ def restart(ctx, deployment, wait, stop_on_error, open, frame):
 @deployment.command(short_help='Stop a deployment.')
 @click.argument('deployment')
 @click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
-@format_options()
-@login_options()
+@global_options
 def stop(deployment, yes):
     '''Stop a deployment.
 
@@ -205,8 +195,7 @@ def stop(deployment, yes):
 @deployment.command(short_help='Open a deployment in a browser.')
 @click.argument('deployment')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
-@format_options()
-@login_options()
+@global_options
 def open(deployment, frame):
     '''Opens a deployment in the default browser.
 

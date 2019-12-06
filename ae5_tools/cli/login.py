@@ -2,7 +2,7 @@ import click
 
 from ..config import config
 from ..api import AESessionBase, AEUserSession, AEAdminSession, AEException
-from .utils import param_callback, click_text, get_options, persist_option
+from .utils import param_callback, click_text, get_options, persist_option, GLOBAL_OPTIONS
 from .format import print_output
 from ..identifier import Identifier
 
@@ -74,6 +74,9 @@ _login_options = [
     click.option('--help-login', is_flag=True, callback=print_login_help, expose_value=False, is_eager=True,
                  help='Get help on the global authentication options.')
 ]
+
+
+GLOBAL_OPTIONS.extend(_login_options)
 
 
 def login_options(password=True):
@@ -193,7 +196,7 @@ def cluster_call(method, *args, **kwargs):
             prefix = prefix.format(ident=ident)
             postfix = postfix.format(ident=ident)
 
-        if confirm and not click.confirm(confirm):
+        if confirm and not opts.get('yes') and not click.confirm(confirm):
             return
         if prefix:
             click.echo(prefix, nl=False, err=True)

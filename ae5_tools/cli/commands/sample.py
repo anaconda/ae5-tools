@@ -1,21 +1,19 @@
 import click
 
-from ..login import login_options, cluster_call
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import global_options
 
 
 @click.group(short_help='info, list',
              epilog='Type "ae5 project sample <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def sample():
     '''Commands related to sample and template projects.'''
     pass
 
 
 @sample.command()
-@format_options()
-@login_options()
+@global_options
 def list():
     '''List the sample projects.
     '''
@@ -24,8 +22,7 @@ def list():
 
 @sample.command()
 @click.argument('project')
-@format_options()
-@login_options()
+@global_options
 def info(project):
     '''Retrieve the record of a single sample project.
 
@@ -41,8 +38,7 @@ def info(project):
 @click.option('--make-unique', is_flag=True, default=None, help='If supplied, a counter will be appended to a supplied --name if needed to make it unique.')
 @click.option('--tag', default='', help='Commit tag to use for initial revision of project.')
 @click.option('--no-wait', is_flag=True, help='Do not wait for the creation seesion to complete before exiting.')
-@format_options()
-@login_options()
+@global_options
 def clone(project, name, tag, make_unique, no_wait):
     '''Create a copy of a sample or template project.
 

@@ -1,13 +1,12 @@
 import click
 
-from ..login import login_options, cluster_call
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import global_options
 
 
 @click.group(short_help='Subcommands: add, info, list, remove',
              epilog='Type "ae5 deployment collaborator <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def collaborator():
     '''Commands related to collaborators on a deployment.
 
@@ -19,8 +18,7 @@ def collaborator():
 
 @collaborator.command()
 @click.argument('deployment')
-@format_options()
-@login_options()
+@global_options
 def list(deployment):
     '''List the collaborators on a deployment.
 
@@ -33,8 +31,7 @@ def list(deployment):
 @collaborator.command()
 @click.argument('deployment')
 @click.argument('userid')
-@format_options()
-@login_options()
+@global_options
 def info(deployment, userid):
     '''Retrieve the record of a single collaborator.
 
@@ -51,8 +48,7 @@ def info(deployment, userid):
 @click.argument('deployment')
 @click.argument('userid', nargs=-1)
 @click.option('--group', is_flag=True, help='The collaborator is a group.')
-@format_options()
-@login_options()
+@global_options
 def add(deployment, userid, group):
     '''Add/modify one or more collaborators for a deployment.
 
@@ -69,8 +65,7 @@ def add(deployment, userid, group):
 @collaborator.command()
 @click.argument('deployment')
 @click.argument('userid', nargs=-1)
-@format_options()
-@login_options()
+@global_options
 def remove(deployment, userid):
     '''Remove one or more collaborators for a deployment.
 

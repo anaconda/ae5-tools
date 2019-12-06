@@ -1,13 +1,12 @@
 import click
 
-from ..login import login_options, cluster_call
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import global_options
 
 
 @click.group(short_help='Subcommands: add, info, list, remove',
              epilog='Type "ae5 project collaborator <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def collaborator():
     '''Commands related to the collaborators on a project.'''
     pass
@@ -15,8 +14,7 @@ def collaborator():
 
 @collaborator.command()
 @click.argument('project')
-@format_options()
-@login_options()
+@global_options
 def list(project):
     '''List the collaborators on a project.
 
@@ -29,8 +27,7 @@ def list(project):
 @collaborator.command()
 @click.argument('project')
 @click.argument('userid')
-@format_options()
-@login_options()
+@global_options
 def info(project, userid):
     '''Retrieve the record of a single collaborator.
 
@@ -49,8 +46,7 @@ def info(project, userid):
 @click.option('--group', is_flag=True, help='The collaborator is a group.')
 @click.option('--read-only', is_flag=True, help='The collaborator should be read-only.')
 @click.option('--read-write', is_flag=True, help='The collaborator should be read-write (default).')
-@format_options()
-@login_options()
+@global_options
 def add(project, userid, group, read_only, read_write):
     '''Add/modify one or more collaborators for a project.
 
@@ -69,8 +65,7 @@ def add(project, userid, group, read_only, read_write):
 @collaborator.command()
 @click.argument('project')
 @click.argument('userid', nargs=-1)
-@format_options()
-@login_options()
+@global_options
 def remove(project, userid):
     '''Remove one or more collaborators for a project.
 

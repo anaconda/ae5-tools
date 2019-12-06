@@ -1,14 +1,13 @@
 import click
 
-from ..login import cluster_call, login_options
-from ..format import format_options
+from ..login import cluster_call
+from ..utils import global_options
 from ...identifier import Identifier
 
 
 @click.group(short_help='Subcommands: download, image, info, list',
              epilog='Type "ae5 project revision <command> --help" for help on a specific command.')
-@format_options()
-@login_options()
+@global_options
 def revision():
     '''Commands related to the revisions of a project.'''
     pass
@@ -16,8 +15,7 @@ def revision():
 
 @revision.command()
 @click.argument('project')
-@format_options()
-@login_options()
+@global_options
 def list(project):
     '''List available revisions for a given project.
 
@@ -29,8 +27,7 @@ def list(project):
 
 @revision.command()
 @click.argument('revision')
-@format_options()
-@login_options()
+@global_options
 def info(revision):
     '''Retrieve information about a single project revision.
 
@@ -43,8 +40,7 @@ def info(revision):
 
 @revision.command()
 @click.argument('revision')
-@format_options()
-@login_options()
+@global_options
 def commands(revision):
     '''List the commands for a given project revision.
 
@@ -58,8 +54,7 @@ def commands(revision):
 @revision.command()
 @click.argument('revision')
 @click.option('--filename', default='', help='Filename')
-@format_options()
-@login_options()
+@global_options
 def download(revision, filename):
     '''Download a project revision.
 
@@ -86,8 +81,7 @@ def download(revision, filename):
 @click.option('--condarc', default='', help='Path to custom condarc file.')
 @click.option('--dockerfile', default='', help='Path to custom Dockerfile.')
 @click.option('--debug', is_flag=True, help='debug logs')
-@format_options()
-@login_options()
+@global_options
 def image(revision, command, condarc, dockerfile, debug):
     ident = Identifier.from_string(revision)
     record = cluster_call('revision_info', ident, format='json')
