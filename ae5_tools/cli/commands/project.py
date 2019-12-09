@@ -1,9 +1,11 @@
 import click
 
-from ..utils import ident_filter, global_options
+from ..utils import ident_filter, global_options, yes_option
 from ..login import cluster_call
 from .project_collaborator import collaborator
 from .project_revision import revision
+from .deployment import start as deployment_start
+from .job import _create
 
 
 @click.group(short_help='activity, collaborator, delete, deploy, deployments, download, image, info, jobs, list, patch, revision, run, runs, schedule, sessions, status, upload',
@@ -14,6 +16,7 @@ def project():
     pass
 
 
+project.add_command(deployment_start, name='deploy')
 project.add_command(collaborator)
 project.add_command(revision)
 
@@ -30,77 +33,77 @@ def list(collaborators):
        supplying an optional PROJECT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    cluster_call('project_list', collaborators=collaborators, cli=True)
+    cluster_call('project_list', collaborators=collaborators)
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True)
 @click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
 @global_options
-def info(project, collaborators):
+def info(collaborators):
     '''Retrieve information about a project.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('project_info', project, collaborators=collaborators, cli=True)
+    cluster_call('project_info', collaborators=collaborators)
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True)
 @global_options
-def jobs(project):
+def jobs():
     '''Retrieve a list of a project's jobs.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('project_jobs', project, cli=True)
+    cluster_call('project_jobs')
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True)
 @global_options
-def runs(project):
+def runs():
     '''Retrieve a list of a project's runs.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('project_runs', project, cli=True)
+    cluster_call('project_runs')
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True)
 @global_options
-def sessions(project):
+def sessions():
     '''Retrieve a list of a project's sessions.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('project_sessions', project, cli=True)
+    cluster_call('project_sessions')
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True)
 @global_options
-def deployments(project):
+def deployments():
     '''Retrieve a list of a project's deployments.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('project_deployments', project, cli=True)
+    cluster_call('project_deployments')
 
 
 @project.command()
-@click.argument('project')
-@click.option('--limit', type=int, default=10, help='Limit the output to N records.')
-@click.option('--all', is_flag=True, default=False, help='Retrieve all possible records.')
-@click.option('--latest', is_flag=True, default=False, help='Return only the latest record.')
+@ident_filter('project', required=True)
+@click.option('--limit', type=int, default=None, help='Limit the output to N records.')
+@click.option('--all', is_flag=True, help='Retrieve all possible records.')
+@click.option('--latest', is_flag=True, help='Return only the latest record.')
 @global_options
-def activity(project, limit, all, latest):
+def activity(**kwargs):
     '''Retrieve the project's acitivty log.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -109,44 +112,41 @@ def activity(project, limit, all, latest):
        By default, the latest 10 records will be returned. This behavior can be
        adjusted using the --limit or --all options.
     '''
-    if latest and all:
-        raise click.UsageError('cannot specify both --all and --latest')
-    cluster_call('project_activity', project, limit=0 if all else limit, latest=latest, cli=True)
+    cluster_call('project_activity', **kwargs)
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True)
 @click.option('--name', help='A new name for the project.')
 @click.option('--editor', help='The editor to use for future sessions.')
 @click.option('--resource-profile', help='The resource profile to use for future sessions.')
 @global_options
-def patch(project, **kwargs):
+def patch(**kwargs):
     '''Change the project's name, editor, or resource profile.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('project_patch', project, **kwargs, cli=True)
+    cluster_call('project_patch', **kwargs)
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True)
 @global_options
-def status(project):
+def status():
     '''Retrieve the project's latest activity entry.
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('project_activity', project, latest=True, cli=True)
+    cluster_call('project_activity', latest=True)
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True, handle_revision=True)
 @click.option('--filename', default='', help='Filename to save to. If not supplied, the filename is constructed from the name of the project.')
 @global_options
-@click.pass_context
-def download(ctx, project, filename):
+def download(**kwargs):
     '''Download an archive of a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -155,19 +155,18 @@ def download(ctx, project, filename):
        A revision value may optionally be supplied in the PROJECT identifier.
        If not supplied, the latest revision will be selected.
     '''
-    from .project_revision import download as revision_download
-    ctx.invoke(revision_download, revision=project, filename=filename)
+    from .project_revision import _download
+    _download(**kwargs)
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True, handle_revision=True)
 @click.option('--command', default='', help='Command name to execute.')
-@click.option('--condarc', default='', help='Path to custom condarc.')
+@click.option('--condarc', default='', help='Path to custom condarc file.')
 @click.option('--dockerfile', default='', help='Path to custom Dockerfile.')
-@click.option('--debug', is_flag=True, help='Show docker image build logs.')
+@click.option('--debug', is_flag=True, help='debug logs')
 @global_options
-@click.pass_context
-def image(ctx, project, command, condarc, dockerfile, debug):
+def image(**kwargs):
     '''Build a Docker Image of a project.
 
        Using the template Dockerfile the project archive is downloaded and a runable
@@ -179,9 +178,9 @@ def image(ctx, project, command, condarc, dockerfile, debug):
        A revision value may optionally be supplied in the PROJECT identifier.
        If not supplied, the latest revision will be selected.
     '''
-    from .project_revision import image as revision_image
-    ctx.invoke(revision_image, revision=project, command=command, condarc=condarc, dockerfile=dockerfile, debug=debug)
-    
+    from .project_revision import _image
+    _image(**kwargs)
+
 
 @project.command()
 @click.argument('filename', type=click.Path(exists=True))
@@ -196,47 +195,11 @@ def upload(filename, name, tag, no_wait):
        the file. This can be overridden by using the --name option. The
        name must not be the same as an existing project.
     '''
-    cluster_call('project_upload', filename, name=name, tag=tag, wait=not no_wait, cli=True)
+    cluster_call('project_upload', filename, name=name, tag=tag, wait=not no_wait)
 
 
 @project.command()
-@click.argument('project')
-@click.option('--name', type=str, required=False, help="Deployment name. If not supplied, it is autogenerated from the project name.")
-@click.option('--endpoint', type=str, required=False, help='Endpoint name.')
-@click.option('--command', help='The command to use for this deployment.')
-@click.option('--resource-profile', help='The resource profile to use for this deployment.')
-@click.option('--public', is_flag=True, help='Make the deployment public.')
-@click.option('--private', is_flag=True, help='Make the deployment private (the default).')
-@click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
-@click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
-@click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
-@click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
-@global_options
-@click.pass_context
-def deploy(ctx, project, name, endpoint, command, resource_profile, public, private, wait, stop_on_error, open, frame):
-    '''Start a deployment for a project.
-
-       The PROJECT identifier need not be fully specified, and may even include
-       wildcards. But it must match exactly one project.
-
-       If the static endpoint is supplied, it must be of the form r'[A-Za-z0-9-]+',
-       and it will be converted to lowercase. It must not match any endpoint with
-       an active deployment, nor can it match any endpoint claimed by another project,
-       even if that project has no active deployments. If the endpoint is not supplied,
-       it will be autogenerated from the project name.
-
-       By default, this command will wait for the completion of the deployment
-       creation before returning. To return more quickly, use the --no-wait option.
-    '''
-    from .deployment import start as deployment_start
-    ctx.invoke(deployment_start, project=project, name=name, endpoint=endpoint,
-               resource_profile=resource_profile, command=command,
-               public=public, private=private, wait=wait,
-               stop_on_error=stop_on_error, open=open, frame=frame)
-
-
-@project.command()
-@click.argument('project')
+@ident_filter('project', required=True, handle_revision=True)
 @click.argument('schedule')
 @click.option('--name', type=str, required=False, help='Name for the job. If supplied, the name must not be identical to an existing job or run record, unless --make-unique is supplied. If not supplied, a unique name will be autogenerated from the project name.')
 @click.option('--make-unique', is_flag=True, default=None, help='If supplied, a counter will be appended to a supplied --name if needed to make it unique.')
@@ -244,32 +207,25 @@ def deploy(ctx, project, name, endpoint, command, resource_profile, public, priv
 @click.option('--resource-profile', help='The resource profile to use for this job.')
 @click.option('--variable', multiple=True, help='A variable setting in the form <key>=<value>. Multiple --variable options can be supplied.')
 @global_options
-@click.pass_context
-def schedule(ctx, project, schedule, command, name, make_unique, resource_profile, variable):
+def schedule(**kwargs):
     '''Create a run schedule for a project.
 
     This command is a shortcut for the "ae5 job create" command when the intent is to
     create a scheduled run for the job. It does not run the job immediately.
 
     For finer control over job behavior, use "ae5 job create" instead.'''
-    from .job import create as job_create
-    if not schedule:
-        raise click.UsageError('schedule must not be empty')
-    ctx.invoke(job_create, project=project, schedule=schedule, command=command, name=name,
-               resource_profile=resource_profile, variable=variable, run=False,
-               make_unique=False, wait=False, show_run=False, cleanup=False)
+    _create(**kwargs)
 
 
 @project.command()
-@click.argument('project')
+@ident_filter('project', required=True, handle_revision=True)
 @click.option('--name', type=str, required=False, help='Name for the run. If supplied, the name must not be identical to an existing job or run record, unless --make-unique is supplied. If not supplied, a unique name will be autogenerated from the project name.')
 @click.option('--make-unique', is_flag=True, default=None, help='If supplied, a counter will be appended to a supplied --name if needed to make it unique.')
 @click.option('--command', help='The command to use for this job.')
 @click.option('--resource-profile', help='The resource profile to use for this job.')
 @click.option('--variable', multiple=True, help='A variable setting in the form <key>=<value>. Multiple --variable options can be supplied.')
 @global_options
-@click.pass_context
-def run(ctx, project, command, name, make_unique, resource_profile, variable):
+def run(**kwargs):
     '''Execute a project as a run-once job.
 
     This command is a shortcut for the "ae5 job create" command when the intent is to
@@ -277,17 +233,15 @@ def run(ctx, project, command, name, make_unique, resource_profile, variable):
     waits for it to complete, then deletes the job record. The run record is returned.
 
     For finer control over job behavior, use "ae5 job create" instead.'''
-    from .job import create as job_create
-    ctx.invoke(job_create, project=project, schedule=None, command=command, name=name,
-               resource_profile=resource_profile, variable=variable, run=True,
-               make_unique=make_unique, wait=True, show_run=True, cleanup=True)
+    kwargs['run'] = kwargs['wait'] = kwargs['show_run'] = kwargs['cleanup'] = True
+    _create(**kwargs)
 
 
 @project.command()
-@click.argument('project')
-@click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@ident_filter('project', required=True)
+@yes_option
 @global_options
-def delete(project, yes):
+def delete(**kwargs):
     '''Delete a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -295,7 +249,7 @@ def delete(project, yes):
 
        This command will currently fail if the project has an active session.
     '''
-    cluster_call('project_delete', ident=project,
-                 confirm=None if yes else 'Delete project {ident}',
+    cluster_call('project_delete', **kwargs,
+                 confirm='Delete project {ident}',
                  prefix='Deleting project {ident}...',
-                 postfix='deleted.', cli=True)
+                 postfix='deleted.')

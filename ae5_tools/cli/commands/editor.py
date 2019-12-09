@@ -13,21 +13,21 @@ def editor():
 
 
 @editor.command()
-@ident_filter('editor', 'id={value}|name={value}')
+@ident_filter('editor')
 @global_options
-def list():
+def list(**kwargs):
     '''List the available editors.
     '''
-    cluster_call('editor_list', cli=True)
+    cluster_call('editor_list', **kwargs)
 
 
 @editor.command()
-@click.argument('name')
+@ident_filter('editor', required=True)
 @global_options
-def info(name):
+def info(**kwargs):
     '''Retrieve the record of a single editor.
 
        The NAME identifier must match exactly one name of an editor.
        Wildcards may be included.
     '''
-    cluster_call('editor_info', name, cli=True)
+    cluster_call('editor_info', **kwargs)

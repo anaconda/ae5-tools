@@ -77,7 +77,7 @@ def filter_list_of_dicts(records, filter):
                         raise ValueError(f'Invalid filter string: {filt4}\n   Required format: <fieldname><op><value>')
                     field, op, value = list(map(str.strip, parts))
                     if field not in rec0:
-                        raise ValueError(f'Invalid filter string: unknown field "{field}')
+                        raise ValueError(f'Invalid filter string: unknown field "{field}"')
                     mask4 = [OPS[op](_str(rec[field]), value) if field in rec else False
                              for rec in records]
                     mask3 = mask4 if mask3 is None else [m1 and m2 for m1, m2 in zip(mask3, mask4)]

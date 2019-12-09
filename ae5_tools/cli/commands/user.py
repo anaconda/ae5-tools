@@ -2,7 +2,7 @@ import sys
 import click
 
 from ..login import cluster_call
-from ..utils import add_param, global_options, ident_filter
+from ..utils import global_options, ident_filter
 
 
 @click.group(short_help='info, list',
@@ -17,21 +17,21 @@ def user():
 
 
 @user.command()
-@ident_filter('uname', 'username={value}|id={value}')
+@ident_filter('username', 'username={value}|id={value}')
 @global_options
 def list():
     '''List all users.'''
-    cluster_call('user_list', cli=True, admin=True)
+    cluster_call('user_list', admin=True)
 
 
 @user.command()
-@click.argument('uname')
+@ident_filter('username', 'username={value}|id={value}', required=True)
 @global_options
-def info(uname):
+def info():
     '''Retrieve information about a single user.
 
-    UNAME must exactly match either one username or one KeyCloak user ID.'''
-    cluster_call('user_info', uname, cli=True, admin=True)
+    USERNAME must exactly match either one username or one KeyCloak user ID.'''
+    cluster_call('user_info', admin=True)
 
 
 @user.command()
@@ -46,4 +46,4 @@ def events(param, limit, first):
     '''
     param = [z.split('=', 1) for z in param]
     param = dict((x.rstrip(), y.lstrip()) for x, y in param)
-    cluster_call('user_events', limit=limit, first=first, **param, cli=True, admin=True)
+    cluster_call('user_events', limit=limit, first=first, **param, admin=True)

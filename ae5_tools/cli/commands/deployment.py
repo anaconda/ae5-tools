@@ -3,7 +3,7 @@ import webbrowser
 import re
 
 from ..login import cluster_call
-from ..utils import ident_filter, global_options
+from ..utils import ident_filter, global_options, yes_option
 from .deployment_collaborator import collaborator
 
 
@@ -23,7 +23,7 @@ deployment.add_command(collaborator)
 @click.option('--collaborators', is_flag=True, help='Include collaborators. Since this requires an API call for each project, it can be slow if there are large numbers of projects.')
 @click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
 @global_options
-def list(collaborators, k8s):
+def list(**kwargs):
     '''List available deployments.
 
        By default, lists all deployments visible to the authenticated user.
@@ -31,95 +31,84 @@ def list(collaborators, k8s):
        supplying an optional DEPLOYMENT argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    cluster_call('deployment_list', collaborators=collaborators, k8s=k8s, cli=True)
+    cluster_call('deployment_list', **kwargs)
 
 
 @deployment.command()
-@click.argument('deployment')
+@ident_filter('deployment', required=True)
 @click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
 @global_options
-def info(deployment, k8s):
+def info(**kwargs):
     '''Retrieve information about a single deployment.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('deployment_info', deployment, k8s=k8s, cli=True)
+    cluster_call('deployment_info', **kwargs)
 
 
 @deployment.command()
-@click.argument('deployment')
-@click.option('--proxy', is_flag=True, help='Return the proxy log instead of the app log.')
-@click.option('--events', is_flag=True, help='Return the event log instead of the app log.')
+@ident_filter('deployment', required=True)
+@click.option('--app', 'which', flag_value='app', default=True, help='Return the app log (default).')
+@click.option('--proxy', 'which', flag_value='proxy', help='Return the proxy log.')
+@click.option('--events', 'which', flag_value='events', help='Return the event log.')
 @global_options
-def logs(deployment, proxy, events):
+def logs(**kwargs):
     '''Retrieve the logs for a deployment.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    if proxy and events:
-        raise click.ClickException('Cannot specify both --proxy and --events')
-    which = 'proxy' if proxy else ('events' if events else 'app')
-    cluster_call('deployment_logs', deployment, which=which, cli=True)
+    cluster_call('deployment_logs', **kwargs)
 
 
 @deployment.command()
-@click.argument('deployment')
+@ident_filter('deployment', required=True)
 @global_options
-def token(deployment):
+def token(**kwargs):
     '''Retrieve a bearer token to access a private deployment.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('deployment_token', deployment, cli=True)
+    cluster_call('deployment_token', **kwargs)
 
 
 @deployment.command()
-@click.argument('deployment')
-@click.option('--public', is_flag=True, help='Make the deployment public.')
-@click.option('--private', is_flag=True, help='Make the deployment private.')
+@ident_filter('deployment', required=True)
+@click.option('--public/--private', is_flag=True, default=None, help='Make the deployment public/private (default).')
 @global_options
-def patch(deployment, public, private):
+def patch(**kwargs):
     '''Change a deployment's public/private status.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one deployment.
     '''
-    if public and private:
-        raise click.ClickException('Cannot specify both --public and --private')
-    if not public and not private:
-        public = None
-    cluster_call('deployment_patch', deployment, public=public, cli=True)
+    cluster_call('deployment_patch', **kwargs)
 
 
-def _open(record, frame):
-    if isinstance(record, tuple):
-        record = {k: v for k, v in record[0]}
-    scheme, _, hostname, _ = record['project_url'].split('/', 3)
-    if frame:
-        url = f'{scheme}//{hostname}/deployments/detail/{record["id"]}/view'
-    else:
-        url = record['url']
-    webbrowser.open(url, 1, True)
+def _start(**kwargs):
+    name_s = f' {kwargs["name"]}' if kwargs.get('name') else ''
+    endpoint_s = f' at endpoint {kwargs["endpoint"]}' if kwargs.get('endpoint') else ''
+    public_s = 'public' if kwargs.get('public') else 'private'
+    response = cluster_call('deployment_start', **kwargs,
+                            prefix=f'Starting {public_s} deployment{name_s}{endpoint_s} for {{ident}}...',
+                            postfix='started.')
 
 
-@deployment.command(short_help='Start a deployment for a project.')
-@click.argument('project')
-@click.option('--name', type=str, required=False, help="Deployment name. If not supplied, it is autogenerated from the project name.")
+@deployment.command()
+@ident_filter('project', required=True)
+@click.option('--name', type=str, default=None, required=False, help="Deployment name. If not supplied, it is autogenerated from the project name.")
 @click.option('--endpoint', type=str, required=False, help='Endpoint name. If not supplied, a generated subdomain will be used.')
 @click.option('--command', help='The command to use for this deployment.')
 @click.option('--resource-profile', help='The resource profile to use for this deployment.')
-@click.option('--public', is_flag=True, help='Make the deployment public.')
-@click.option('--private', is_flag=True, help='Make the deployment private (the default).')
+@click.option('--public/--private', is_flag=True, help='Make the deployment public/private (default).')
 @click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
 @click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @global_options
-@click.pass_context
-def start(ctx, project, name, endpoint, command, resource_profile, public, private, wait, stop_on_error, open, frame):
+def start(**kwargs):
     '''Start a deployment for a project.
 
        The PROJECT identifier need not be fully specified, and may even include
@@ -134,69 +123,48 @@ def start(ctx, project, name, endpoint, command, resource_profile, public, priva
        By default, this command will wait for the completion of the deployment
        creation before returning. To return more quickly, use the --no-wait option.
     '''
-    if public and private:
-        raise click.ClickException('Cannot specify both --public and --private')
-    if endpoint:
-        endpoints = cluster_call('endpoint_list', format='json')
-        if not re.match(r'[A-Za-z0-9-]+', endpoint):
-            click.ClickException(f'Invalid endpoint: {endpoint}')
-        prec = cluster_call('project_info', project, collaborators=False, format='json')
-    name_s = f' {name}' if name else ''
-    endpoint_s = f' at endpoint {endpoint}' if endpoint else ''
-    response = cluster_call('deployment_start', ident=project, id_class='project',
-                            name=name if name else None,
-                            endpoint=endpoint, command=command,
-                            resource_profile=resource_profile, public=public,
-                            wait=wait or open, stop_on_error=stop_on_error,
-                            prefix=f'Starting deployment{name_s}{endpoint_s} for {{ident}}...',
-                            postfix='started.')
-    if open:
-        _open(response, frame)
+    response = _start(**kwargs)
 
 
-@deployment.command(short_help='Restart a deployment for a project.')
-@click.argument('deployment')
+@deployment.command()
+@ident_filter('deployment', required=True)
 @click.option('--wait', is_flag=True, help='Wait for the deployment to complete initialization before exiting.')
 @click.option('--stop-on-error', is_flag=True, help='Stop the deployment if it fails on the first attempt. Implies --wait.')
 @click.option('--open', is_flag=True, help='Open a browser upon initialization. Implies --wait.')
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @global_options
-@click.pass_context
-def restart(ctx, deployment, wait, stop_on_error, open, frame):
+def restart(**kwargs):
     '''Restart a deployment for a project.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    result = cluster_call('deployment_restart', ident=deployment,
-                          wait=wait or open, stop_on_error=stop_on_error,
+    result = cluster_call('deployment_restart', **kwargs,
                           prefix='Restarting deployment {ident}...',
                           postfix='restarted.')
-    if open:
-        _open(result, frame)
 
 
 @deployment.command(short_help='Stop a deployment.')
-@click.argument('deployment')
-@click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@ident_filter('deployment', required=True)
+@yes_option
 @global_options
-def stop(deployment, yes):
+def stop():
     '''Stop a deployment.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
     '''
-    cluster_call('deployment_stop', ident=deployment,
-                 confirm=None if yes else 'Stop deployment {ident}',
+    cluster_call('deployment_stop',
+                 confirm='Stop deployment {ident}',
                  prefix='Stopping {ident}...',
                  postfix='stopped.')
 
 
 @deployment.command(short_help='Open a deployment in a browser.')
-@click.argument('deployment')
+@ident_filter('deployment', required=True)
 @click.option('--frame', is_flag=True, help='Include the AE banner when opening.')
 @global_options
-def open(deployment, frame):
+def open(**kwargs):
     '''Opens a deployment in the default browser.
 
        The DEPLOYMENT identifier need not be fully specified, and may even include
@@ -206,5 +174,4 @@ def open(deployment, frame):
        default. If you wish to the Anaconda Enterprise banner at the top
        of the window, use the --frame option.
     '''
-    result = cluster_call('deployment_info', deployment, format='json')
-    _open(result, frame)
+    cluster_call('deployment_open', **kwargs)

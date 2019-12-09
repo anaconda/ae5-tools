@@ -8,8 +8,7 @@ from ...config import config
 @click.group(short_help='list',
              epilog='Type "ae5 account <command> --help" for help on a specific command.')
 @global_options
-@click.pass_context
-def account(ctx):
+def account():
     '''Commands related to the saved session information.'''
     pass
 

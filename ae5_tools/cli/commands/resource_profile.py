@@ -13,21 +13,21 @@ def resource_profile():
 
 
 @resource_profile.command()
-@ident_filter('resource_profile', 'name={value}')
+@ident_filter('resource_profile')
 @global_options
-def list():
+def list(**kwargs):
     '''List all availables resource profiles.
     '''
-    cluster_call('resource_profile_list', cli=True)
+    cluster_call('resource_profile_list', **kwargs)
 
 
 @resource_profile.command()
-@click.argument('name')
+@ident_filter('resource_profile', required=True)
 @global_options
-def info(name):
+def info(**kwargs):
     '''Retrieve the record of a single resource profile.
 
        The NAME identifier must match exactly one name of a resource profile.
        Wildcards may be included.
     '''
-    cluster_call('resource_profile_info', name, cli=True)
+    cluster_call('resource_profile_info', **kwargs)

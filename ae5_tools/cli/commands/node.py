@@ -2,7 +2,7 @@ import sys
 import click
 
 from ..login import cluster_call
-from ..utils import add_param, global_options, ident_filter
+from ..utils import global_options, ident_filter
 
 
 @click.group(short_help='info, list',
@@ -18,16 +18,16 @@ def node():
 
 
 @node.command()
-@ident_filter('node', 'name={value}')
+@ident_filter('node')
 @global_options
-def list():
+def list(**kwargs):
     '''List all nodes.'''
-    cluster_call('node_list', cli=True)
+    cluster_call('node_list', **kwargs)
 
 
 @node.command()
-@click.argument('node')
+@ident_filter('node', required=True)
 @global_options
-def info(node):
+def info(**kwargs):
     '''Get information about a specific node.'''
-    cluster_call('node_info', node, cli=True)
+    cluster_call('node_info', **kwargs)
