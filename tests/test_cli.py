@@ -72,6 +72,13 @@ def test_editors(editors):
     assert set(rec['id'] for rec in editors).issuperset({'zeppelin', 'jupyterlab', 'notebook'})
 
 
+def test_endpoints():
+    slist = _cmd('endpoint list')
+    for rec in slist:
+        rec2 = _cmd(f'endpoint info {rec["id"]}')
+        assert rec == rec2
+
+
 def test_samples():
     slist = _cmd(f'sample list')
     assert sum(rec['is_default'].lower() == 'true' for rec in slist) == 1
@@ -85,49 +92,14 @@ def test_samples():
 def test_sample_clone():
     cname = 'nlp_api'
     pname = 'testclone'
-    rrec = _cmd(f'sample clone {cname} --name {pname}')
-    _cmd(f'project delete {rrec["id"]}')
-
-
-@pytest.fixture(scope='module')
-def downloaded_project(user_session):
-    with tempfile.TemporaryDirectory() as tempd:
-        fname = os.path.join(tempd, 'blob.tar.gz')
-        fname2 = os.path.join(tempd, 'blob2.tar.gz')
-        _cmd(f'project download testproj3 --filename {fname}')
-        with tarfile.open(fname, 'r') as tf:
-            tf.extractall(path=tempd)
-        dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
-        assert len(dnames) == 1
-        dname = os.path.dirname(dnames[0])
-        yield fname, fname2, dname
-    for r in _cmd('project list'):
-        if r['name'].startswith('test_upload'):
-            _cmd(f'project delete {r["id"]}')
-    assert not any(r['name'].startswith('test_upload')
-                   for r in _cmd('project list'))
-
-
-def test_project_download(downloaded_project):
-    pass
-
-
-def test_project_upload(downloaded_project):
-    fname, fname2, dname = downloaded_project
-    _cmd(f'project upload {fname} --name test_upload1 --tag 1.2.3')
-    rrec = _cmd(f'project revision list test_upload1')
-    assert len(rrec) == 1
-    assert rrec[0]['name'] == '1.2.3'
-    _cmd(f'project download test_upload1 --filename {fname2}')
-
-
-def test_project_upload_as_directory(downloaded_project):
-    fname, fname2, dname = downloaded_project
-    _cmd(f'project upload {dname} --name test_upload2 --tag 1.2.3')
-    rrec = _cmd(f'project revision list test_upload2')
-    assert len(rrec) == 1
-    assert rrec[0]['name'] == '1.2.3'
-    _cmd(f'project download test_upload2 --filename {fname2}')
+    rrec1 = _cmd(f'sample clone {cname} --name {pname}')
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'sample clone {cname} --name {pname}')
+    rrec2 = _cmd(f'sample clone {cname} --name {pname} --make-unique')
+    rrec3 = _cmd(f'sample clone {cname}')
+    _cmd(f'project delete {rrec1["id"]}')
+    _cmd(f'project delete {rrec2["id"]}')
+    _cmd(f'project delete {rrec3["id"]}')
 
 
 @pytest.fixture(scope='module')
@@ -140,6 +112,51 @@ def cli_revisions(cli_project):
     prec = cli_project
     revs = _cmd(f'project revision list {prec["id"]}')
     return prec, revs
+
+
+@pytest.fixture(scope='module')
+def downloaded_project(user_session, cli_revisions):
+    prec, revs = cli_revisions
+    with tempfile.TemporaryDirectory() as tempd:
+        fname = _cmd(f'project download {prec["id"]}', table=False).strip()
+        assert fname == prec['name'] + '.tar.gz'
+        with tarfile.open(fname, 'r') as tf:
+            tf.extractall(path=tempd)
+        dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
+        assert len(dnames) == 1
+        dname = os.path.dirname(dnames[0])
+        yield fname, dname
+    for r in _cmd('project list'):
+        if r['name'].startswith('test_upload'):
+            _cmd(f'project delete {r["id"]}')
+    assert not any(r['name'].startswith('test_upload')
+                   for r in _cmd('project list'))
+
+
+def test_project_download(downloaded_project):
+    pass
+
+
+def test_project_upload(downloaded_project):
+    fname, dname = downloaded_project
+    _cmd(f'project upload {fname} --name test_upload1 --tag 1.2.3')
+    rrec = _cmd(f'project revision list test_upload1')
+    assert len(rrec) == 1
+    assert rrec[0]['name'] == '1.2.3'
+    fname2 = _cmd(f'project download test_upload1:1.2.3', table=False).strip()
+    assert fname2 == 'test_upload1-1.2.3.tar.gz'
+    assert os.path.exists(fname2)
+
+
+def test_project_upload_as_directory(downloaded_project):
+    fname, dname = downloaded_project
+    _cmd(f'project upload {dname} --name test_upload2 --tag 1.3.4')
+    rrec = _cmd(f'project revision list test_upload2')
+    assert len(rrec) == 1
+    assert rrec[0]['name'] == '1.3.4'
+    fname2 = _cmd(f'project download test_upload2:1.3.4', table=False).strip()
+    assert fname2 == 'test_upload2-1.3.4.tar.gz'
+    assert os.path.exists(fname2)
 
 
 def test_project_revisions(cli_revisions):
@@ -210,12 +227,18 @@ def test_project_collaborators(cli_project, project_list):
 
 def test_project_activity(cli_project):
     prec = cli_project
-    activity = _cmd(f'project activity --limit -1 {prec["id"]}')
-    assert activity[-1]['status'] == 'created'
-    assert activity[-1]['done']
-    assert activity[-1]['owner'] == prec['owner']
+    activity = _cmd(f'project activity  {prec["id"]}')
+    assert 1 <= len(activity) <= 10
     activity2 = _cmd(f'project activity --latest {prec["id"]}')
     assert activity[0] == activity2
+    activity3 = _cmd(f'project activity --limit 1 {prec["id"]}')
+    assert activity[0] == activity3[0]
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project activity --latest --all {prec["id"]}')
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project activity --limit 2 --all {prec["id"]}')
+    with pytest.raises(CMDException) as excinfo:
+        _cmd(f'project activity --latest --limit 2 {prec["id"]}')
 
 
 @pytest.fixture(scope='module')
@@ -347,9 +370,14 @@ def test_deploy_collaborators(cli_deployment):
     assert len(clist) == 1
     clist = _cmd(f'deployment collaborator add {drec["id"]} everyone --group')
     assert len(clist) == 2
+    clist = _cmd(f'deployment collaborator add {drec["id"]} {uname}')
+    assert len(clist) == 2
     assert all(c['id'] == uname and c['type'] == 'user' or
                c['id'] == 'everyone' and c['type'] == 'group'
                for c in clist)
+    for crec in clist:
+        crec2 = _cmd(f'deployment collaborator info {drec["id"]} {crec["id"]}')
+        assert crec2['id'] == crec['id'] and crec2['type'] == crec['type']
     clist = _cmd(f'deployment collaborator remove {drec["id"]} {uname} everyone')
     assert len(clist) == 0
     with pytest.raises(CMDException) as excinfo:
@@ -366,12 +394,22 @@ def test_deploy_broken(cli_deployment):
     assert not any(r['name'] == dname for r in _cmd('deployment list'))
 
 
-def test_k8s(user_session, cli_session, cli_deployment):
+def test_k8s_node(user_session):
+    nlist = _cmd('node list')
+    for nrec in nlist:
+        nrec2 = _cmd(f'node info {nrec["name"]}')
+        assert nrec2['name'] == nrec['name']
+
+
+def test_k8s_pod(user_session, cli_session, cli_deployment):
     _, srec = cli_session
     _, drec = cli_deployment
     plist = _cmd('pod list')
     assert any(prec['id'] == srec['id'] for prec in plist)
     assert any(prec['id'] == drec['id'] for prec in plist)
+    for prec in plist:
+        prec2 = _cmd(f'pod info {prec["id"]}')
+        assert prec2['id'] == prec['id']
     srec2 = _cmd(f'session info {srec["id"]} --k8s')
     assert srec2['id'] == srec['id']
     drec2 = _cmd(f'deployment info {drec["id"]} --k8s')

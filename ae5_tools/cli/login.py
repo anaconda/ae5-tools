@@ -160,69 +160,78 @@ def cluster(admin=False, retry=True):
 def cluster_call(method, *args, **kwargs):
     opts = get_options()
 
-    # Translate the user-supplied identifer string into an ID
-    ident = kwargs.pop('ident', None)
-    if ident:
-        id_class = kwargs.pop('id_class', None)
-        revision = id_class == 'project'
-        if not id_class:
-            id_class = method.split('_', 1)[0]
-        result = cluster_call(id_class + '_info', ident, internal=True, format='json')
-        ident = Identifier.from_record(result, ignore_revision=not revision)
-        args = (result,) + args
-
-    # Provide a standardized method for supplying the filter argument
-    # to the *_list api commands. This improves our performance when
-    if opts.get('ident_filter'):
-        itype, value = opts['ident_filter']
-        if Identifier.id_prefix(itype + 's', quiet=True):
-            value = Identifier.from_string(value).project_filter().split(',')
-        else:
-            value = [f'id={value}|name={value}']
-        kwargs['filter'] = tuple(value) + opts.get('filter', ())
-        opts['filter'] = ()
-
-    # Provide a standardized method for providing interactive output
-    # on the cli, including a confirmation prompt, a simple progress
-    # indicator via prefix/postfix strings
-    is_cli = (kwargs.pop('cli', False) or 'confirm' in kwargs or
-              'prefix' in kwargs or 'postfix' in kwargs)
-    if is_cli:
-        confirm = kwargs.pop('confirm', None) or ''
-        prefix = kwargs.pop('prefix', None) or ''
-        postfix = kwargs.pop('postfix', None) or ''
-        if ident:
-            confirm = confirm.format(ident=ident)
-            prefix = prefix.format(ident=ident)
-            postfix = postfix.format(ident=ident)
-
-        if confirm and not opts.get('yes') and not click.confirm(confirm):
-            return
-        if prefix:
-            click.echo(prefix, nl=False, err=True)
-        format = opts.get('format')
-        if format is None:
-            # This is a special format that passes tabular json data
-            # without error, but converts json data to a table
-            format = 'tableif'
-        elif format in ('json', 'csv'):
-            format = 'table'
-        kwargs.setdefault('format', format)
-
     # Retrieve the proper cluster session object and make the call
     try:
         admin = kwargs.pop('admin', False)
         c = cluster(admin=admin)
+    except AEException as e:
+        raise click.ClickException(str(e))
+
+    # Provide a standardized method for supplying the filter argument
+    # to the *_list api commands, and the ident argument for *_info
+    # api commands.
+    ident = None
+    if opts.get('ident_filter'):
+        record_type, filter, required, revision = opts['ident_filter']
+        if required:
+            ident = ','.join(filter)
+            if method.endswith('_info'):
+                if revision is not None:
+                    filter = filter + (f'revision={revision}',)
+                args = (filter,)  + args
+            else:
+                # For tasks that require a unique record, we call
+                # _ident_record to fully resolve the identifier and
+                # ensure that it is unique.
+                try:
+                    result = c._ident_record(record_type, filter)
+                except AEException as e:
+                    raise click.ClickException(str(e))
+                if Identifier.has_prefix(record_type + 's'):
+                    ident = Identifier.from_record(result)
+                if revision is not None:
+                    result['_revision'] = revision
+                args = (result,) + args
+        else:
+            # In non-required mode, we can feed the entire filter
+            # into the command, the combination of the identifier
+            # filter and the command-line filter arguments.
+            kwargs['filter'] = filter + opts.get('filter', ())
+            opts['filter'] = ()
+
+    # Provide a standardized method for providing interactive output
+    # on the cli, including a confirmation prompt, a simple progress
+    # indicator via prefix/postfix strings
+    confirm = kwargs.pop('confirm', None) or ''
+    prefix = kwargs.pop('prefix', None) or ''
+    postfix = kwargs.pop('postfix', None) or ''
+    if ident:
+        confirm = confirm.format(ident=ident)
+        prefix = prefix.format(ident=ident)
+        postfix = postfix.format(ident=ident)
+
+    if confirm and not opts.get('yes') and not click.confirm(confirm):
+        return
+    if prefix:
+        click.echo(prefix, nl=False, err=True)
+    format = opts.get('format')
+    if format is None:
+        # This is a special format that passes tabular json data
+        # without error, but converts json data to a table
+        format = 'tableif'
+    elif format in ('json', 'csv'):
+        format = 'table'
+    kwargs.setdefault('format', format)
+
+    # Retrieve the proper cluster session object and make the call
+    try:
         result = getattr(c, method)(*args, **kwargs)
     except AEException as e:
-        if is_cli and (postfix or prefix):
+        if postfix or prefix:
             click.echo('', nl=True, err=True)
         raise click.ClickException(str(e))
 
     # Finish out the standardized CLI output
-    if is_cli:
-        if postfix or prefix:
-            click.echo(postfix, nl=True, err=True)
-        print_output(result)
-
-    return result
+    if postfix or prefix:
+        click.echo(postfix, nl=True, err=True)
+    print_output(result)

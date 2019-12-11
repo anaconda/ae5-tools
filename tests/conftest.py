@@ -50,9 +50,7 @@ def user_session():
     assert set(len(p['_collaborators']) for p in plist
                if p['owner'] == username).issuperset((0, 1, 2))
     yield s
-    # To exercise the disconnect path in the destructor
-    s.persist = False
-    del s
+    s.disconnect()
 
 
 @pytest.fixture(scope='session')

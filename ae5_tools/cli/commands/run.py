@@ -1,8 +1,7 @@
 import click
 
 from ..login import cluster_call
-from ..utils import add_param, global_options
-from ...identifier import Identifier
+from ..utils import global_options, ident_filter, yes_option
 
 
 @click.group(short_help='delete, info, list, log, stop',
@@ -14,9 +13,9 @@ def run():
 
 
 @run.command()
-@click.argument('run', required=False)
+@ident_filter('run')
 @global_options
-def list(run):
+def list(**kwargs):
     '''List all available run records.
 
        By default, lists all runs visible to the authenticated user.
@@ -24,41 +23,38 @@ def list(run):
        supplying an optional RUN argument. Filters on other fields may
        be applied using the --filter option.
     '''
-    if run:
-        ident = Identifier.from_string(run, no_revision=True)
-        add_param('filter', ident.project_filter())
-    cluster_call('run_list', cli=True)
+    cluster_call('run_list', **kwargs)
 
 
 @run.command()
-@click.argument('run')
+@ident_filter('run', required=True)
 @global_options
-def info(run):
+def info(**kwargs):
     '''Retrieve information about a single run.
 
        The RUN identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one run.
     '''
-    cluster_call('run_info', run, cli=True)
+    cluster_call('run_info', **kwargs)
 
 
 @run.command(short_help='Retrieve the log for a single run.')
-@click.argument('run')
+@ident_filter('run', required=True)
 @global_options
-def log(run):
+def log(**kwargs):
     '''Retrieve the log file for a particular run.
 
        The RUN identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one run.
     '''
-    cluster_call('run_log', run, cli=True)
+    cluster_call('run_log', **kwargs)
 
 
 @run.command()
-@click.argument('run')
-@click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@ident_filter('run', required=True)
+@yes_option
 @global_options
-def stop(run, yes):
+def stop(**kwargs):
     '''Stop a run.
 
        Does not produce an error if the run has already completed.
@@ -66,23 +62,23 @@ def stop(run, yes):
        The RUN identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one run.
     '''
-    cluster_call('run_stop', ident=run,
-                 confirm=None if yes else 'Stop run {ident}',
+    cluster_call('run_stop', **kwargs,
+                 confirm='Stop run {ident}',
                  prefix='Stopping run {ident}...',
-                 postfix='stopped.', cli=True)
+                 postfix='stopped.')
 
 
 @run.command()
-@click.argument('run')
-@click.option('--yes', is_flag=True, help='Do not ask for confirmation.')
+@ident_filter('run', required=True)
+@yes_option
 @global_options
-def delete(run, yes):
+def delete(**kwargs):
     '''Delete a run record.
 
        The RUN identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one run.
     '''
-    cluster_call('run_delete', ident=run,
-                 confirm=None if yes else 'Delete run {ident}',
+    cluster_call('run_delete', **kwargs,
+                 confirm='Delete run {ident}',
                  prefix='Deleting run {ident}...',
-                 postfix='deleted.', cli=True)
+                 postfix='deleted.')

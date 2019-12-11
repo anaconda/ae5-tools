@@ -5,6 +5,7 @@ import re
 import os
 import sys
 import json
+import webbrowser
 from os.path import basename, abspath, isfile, isdir, join
 from fnmatch import fnmatch
 from datetime import datetime
@@ -56,7 +57,17 @@ COLUMNS = {
     'user': ['username', 'firstName', 'lastName', 'lastLogin', 'email', 'id'],
     'activity': ['type', 'status', 'message', 'done', 'owner', 'id', 'description', 'created', 'updated'],
     'endpoint': ['id', 'owner', 'name', 'project_name', 'deployment_id', 'project_id', 'project_url'],
-    'pod': ['name', 'owner', 'type', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'modified', 'phase', 'since', 'resource_profile', 'id'],
+    'pod': ['name', 'owner', 'type', 'usage/mem', 'usage/cpu', 'usage/gpu', 'node', 'rst', 'modified', 'phase', 'since', 'resource_profile', 'id', 'project_id'],
+}
+
+IDENT_FILTERS = {
+    'endpoint': 'id={value}',
+    'editor': 'name={value}|id={value}',
+    'node': 'name={value}',
+    'resource_profile': 'name={value}',
+    'sample': 'name={value}|id={value}',
+    'collaborator': 'id={value}',
+    'user': 'username={value}|id={value}'
 }
 
 _DTYPES = {'created': 'datetime', 'updated': 'datetime',
@@ -66,16 +77,12 @@ _DTYPES = {'created': 'datetime', 'updated': 'datetime',
 
 
 class EmptyRecordList(list):
-    def __init__(self, record_type=None, columns=None):
+    def __init__(self, record_type, columns=None):
+        self._record_type = record_type
         if columns is not None:
             self._columns = list(columns)
-            if isinstance(columns, dict) and '_record_type' in columns:
-                record_type = columns['_record_type']
-        elif record_type is not None:
-            self._columns = list(c for c in COLUMNS.get(record_type, ()) if not c.startswith('?'))
         else:
-            self._columns = []
-        self._record_type = record_type
+            self._columns = list(c for c in COLUMNS.get(record_type, ()) if not c.startswith('?'))
         super(EmptyRecordList, self).__init__()
     def __str__(self):
         return f'EmptyRecordList: record_type={self._record_type}\n  - columns: ' + ','.join(self._columns)
@@ -143,6 +150,7 @@ class AESessionBase(object):
     @staticmethod
     def _auth_message(msg, nl=True):
         print(msg, file=sys.stderr, end='\n' if nl else '')
+        sys.stderr.flush()
 
     @staticmethod
     def _password_prompt(key, last_valid=True):
@@ -199,6 +207,81 @@ class AESessionBase(object):
             self._save()
         self.connected = False
 
+    def _filter_records(self, filter, records):
+        if not filter or not records:
+            return records
+        rec0 = records[0]
+        records = filter_list_of_dicts(records, filter)
+        if not records:
+            records = EmptyRecordList(rec0['_record_type'], rec0)
+        return records
+
+    def _should_be_one(self, matches, filter, quiet):
+        if isinstance(matches, dict) or matches is None:
+            return matches
+        if len(matches) == 1:
+            return matches[0]
+        if quiet:
+            return None
+        if matches:
+            record_type = matches[0]['_record_type']
+        else:
+            record_type = getattr(matches, '_record_type', 'record')
+        pfx = 'Multiple' if len(matches) else 'No'
+        if isinstance(filter, (list, tuple)):
+            filter = ','.join(filter)
+        istr = record_type.replace('_', ' ') + 's'
+        msg = f'{pfx} {istr} found matching {filter}'
+        if matches:
+            if Identifier.has_prefix(record_type + 's'):
+                matches = [str(Identifier.from_record(r)) for r in matches]
+            else:
+                vars = filter_vars(filter)
+                matches = [','.join(f'{k}={r[k]}' for k in vars) for r in matches]
+            msg += ':\n  - ' + '\n  - '.join(matches)
+        raise AEException(msg)
+
+    def _fix_records(self, record_type, records, filter=None, **kwargs):
+        pre = f'_pre_{record_type}'
+        if isinstance(records, dict) and 'data' in records:
+            records = records['data']
+        is_single = isinstance(records, dict)
+        if is_single:
+            records = [records]
+        if hasattr(self, pre):
+            records = getattr(self, pre)(records)
+        for rec in records:
+            rec['_record_type'] = record_type
+        if not records:
+            records = EmptyRecordList(record_type)
+        if records and filter:
+            prefilt, postfilt = split_filter(filter, records[0])
+            records = self._filter_records(prefilt, records)
+        post = f'_post_{record_type}'
+        if hasattr(self, post):
+            records = getattr(self, post)(records, **kwargs)
+        if records and filter:
+            records = self._filter_records(postfilt, records)
+        if is_single:
+            return records[0] if records else None
+        return records
+
+    def _ident_record(self, record_type, ident, quiet=False, **kwargs):
+        if isinstance(ident, dict) and ident.get('_record_type', '') == record_type:
+            return ident
+        itype = record_type + 's'
+        if isinstance(ident, Identifier):
+            filter = ident.project_filter(itype=itype, ignore_revision=True)
+        elif isinstance(ident, tuple):
+            ident, filter = ','.join(ident), ident
+        elif record_type in IDENT_FILTERS:
+            ident = filter = IDENT_FILTERS[record_type].format(value=ident)
+        else:
+            ident = Identifier.from_string(ident, itype)
+            filter = ident.project_filter(itype=itype, ignore_revision=True)
+        matches = getattr(self, f'{record_type}_list')(filter=filter, **kwargs)
+        return self._should_be_one(matches, filter, quiet)
+
     def _format_table(self, response, columns):
         is_series = isinstance(response, dict)
         rlist = [response] if is_series else response
@@ -222,7 +305,7 @@ class AESessionBase(object):
                 elif dtype.startswith('timestamp'):
                     incr = dtype.rsplit('/', 1)[1]
                     fact = 1000.0 if incr == 'ms' else 1.0
-                    for rec in response:
+                    for rec in rlist:
                         if rec.get(col):
                             rec[col] = datetime.fromtimestamp(rec[col] / fact)
         result = [tuple(rec.get(k) for k in cdst) for rec in rlist]
@@ -240,7 +323,7 @@ class AESessionBase(object):
         if record_type is not None:
             for rec in rlist:
                 rec['_record_type'] = record_type
-        if format not in ('table', 'tableif', 'dataframe'):
+        if format not in ('table', 'tableif', 'dataframe', '_dataframe'):
             return response
         if record_type is None:
             if rlist and '_record_type' in rlist[0]:
@@ -250,8 +333,10 @@ class AESessionBase(object):
         if columns is None and record_type is not None:
             columns = COLUMNS.get(record_type, ())
         records, columns = self._format_table(response, columns)
-        if format == 'dataframe':
+        if format in ('dataframe', '_dataframe'):
             try:
+                if format == '_dataframe':
+                    raise ImportError
                 import pandas as pd
             except ImportError:
                 raise ImportError('Pandas must be installed in order to use format="dataframe"')
@@ -336,15 +421,9 @@ class AESessionBase(object):
             return response.content
         if format == 'text':
             return response.text
-        ctype = response.headers['content-type']
-        if 'json' in ctype:
+        if 'json' in response.headers['content-type']:
             return response.json()
-        elif format in ('json', 'table'):
-            raise AEException(f'Content type {ctype} not compatible with json format')
-        elif 'text' in ctype:
-            return response.text
-        else:
-            return response.content
+        return response.text
 
     def api(self, method, endpoint, **kwargs):
         format = kwargs.pop('format', None)
@@ -382,17 +461,17 @@ class AEUserSession(AESessionBase):
         quiet = kwargs.pop('quiet', False)
         if self._k8s_endpoint:
             if self._k8s_endpoint.startswith('ssh:'):
-                self._k8s_client = AE5K8SLocalClient(hostname, self._k8s_endpoint.split(':', 1)[1])
+                self._k8s_client = AE5K8SLocalClient(self.hostname, self._k8s_endpoint.split(':', 1)[1])
             else:
-                try:
-                    response = self._head(f'/_errors/404.html', subdomain=self._k8s_endpoint, format='response')
-                    self._k8s_client = AE5K8SRemoteClient(self, self._k8s_endpoint)
-                except AEUnexpectedResponseError:
-                    self._k8s_endpoint = None
-                    raise AEException('No kubectl deployment was found')
-            if self._k8s_endpoint and not self._k8s_client.healthy():
+                self._k8s_client = AE5K8SRemoteClient(self, self._k8s_endpoint)
+            estr = self._k8s_client.error()
+            if estr:
                 self._k8s_endpoint = self._k8s_client = None
-                raise AEException('Error establishing kubectl connection')
+                msg = ['Error establishing k8s connection:']
+                msg.extend('  ' + x for x in estr.splitlines())
+                raise AEException('\n'.join(msg))
+        if self._k8s_client is None:
+            raise AEException('No k8s connection available')
         return getattr(self._k8s_client, method)(*args, **kwargs)
 
     def _set_header(self):
@@ -446,40 +525,6 @@ class AEUserSession(AESessionBase):
         self.session.cookies.save(self._filename, ignore_discard=True)
         os.chmod(self._filename, 0o600)
 
-    def _filter_records(self, filter, records):
-        if not filter or not records:
-            return records
-        rec0 = records[0]
-        records = filter_list_of_dicts(records, filter)
-        if not records:
-            records = EmptyRecordList(columns=rec0)
-        return records
-
-    def _fix_records(self, record_type, records, filter=None, **kwargs):
-        pre = f'_pre_{record_type}'
-        if isinstance(records, dict) and 'data' in records:
-            records = records['data']
-        is_single = isinstance(records, dict)
-        if is_single:
-            records = [records]
-        if hasattr(self, pre):
-            records = getattr(self, pre)(records)
-        for rec in records:
-            rec['_record_type'] = record_type
-        if not records:
-            records = EmptyRecordList(record_type=record_type)
-        if records and filter:
-            prefilt, postfilt = split_filter(filter, records[0])
-            records = self._filter_records(prefilt, records)
-        post = f'_post_{record_type}'
-        if hasattr(self, post):
-            records = getattr(self, post)(records, **kwargs)
-        if records and filter:
-            records = self._filter_records(postfilt, records)
-        if is_single:
-            return records[0] if records else None
-        return records
-
     def _api_records(self, method, endpoint, filter=None, **kwargs):
         record_type = kwargs.pop('record_type', None)
         api_kwargs = kwargs.pop('api_kwargs', None) or {}
@@ -494,56 +539,17 @@ class AEUserSession(AESessionBase):
     def _post_record(self, endpoint, filter=None, **kwargs):
         return self._api_records('post', endpoint, filter=filter, **kwargs)
 
-    def _should_be_one(self, matches, filter, quiet):
-        if isinstance(matches, dict) or matches is None:
-            return matches
-        if len(matches) == 1:
-            return matches[0]
-        if quiet:
-            return None
-        if matches:
-            record_type = matches[0]['_record_type']
-        else:
-            record_type = getattr(matches, '_record_type', 'record')
-        pfx = 'Multiple' if len(matches) else 'No'
-        if isinstance(filter, (list, tuple)):
-            filter = ','.join(filter)
-        istr = record_type.replace('_', ' ') + 's'
-        msg = f'{pfx} {istr} found matching {filter}'
-        if matches:
-            if Identifier.has_prefix(record_type + 's'):
-                matches = [str(Identifier.from_record(r)) for r in matches]
-            else:
-                vars = filter_vars(filter)
-                matches = [','.join(f'{k}={r[k]}' for k in vars) for r in matches]
-            msg += ':\n  - ' + '\n  - '.join(matches)
-        raise AEException(msg)
-
-    def _ident_record(self, record_type, ident, quiet=False, **kwargs):
-        if isinstance(ident, dict) and ident.get('_record_type', '') == record_type:
-            return ident
-        itype = record_type + 's'
-        if Identifier.has_prefix(itype):
-            if isinstance(ident, str):
-                ident = Identifier.from_string(ident, itype)
-            filter = ident.project_filter(itype=itype, ignore_revision=True)
-        else:
-            filter = ident
-        matches = getattr(self, f'{record_type}_list')(filter=filter, **kwargs)
-        return self._should_be_one(matches, filter, quiet)
-
     def _post_project(self, records, collaborators=False):
         if collaborators:
             self._join_collaborators('projects', records)
         return records
 
-    def project_list(self, filter=None, internal=False, collaborators=False, format=None):
-        records = self._get_records('projects', filter,
-                                    collaborators=not internal and collaborators)
+    def project_list(self, filter=None, collaborators=False, format=None):
+        records = self._get_records('projects', filter, collaborators=collaborators)
         return self._format_response(records, format=format)
 
-    def project_info(self, ident, internal=False, collaborators=False, format=None, quiet=False):
-        record = self._ident_record('project', ident, collaborators=not internal and collaborators, quiet=quiet)
+    def project_info(self, ident, collaborators=False, format=None, quiet=False):
+        record = self._ident_record('project', ident, collaborators=collaborators, quiet=quiet)
         return self._format_response(record, format=format)
 
     def project_patch(self, ident, format=None, **kwargs):
@@ -620,14 +626,14 @@ class AEUserSession(AESessionBase):
                 profile['gpu'] = 0
         return response
 
-    def resource_profile_list(self, filter=None, internal=False, format=None):
+    def resource_profile_list(self, filter=None, format=None):
         response = self._get('projects/actions', params={'q': 'create_action'})
         response = response[0]['resource_profiles']
         response = self._fix_records('resource_profile', response, filter=filter)
         return self._format_response(response, format=format)
 
     def resource_profile_info(self, name, format=None, quiet=False):
-        response = self._ident_record('resource_profile', f'name={name}', quiet)
+        response = self._ident_record('resource_profile', name, quiet)
         return self._format_response(response, format=format)
 
     def _pre_editor(self, response):
@@ -635,14 +641,14 @@ class AEUserSession(AESessionBase):
             rec['packages'] = ', '.join(rec['packages'])
         return response
 
-    def editor_list(self, filter=None, internal=False, format=None):
+    def editor_list(self, filter=None, format=None):
         response = self._get('projects/actions', params={'q': 'create_action'})
         response = response[0]['editors']
         response = self._fix_records('editor', response, filter=filter)
         return self._format_response(response, format=format)
 
     def editor_info(self, name, format=None, quiet=False):
-        response = self._ident_record('editor', f'name={name}|id={name}', quiet)
+        response = self._ident_record('editor', name, quiet)
         return self._format_response(response, format=format)
 
     def _pre_sample(self, records):
@@ -651,18 +657,18 @@ class AEUserSession(AESessionBase):
             record.setdefault('is_default', False)
         return records
 
-    def sample_list(self, filter=None, internal=False, format=None):
+    def sample_list(self, filter=None, format=None):
         records = self._get('template_projects') + self._get('sample_projects')
         response = self._fix_records('sample', records, filter)
         return self._format_response(response, format=format)
 
-    def sample_info(self, name, format=None, quiet=False):
-        response = self._ident_record('sample', f'name={name}|id={name}', quiet)
+    def sample_info(self, ident, format=None, quiet=False):
+        response = self._ident_record('sample', ident, quiet)
         return self._format_response(response, format=format)
 
     def sample_clone(self, ident, name=None, tag=None,
                      make_unique=None, wait=True, format=None):
-        record = self.sample_info(ident)
+        record = self._ident_record('sample', ident)
         if name is None:
             name = record['name']
             if make_unique is None:
@@ -690,9 +696,18 @@ class AEUserSession(AESessionBase):
         response = self._get_records(f'projects/{id}/runs')
         return self._format_response(response, format=format)
 
-    def project_activity(self, ident, limit=0, latest=False, format=None):
+    def project_activity(self, ident, limit=None, all=False, latest=False, format=None):
         id = self._ident_record('project', ident)["id"]
-        limit = 1 if latest else (999999 if limit <= 0 else limit)
+        if all and latest:
+            raise AEException('Cannot specify both all=True and latest=True')
+        elif limit is None:
+            limit = 1 if latest else (0 if all else 10)
+        elif all and limit > 0:
+            raise AEException(f'Cannot specify both all=True and limit={limit}')
+        elif latest and limit > 1:
+            raise AEException(f'Cannot specify both latest=True and limit={limit}')
+        elif limit <= 0:
+            limit = 999999
         api_kwargs = {'params': {'sort': '-updated', 'page[size]': limit}}
         response = self._get_records(f'projects/{id}/activity', api_kwargs=api_kwargs)
         if latest:
@@ -718,27 +733,32 @@ class AEUserSession(AESessionBase):
 
     def _revisions(self, ident, filter=None, latest=False, single=False, quiet=False):
         if isinstance(ident, dict):
-            revision = None
+            revision = ident.get('_revision')
+        elif isinstance(ident, tuple):
+            revision = ''.join(r[9:] for r in ident if r.startswith('revision='))
+            ident = tuple(r for r in ident if not r.startswith('revision='))
         else:
             if isinstance(ident, str):
                 ident = Identifier.from_string(ident)
             revision = ident.revision
-        revision = revision or ('latest' if latest else None)
+        if revision == 'latest':
+            latest = latest or True
+            revision = None
+        elif revision:
+            latest = False
         prec = self._ident_record('project', ident, quiet=quiet)
         if prec is None:
             return None
         id = prec["id"]
         if not filter:
             filter = ()
-        elif isinstance(filter, str):
-            filter = filter,
-        if revision == 'latest':
+        if latest:
             filter = (f'latest=True',) + filter
         elif revision and revision != '*':
             filter = (f'name={revision}',) + filter
         response = self._get_records(f'projects/{id}/revisions', filter=filter, project=prec)
         if latest == 'keep' and response:
-            response[0]['name'] == 'latest'
+            response[0]['name'] = 'latest'
         if single:
             response = self._should_be_one(response, filter, quiet)
         return response
@@ -747,30 +767,34 @@ class AEUserSession(AESessionBase):
         latest = 'keep' if keep_latest else True
         return self._revisions(ident, latest=latest, single=True, quiet=quiet)
 
-    def revision_list(self, ident, filter=None, internal=False, format=None):
+    def revision_list(self, ident, filter=None, format=None):
         response = self._revisions(ident, filter, quiet=False)
         return self._format_response(response, format=format)
 
-    def revision_info(self, ident, internal=False, format=None, quiet=False):
+    def revision_info(self, ident, format=None, quiet=False):
         rrec = self._revision(ident, quiet=quiet)
         return self._format_response(rrec, format=format)
 
-    def revision_commands(self, ident, internal=False, format=None, quiet=False):
+    def revision_commands(self, ident, format=None, quiet=False):
         rrec = self._revision(ident, quiet=quiet)
         return self._format_response(rrec['_commands'], format=format)
 
-    def project_download(self, ident, filename=None):
-        rrec = self._revision(ident)
-        id, rev = rrec['_project']['id'], rrec['id']
-        response = self._get(f'projects/{id}/revisions/{rev}/archive', format='blob')
-        if filename is None:
-            return response
+    def project_download(self, ident, filename=None, format=None):
+        rrec = self._revision(ident, keep_latest=True)
+        prec, rev = rrec['_project'], rrec['id']
+        need_filename = not bool(filename)
+        if need_filename:
+            revdash = f'-{rrec["name"]}' if rrec['name'] != 'latest' else ''
+            filename = f'{prec["name"]}{revdash}.tar.gz'
+        response = self._get(f'projects/{prec["id"]}/revisions/{rev}/archive', format='blob')
         with open(filename, 'wb') as fp:
             fp.write(response)
+        if need_filename:
+            return filename
 
     def project_image(self, ident, command=None, condarc_path=None, dockerfile_path=None, debug=False, format=None):
         '''Build docker image'''
-        rrec = self._revision(ident)
+        rrec = self._revision(ident, keep_latest=True)
         prec, rev = rrec['_project'], rrec['id']
         name = prec['name'].replace(' ','').lower()
         owner = prec['owner'].replace('@','_at_')
@@ -922,9 +946,7 @@ class AEUserSession(AESessionBase):
     def _pre_session(self, records):
         # The "name" value in an internal AE5 session record is nothing
         # more than the "id" value with the "a1-" stub removed. Not very
-        # helpful, even if understandable. So we call _join_projects even
-        # when internal=True to replace this internal name with the project
-        # name, providing a more consistent user experience
+        # helpful, even if understandable.
         precs = {x['id']: x for x in self._get_records('projects')}
         for rec in records:
             pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
@@ -940,15 +962,15 @@ class AEUserSession(AESessionBase):
             self._join_k8s(records, True)
         return records
 
-    def session_list(self, filter=None, internal=False, k8s=False, format=None):
-        records = self._get_records('sessions', filter, k8s=not internal and k8s)
+    def session_list(self, filter=None, k8s=False, format=None):
+        records = self._get_records('sessions', filter, k8s=k8s)
         return self._format_response(records, format, record_type='session')
 
-    def session_info(self, ident, internal=False, k8s=False, format=None, quiet=False):
-        record = self._ident_record('session', ident, quiet=quiet, k8s=not internal and k8s)
+    def session_info(self, ident, k8s=False, format=None, quiet=False):
+        record = self._ident_record('session', ident, quiet=quiet, k8s=k8s)
         return self._format_response(record, format)
 
-    def session_start(self, ident, editor=None, resource_profile=None, wait=True, format=None):
+    def session_start(self, ident, editor=None, resource_profile=None, wait=True, open=False, frame=True, format=None):
         prec = self._ident_record('project', ident)
         id = prec['id']
         patches = {}
@@ -961,24 +983,36 @@ class AEUserSession(AESessionBase):
         response = self._post_record(f'projects/{id}/sessions')
         if response.get('error'):
             raise RuntimeError('Error starting project: {}'.format(response['error']['message']))
-        if wait:
+        if wait or open:
             self._wait(response)
         if response['action'].get('error'):
             raise RuntimeError('Error completing session start: {}'.format(response['action']['message']))
+        if open:
+            self.session_open(response, frame)
         return self._format_response(response, format=format)
 
     def session_stop(self, ident, format=format):
         id = self._ident_record('session', ident)['id']
         self._delete(f'sessions/{id}')
 
-    def session_restart(self, ident, wait=True, format=None):
+    def session_restart(self, ident, wait=True, open=False, frame=True, format=None):
         srec = self._ident_record('session', ident)
         id, pid = srec['id'], srec['project_id']
         self._delete(f'sessions/{id}')
         # Unlike deployments I am not copying over the editor and resource profile
         # settings from the current session. That's because I want to support the use
         # case where the session settings are patched prior to restart
-        return self.session_start(pid, wait=wait, format=format)
+        return self.session_start(pid, wait=wait, open=open, frame=frame, format=format)
+
+    def session_open(self, ident, frame=True, format=None):
+        srec = self._ident_record('session', ident)
+        if frame:
+            scheme, _, hostname, *_, project_id = srec['project_url'].split('/')
+            url = f'{scheme}//{hostname}/projects/detail/a0-{project_id}/view'
+        else:
+            scheme, _, hostname, *_, session_id = srec['url'].split('/')
+            url = f'{scheme}//{session_id}.{hostname}/'
+        webbrowser.open(url, 1, True)
 
     def session_changes(self, ident, master=False, format=None):
         id = self._ident_record('session', ident)['id']
@@ -1011,18 +1045,12 @@ class AEUserSession(AESessionBase):
             self._join_k8s(records, False)
         return records
 
-    def deployment_list(self, filter=None, internal=False, collaborators=False, k8s=False, format=None):
-        response = self._get_records('deployments', filter=filter,
-                                     collaborators=not internal and collaborators,
-                                     k8s=not internal and k8s)
+    def deployment_list(self, filter=None, collaborators=False, k8s=False, format=None):
+        response = self._get_records('deployments', filter=filter, collaborators=collaborators, k8s=k8s)
         return self._format_response(response, format=format)
 
-    def deployment_info(self, ident, internal=False, collaborators=False, k8s=False, format=None, quiet=False):
-        record = self._ident_record('deployment', ident, quiet=quiet)
-        if record and not internal and collaborators:
-            self._join_collaborators('deployments', record)
-        if record and not internal and k8s:
-            self._join_k8s(record, False)
+    def deployment_info(self, ident, collaborators=False, k8s=False, format=None, quiet=False):
+        record = self._ident_record('deployment', ident, collaborators=collaborators, k8s=k8s, quiet=quiet)
         return self._format_response(record, format=format)
 
     def _pre_endpoint(self, records):
@@ -1056,7 +1084,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format)
 
     def endpoint_info(self, ident, format=None, quiet=False):
-        response = self._ident_record('endpoint', f'id={ident}')
+        response = self._ident_record('endpoint', ident)
         return self._format_response(response, format=format)
 
     def deployment_collaborator_list(self, ident, filter=None, format=None):
@@ -1065,8 +1093,9 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format)
 
     def deployment_collaborator_info(self, ident, userid, format=None, quiet=False):
-        response = self.deployment_collaborator_list(ident, quiet=quiet)
-        response = self._should_be_one(response, f'id={userid}', quiet)
+        filter = f'id={userid}'
+        response = self.deployment_collaborator_list(ident, filter=filter)
+        response = self._should_be_one(response, filter, quiet)
         return self._format_response(response, format=format)
 
     def deployment_collaborator_list_set(self, ident, collabs, format=None):
@@ -1085,7 +1114,7 @@ class AEUserSession(AESessionBase):
             userid = userid,
         collabs = [c for c in collabs if c['id'] not in userid]
         if len(collabs) != ncollabs:
-            self.deployment_collaborator_list_set(id, collabs)
+            self.deployment_collaborator_list_set(drec, collabs)
         collabs.extend({'id': u, 'type': 'group' if group else 'user', 'permission': 'r'} for u in userid)
         return self.deployment_collaborator_list_set(drec, collabs, format=format)
 
@@ -1103,7 +1132,7 @@ class AEUserSession(AESessionBase):
 
     def deployment_start(self, ident, name=None, endpoint=None, command=None,
                          resource_profile=None, public=False,
-                         collaborators=None, wait=True,
+                         collaborators=None, wait=True, open=False, frame=False,
                          stop_on_error=False, format=None,
                          _skip_endpoint_test=False):
         rrec = self._revision(ident, keep_latest=True)
@@ -1121,6 +1150,8 @@ class AEUserSession(AESessionBase):
         if name:
             data['name'] = name
         if endpoint:
+            if not re.match(r'[A-Za-z0-9-]+', endpoint):
+                raise AEException(f'Invalid endpoint: {endpoint}')
             if not _skip_endpoint_test:
                 try:
                     self._head(f'/_errors/404.html', subdomain=endpoint)
@@ -1143,9 +1174,11 @@ class AEUserSession(AESessionBase):
                 if stop_on_error:
                     self.deployment_stop(id)
                 raise AEException(f'Error completing deployment start: {response["status_text"]}')
+        if open:
+            self.deployment_open(response, frame)
         return self._format_response(response, format=format)
 
-    def deployment_restart(self, ident, wait=True, stop_on_error=False, format=None):
+    def deployment_restart(self, ident, wait=True, open=False, frame=True, stop_on_error=False, format=None):
         drec = self._ident_record('deployment', ident)
         collab = self.deployment_collaborator_list(drec)
         if drec.get('url'):
@@ -1159,9 +1192,18 @@ class AEUserSession(AESessionBase):
                                      endpoint=endpoint, command=drec['command'],
                                      resource_profile=drec['resource_profile'],
                                      public=drec['public'],
-                                     collaborators=collab, wait=wait,
+                                     collaborators=collab, wait=wait, open=open, frame=frame,
                                      stop_on_error=stop_on_error, format=format,
                                      _skip_endpoint_test=True)
+
+    def deployment_open(self, ident, frame=False, format=None):
+        drec = self._ident_record('deployment', ident)
+        scheme, _, hostname, _ = drec['project_url'].split('/', 3)
+        if frame:
+            url = f'{scheme}//{hostname}/deployments/detail/{drec["id"]}/view'
+        else:
+            url = drec['url']
+        webbrowser.open(url, 1, True)
 
     def deployment_patch(self, ident, format=None, **kwargs):
         drec = self._ident_record('deployment', ident)
@@ -1190,11 +1232,11 @@ class AEUserSession(AESessionBase):
             response = response['token']
         return self._format_response(response, format=format)
 
-    def job_list(self, filter=None, internal=False, format=None):
+    def job_list(self, filter=None, format=None):
         response = self._get_records('jobs', filter=filter)
         return self._format_response(response, format=format)
 
-    def job_info(self, ident, internal=False, format=None, quiet=False):
+    def job_info(self, ident, format=None, quiet=False):
         response = self._ident_record('job', ident, quiet=quiet)
         return self._format_response(response, format=format)
 
@@ -1218,9 +1260,13 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format)
 
     def job_create(self, ident, schedule=None, name=None, command=None,
-                   resource_profile=None, variables=None, run=False,
-                   wait=False, cleanup=False, make_unique=None,
+                   resource_profile=None, variables=None, run=None,
+                   wait=None, cleanup=False, make_unique=None,
                    show_run=False, format=None):
+        if run is None:
+            run = not schedule or cleanup
+        if wait is None:
+            wait = cleanup
         if cleanup and schedule:
             raise ValueError('cannot use cleanup=True with a scheduled job')
         if cleanup and (not run or not wait):
@@ -1237,7 +1283,7 @@ class AEUserSession(AESessionBase):
         # Furthermore, creating a job with the same name as an deleted
         # job that still has run listings causes an error.
         if not name:
-            name = f'{command}-{rrec["project_name"]}'
+            name = f'{command}-{prec["name"]}'
             if make_unique is None:
                 make_unique = True
         if make_unique:
@@ -1296,11 +1342,11 @@ class AEUserSession(AESessionBase):
             jrec = self._ident_record('job', id)
         return self._format_response(jrec, format=format)
 
-    def run_list(self, filter=None, internal=False, format=None):
+    def run_list(self, filter=None, format=None):
         response = self._get_records('runs', filter=filter)
         return self._format_response(response, format=format)
 
-    def run_info(self, ident, internal=False, format=None, quiet=False):
+    def run_info(self, ident, format=None, quiet=False):
         response = self._ident_record('run', ident, quiet=quiet)
         return self._format_response(response, format=format)
 
@@ -1321,29 +1367,27 @@ class AEUserSession(AESessionBase):
     def _pre_pod(self, records):
         for ndx, rec in enumerate(records):
             type = rec['_record_type']
-            value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id')}
+            value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id', 'project_id')}
             value['type'] = type
             records[ndx] = value
         return records
 
-    def _post_pod(self, records, internal=False):
-        if not internal:
-            self._join_k8s(records, True)
+    def _post_pod(self, records):
+        self._join_k8s(records, True)
         return records
 
-    def pod_list(self, filter=None, internal=False, format=None):
-        post_kwargs = {'internal': internal}
+    def pod_list(self, filter=None, format=None):
         records = (self.session_list(filter=filter) + 
                    self.deployment_list(filter=filter) +
                    self.run_list(filter=filter))
         records = self._fix_records('pod', records)
         return self._format_response(records, format=format)
 
-    def pod_info(self, pod, internal=False, format=None, quiet=False):
-        record = self._ident_record('pods', pod, quiet=quiet, internal=internal)
+    def pod_info(self, pod, format=None, quiet=False):
+        record = self._ident_record('pod', pod, quiet=quiet)
         return self._format_response(record, format=format)
 
-    def node_list(self, filter=None, internal=False, format=None):
+    def node_list(self, filter=None, format=None):
         result = []
         for rec in self._k8s('node_info'):
             result.append({
@@ -1377,8 +1421,8 @@ class AEUserSession(AESessionBase):
             })
         return self._format_response(result, format=format)
 
-    def node_info(self, node, internal=False, format=None, quiet=False):
-        record = self._ident_record('@node', node, quiet=quiet)
+    def node_info(self, node, format=None, quiet=False):
+        record = self._ident_record('node', node, quiet=quiet)
         return self._format_response(record, format=format)
 
 
@@ -1449,44 +1493,30 @@ class AEAdminSession(AESessionBase):
         records = self._get_paginated('events', limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=[])
 
-    def user_list(self, internal=False, format=None):
-        users = self._get_paginated('users')
-        if not internal:
-            users = {u['id']: u for u in users}
-            events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
-            for e in events:
-                if 'response_mode' not in e['details']:
-                    urec = users.get(e['userId'])
-                    if urec and 'lastLogin' not in urec:
-                        urec['lastLogin'] = e['time']
-            users = list(users.values())
-            for urec in users:
-                urec.setdefault('lastLogin', 0)
-        return self._format_response(users, format=format, record_type='user')
+    def _post_user(self, users):
+        users = {u['id']: u for u in users}
+        events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
+        for e in events:
+            if 'response_mode' not in e['details']:
+                urec = users.get(e['userId'])
+                if urec and 'lastLogin' not in urec:
+                    urec['lastLogin'] = e['time']
+        users = list(users.values())
+        for urec in users:
+            urec.setdefault('lastLogin', 0)
+        return users
 
-    def user_info(self, user_or_id, internal=False, format=None, quiet=False):
-        if re.match(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', user_or_id):
-            response = [self._get(f'users/{user_or_id}')]
-        else:
-            response = self._get(f'users?username={user_or_id}')
-        if response:
-            response = response[0]
-            if not internal:
-                events = self._get_paginated('events', client='anaconda-platform',
-                                             type='LOGIN', user=response['id'])
-                time = next((e['time'] for e in events
-                             if 'response_mode' not in e['details']), 0)
-                response['lastLogin'] = datetime.utcfromtimestamp(time / 1000.0)
-        elif not quiet:
-            raise ValueError(f'Could not find user {user_or_id}')
-        if not internal:
-            events = self.user_events(client='anaconda-platform', type='LOGIN', user=response['id'])
-            response['lastLogin'] = next((e['time'] for e in events
-                                         if 'response_mode' not in e['details']), 0)
-        return self._format_response(response, format, record_type='user')
+    def user_list(self, filter=None, format=None):
+        users = self._get_paginated('users')
+        users = self._fix_records('user', users, filter)
+        return self._format_response(users, format=format)
+
+    def user_info(self, ident, format=None, quiet=False):
+        response = self._ident_record('user', ident, quiet=False)
+        return self._format_response(response, format)
 
     def impersonate(self, user_or_id):
-        record = self.user_info(user_or_id, internal=True)
+        record = self.user_info(user_or_id)
         old_headers = self.session.headers.copy()
         try:
             self._post(f'users/{record["id"]}/impersonation')

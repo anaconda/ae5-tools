@@ -3,6 +3,7 @@ import requests
 import time
 import pytest
 import os
+import io
 import tarfile
 import glob
 import uuid
@@ -10,6 +11,7 @@ import uuid
 from datetime import datetime
 
 from ae5_tools.api import AEUserSession, AEUnexpectedResponseError, AEException
+from .utils import _get_vars
 
 
 class AttrDict(dict):
@@ -41,11 +43,36 @@ def test_unexpected_response(user_session):
     assert 'json: json' in exc
 
 
-def test_invalid_user_session():
+def test_user_session(monkeypatch, capsys):
     with pytest.raises(ValueError) as excinfo:
         AEUserSession('', '')
     assert 'Must supply hostname and username' in str(excinfo.value)
-
+    hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
+    with pytest.raises(AEException) as excinfo:
+        c = AEUserSession(hostname, username, 'x' + password, persist=False)
+        c.authorize()
+        del c
+    assert 'Invalid username or password.' in str(excinfo.value)
+    passwords = [password, '', 'x' + password]
+    monkeypatch.setattr('getpass.getpass', lambda x: passwords.pop())
+    c = AEUserSession(hostname, username, persist=False)
+    c.authorize()
+    captured = capsys.readouterr()
+    assert f'Password for {username}@{hostname}' in captured.err
+    assert f'Invalid username or password; please try again.' in captured.err
+    assert f'Must supply a password' in captured.err
+    assert c._k8s('status') == 'Alive and kicking'
+    c._k8s_client, c._k8s_endpoint = None, 'ssh:fakeuser'
+    with pytest.raises(AEException) as excinfo:
+        c._k8s('status')
+    assert 'Error establishing k8s connection' in str(excinfo.value)
+    c._k8s_endpoint = 'fakek8sendpoint'
+    with pytest.raises(AEException) as excinfo:
+        c._k8s('status')
+    assert 'No deployment found at endpoint fakek8sendpoint' in str(excinfo.value)
+    with pytest.raises(AEException) as excinfo:
+        c._k8s('status')
+    assert 'No k8s connection available' in str(excinfo.value)
 
 
 @pytest.fixture(scope='module')
@@ -54,6 +81,9 @@ def project_list(user_session):
 
 
 def test_project_list_df(user_session, project_list):
+    with pytest.raises(ImportError) as excinfo:
+        df = user_session.project_list(collaborators=True, format='_dataframe')
+    assert 'Pandas must be installed in order to use format="dataframe"' in str(excinfo.value)
     df = user_session.project_list(collaborators=True, format='dataframe')
     assert len(df) == len(project_list)
     mismatch = False
@@ -121,6 +151,13 @@ def test_editors(user_session, editors):
     assert set(rec['id'] for rec in editors).issuperset({'zeppelin', 'jupyterlab', 'notebook'})
 
 
+def test_endpoints(user_session):
+    slist = user_session.endpoint_list()
+    for rec in slist:
+        rec2 = user_session.endpoint_info(rec['id'])
+        assert rec == rec2
+
+
 def test_samples(user_session):
     slist = user_session.sample_list()
     assert sum(rec['is_default'] for rec in slist) == 1
@@ -134,8 +171,14 @@ def test_samples(user_session):
 def test_sample_clone(user_session):
     cname = 'nlp_api'
     pname = 'testclone'
-    rrec = user_session.sample_clone(cname, name=pname, wait=True)
-    user_session.project_delete(rrec['id'])
+    rrec1 = user_session.sample_clone(cname, name=pname, wait=True)
+    with pytest.raises(AEException) as excinfo:
+        user_session.sample_clone(cname, name=pname, wait=True)
+    rrec2 = user_session.sample_clone(cname, name=pname, make_unique=True, wait=True)
+    rrec3 = user_session.sample_clone(cname, wait=True)
+    user_session.project_delete(rrec1)
+    user_session.project_delete(rrec2)
+    user_session.project_delete(rrec3)
 
 
 @pytest.fixture(scope='module')
@@ -154,15 +197,14 @@ def api_revisions(user_session, api_project):
 def downloaded_project(user_session, api_revisions):
     prec, revs = api_revisions
     with tempfile.TemporaryDirectory() as tempd:
-        fname = os.path.join(tempd, 'blob.tar.gz')
-        fname2 = os.path.join(tempd, 'blob2.tar.gz')
-        user_session.project_download(prec, filename=fname)
+        fname = user_session.project_download(prec)
+        assert fname == prec['name'] + '.tar.gz'
         with tarfile.open(fname, 'r') as tf:
             tf.extractall(path=tempd)
         dnames = glob.glob(os.path.join(tempd, '*', 'anaconda-project.yml'))
         assert len(dnames) == 1
         dname = os.path.dirname(dnames[0])
-        yield fname, fname2, dname
+        yield fname, dname
     for r in user_session.session_list():
         if r['name'].startswith('test_upload'):
             user_session.session_stop(r)
@@ -179,21 +221,25 @@ def test_project_download(user_session, downloaded_project):
 
 
 def test_project_upload(user_session, downloaded_project):
-    fname, fname2, dname = downloaded_project
+    fname, dname = downloaded_project
     user_session.project_upload(fname, 'test_upload1', '1.2.3', wait=True)
     rrec = user_session.revision_list('test_upload1')
     assert len(rrec) == 1
     assert rrec[0]['name'] == '1.2.3'
-    user_session.project_download('test_upload1:1.2.3', filename=fname2)
+    fname2 = user_session.project_download('test_upload1:1.2.3')
+    assert fname2 == 'test_upload1-1.2.3.tar.gz'
+    assert os.path.exists(fname2)
 
 
 def test_project_upload_as_directory(user_session, downloaded_project):
-    fname, fname2, dname = downloaded_project
+    fname, dname = downloaded_project
     user_session.project_upload(dname, 'test_upload2', '1.3.4', wait=True)
     rrec = user_session.revision_list('test_upload2')
     assert len(rrec) == 1
     assert rrec[0]['name'] == '1.3.4'
-    user_session.project_download('test_upload2:1.3.4', filename=fname2)
+    fname2 = user_session.project_download('test_upload2:1.3.4')
+    assert fname2 == 'test_upload2-1.3.4.tar.gz'
+    assert os.path.exists(fname2)
 
 
 def _soft_equal(d1, d2):
@@ -270,6 +316,7 @@ def test_project_collaborators(user_session, api_project, project_list):
     uname = next(rec['owner'] for rec in project_list if rec['owner'] != prec['owner'])
     with pytest.raises(AEException) as excinfo:
         user_session.project_collaborator_info(prec, uname)
+    user_session.project_collaborator_info(prec, uname, quiet=True)
     assert f'No collaborators found matching id={uname}' in str(excinfo.value)
     clist = user_session.project_collaborator_add(prec, uname)
     assert len(clist) == 1
@@ -293,12 +340,18 @@ def test_project_collaborators(user_session, api_project, project_list):
 
 def test_project_activity(user_session, api_project):
     prec = api_project
-    activity = user_session.project_activity(prec, limit=-1)
-    assert activity[-1]['status'] == 'created'
-    assert activity[-1]['done']
-    assert activity[-1]['owner'] == prec['owner']
+    activity = user_session.project_activity(prec)
+    assert 1 <= len(activity) <= 10
     activity2 = user_session.project_activity(prec, latest=True)
     assert activity[0] == activity2
+    activity3 = user_session.project_activity(prec, limit=1)
+    assert activity[0] == activity3[0]
+    with pytest.raises(AEException) as excinfo:
+        user_session.project_activity(prec, latest=True, all=True)
+    with pytest.raises(AEException) as excinfo:
+        user_session.project_activity(prec, latest=True, limit=2)
+    with pytest.raises(AEException) as excinfo:
+        user_session.project_activity(prec, all=True, limit=2)
 
 
 @pytest.fixture(scope='module')
@@ -398,6 +451,9 @@ def test_deploy_token(user_session, api_deployment):
                         headers={'Authorization': f'Bearer {token}'})
     assert resp.status_code == 200
     assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
+    with pytest.raises(AEException) as excinfo:
+        token = user_session.deployment_token(drec, format='table')
+    assert 'Response is not a tabular format' in str(excinfo.value)
 
 
 def test_deploy_logs(user_session, api_deployment):
@@ -430,9 +486,14 @@ def test_deploy_collaborators(user_session, api_deployment):
     assert len(clist) == 1
     clist = user_session.deployment_collaborator_add(drec, 'everyone', group=True)
     assert len(clist) == 2
+    clist = user_session.deployment_collaborator_add(drec, uname)
+    assert len(clist) == 2
     assert all(c['id'] == uname and c['type'] == 'user' or
                c['id'] == 'everyone' and c['type'] == 'group'
                for c in clist)
+    for crec in clist:
+        crec2 = user_session.deployment_collaborator_info(drec, crec['id'])
+        assert crec2['id'] == crec['id'] and crec2['type'] == crec['type']
     clist = user_session.deployment_collaborator_remove(drec, (uname, 'everyone'))
     assert len(clist) == 0
     with pytest.raises(AEException) as excinfo:
@@ -451,12 +512,22 @@ def test_deploy_broken(user_session, api_deployment):
     assert not any(r['name'] == dname for r in user_session.deployment_list())
 
 
-def test_k8s(user_session, api_session, api_deployment):
+def test_k8s_node(user_session):
+    nlist = user_session.node_list()
+    for nrec in nlist:
+        nrec2 = user_session.node_info(nrec['name'])
+        assert nrec2['name'] == nrec['name']
+
+
+def test_k8s_pod(user_session, api_session, api_deployment):
     _, srec = api_session
     _, drec = api_deployment
     plist = user_session.pod_list()
     assert any(prec['id'] == srec['id'] for prec in plist)
     assert any(prec['id'] == drec['id'] for prec in plist)
+    for prec in plist:
+        prec2 = user_session.pod_info(prec['id'])
+        assert prec2['id'] == prec['id']
     srec2 = user_session.session_info(srec['id'], k8s=True)
     assert srec2['id'] == srec['id']
     drec2 = user_session.deployment_info(drec['id'], k8s=True)

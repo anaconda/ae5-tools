@@ -1,9 +1,17 @@
 import click
 
 from ..identifier import Identifier
+from ..api import IDENT_FILTERS
+
+
+def param_callback(ctx, param, value):
+    if value in (None, ()):
+        return
+    add_param(param.name.lower().replace('-', '_'), value)
+
 
 GLOBAL_OPTIONS = [
-    click.option('--yes', is_flag=True, expose_value=False, hidden=True)
+    click.option('--yes', is_flag=True, expose_value=False, callback=param_callback, hidden=True)
 ]
 
 
@@ -12,6 +20,10 @@ def global_options(func):
         func = option(func)
     return func
 
+
+def yes_option(func):
+    return click.option('--yes', is_flag=True, expose_value=False, callback=param_callback, hidden=False,
+                        help='Do not ask for confirmation.')(func)
 
 def add_param(param, value):
     ctx = click.get_current_context()
@@ -52,20 +64,35 @@ def persist_option(param, value):
         obj['defaults'][param] = value
 
 
-def param_callback(ctx, param, value):
-    if value in (None, ()):
-        return
-    add_param(param.name.lower().replace('-', '_'), value)
+def ident_callback(handle_revision, required):
+    def _callback(ctx, param, value):
+        if value in (None, '', ()):
+            return
+        revision = None
+        record_type = param.name.lower().replace('-', '_')
+        ident_type = record_type.rstrip('s') + 's'
+        if Identifier.has_prefix(ident_type):
+            ident = Identifier.from_string(value)
+            if ident.revision:
+                if not handle_revision:
+                    raise click.ClickException(f'Revision tag not expected here: {value}')
+                revision = ident.revision
+            # Just to verify that it the identifier is compatible
+            # with this category of search (e.g., deployment, project)
+            try:
+                value = Identifier.project_filter(ident, ident_type, ignore_revision=True)
+            except ValueError as exc:
+                raise click.ClickException(str(exc))
+        elif record_type in IDENT_FILTERS:
+            value = IDENT_FILTERS[record_type].format(value=value)
+        value = (record_type, tuple(value.split(',')), required, revision)
+        add_param('ident_filter', value)
+    return _callback
 
 
-def ident_callback(ctx, param, value):
-    if value in (None, '', ()):
-        return
-    add_param('ident_filter', (param.name.lower().replace('-', '_'), value))
-
-
-def ident_filter(name):
-    return click.argument(name, expose_value=False, callback=ident_callback, required=False)
+def ident_filter(name, handle_revision=False, required=False):
+    callback = ident_callback(handle_revision, required)
+    return click.argument(name, expose_value=False, callback=callback, required=required)
 
 
 def click_text(text):

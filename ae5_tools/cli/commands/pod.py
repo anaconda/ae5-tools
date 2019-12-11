@@ -20,14 +20,14 @@ def pod():
 @pod.command()
 @ident_filter('pod')
 @global_options
-def list():
+def list(**kwargs):
     '''List all nodes.'''
-    cluster_call('pod_list', cli=True)
+    cluster_call('pod_list', **kwargs)
 
 
 @pod.command()
-@click.argument('pod')
+@ident_filter('pod', required=True)
 @global_options
-def info(pod):
+def info(**kwargs):
     '''Get information about a specific pod.'''
-    cluster_call('pod_info', pod, cli=True)
+    cluster_call('pod_info', **kwargs)

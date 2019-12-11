@@ -1,7 +1,7 @@
 import click
 
 from ..login import cluster_call
-from ..utils import global_options
+from ..utils import global_options, ident_filter
 
 
 @click.group(short_help='info, list',
@@ -13,20 +13,21 @@ def endpoint():
 
 
 @endpoint.command()
+@ident_filter('endpoint')
 @global_options
-def list():
+def list(**kwargs):
     '''List the static endpoints on this cluster.
     '''
-    cluster_call('endpoint_list', cli=True)
+    cluster_call('endpoint_list', **kwargs)
 
 
 @endpoint.command()
-@click.argument('endpoint')
+@ident_filter('endpoint', required=True)
 @global_options
-def info(endpoint):
+def info(**kwargs):
     '''Retrieve the record of a single endpoint.
 
        The ENDPOINT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one endpoint name or ID.
     '''
-    cluster_call('endpoint_info', endpoint, cli=True)
+    cluster_call('endpoint_info', **kwargs)
