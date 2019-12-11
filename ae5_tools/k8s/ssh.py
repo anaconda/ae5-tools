@@ -26,7 +26,8 @@ def raise_error(stdout, stderr, errcode, cmd, msg):
 
 def find_remote_port(hostname, username):
     # https://stackoverflow.com/questions/2838244/get-open-tcp-port-in-python/2838309#2838309
-    cmd = ['ssh', f'{username}@{hostname}', 'python', '-c',
+    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+           f'{username}@{hostname}', 'python', '-c',
            "'" 'import socket;s=socket.socket();s.bind(("", 0));'
            'print(s.getsockname()[1]);s.close()'"'"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -55,8 +56,8 @@ def find_local_port():
 def tunneled_k8s_url(hostname, username):
     remote_port = find_remote_port(hostname, username)
     local_port = find_local_port()
-    cmd = ['ssh', '-t', '-t', '-L', f'{local_port}:localhost:{remote_port}',
-           f'{username}@{hostname}',
+    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-t', '-t', '-L',
+           f'{local_port}:localhost:{remote_port}', f'{username}@{hostname}',
            'kubectl', 'proxy', '--disable-filter', f'--port={remote_port}']
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, universal_newlines=True)
