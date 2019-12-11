@@ -77,16 +77,12 @@ _DTYPES = {'created': 'datetime', 'updated': 'datetime',
 
 
 class EmptyRecordList(list):
-    def __init__(self, record_type=None, columns=None):
+    def __init__(self, record_type, columns=None):
+        self._record_type = record_type
         if columns is not None:
             self._columns = list(columns)
-            if isinstance(columns, dict) and '_record_type' in columns:
-                record_type = columns['_record_type']
-        elif record_type is not None:
-            self._columns = list(c for c in COLUMNS.get(record_type, ()) if not c.startswith('?'))
         else:
-            self._columns = []
-        self._record_type = record_type
+            self._columns = list(c for c in COLUMNS.get(record_type, ()) if not c.startswith('?'))
         super(EmptyRecordList, self).__init__()
     def __str__(self):
         return f'EmptyRecordList: record_type={self._record_type}\n  - columns: ' + ','.join(self._columns)
@@ -154,6 +150,7 @@ class AESessionBase(object):
     @staticmethod
     def _auth_message(msg, nl=True):
         print(msg, file=sys.stderr, end='\n' if nl else '')
+        sys.stderr.flush()
 
     @staticmethod
     def _password_prompt(key, last_valid=True):
@@ -216,7 +213,7 @@ class AESessionBase(object):
         rec0 = records[0]
         records = filter_list_of_dicts(records, filter)
         if not records:
-            records = EmptyRecordList(columns=rec0)
+            records = EmptyRecordList(rec0['_record_type'], rec0)
         return records
 
     def _should_be_one(self, matches, filter, quiet):
@@ -256,7 +253,7 @@ class AESessionBase(object):
         for rec in records:
             rec['_record_type'] = record_type
         if not records:
-            records = EmptyRecordList(record_type=record_type)
+            records = EmptyRecordList(record_type)
         if records and filter:
             prefilt, postfilt = split_filter(filter, records[0])
             records = self._filter_records(prefilt, records)
@@ -279,11 +276,9 @@ class AESessionBase(object):
             ident, filter = ','.join(ident), ident
         elif record_type in IDENT_FILTERS:
             ident = filter = IDENT_FILTERS[record_type].format(value=ident)
-        elif Identifier.has_prefix(itype):
+        else:
             ident = Identifier.from_string(ident, itype)
             filter = ident.project_filter(itype=itype, ignore_revision=True)
-        else:
-            filter = ident
         matches = getattr(self, f'{record_type}_list')(filter=filter, **kwargs)
         return self._should_be_one(matches, filter, quiet)
 
@@ -328,7 +323,7 @@ class AESessionBase(object):
         if record_type is not None:
             for rec in rlist:
                 rec['_record_type'] = record_type
-        if format not in ('table', 'tableif', 'dataframe'):
+        if format not in ('table', 'tableif', 'dataframe', '_dataframe'):
             return response
         if record_type is None:
             if rlist and '_record_type' in rlist[0]:
@@ -338,8 +333,10 @@ class AESessionBase(object):
         if columns is None and record_type is not None:
             columns = COLUMNS.get(record_type, ())
         records, columns = self._format_table(response, columns)
-        if format == 'dataframe':
+        if format in ('dataframe', '_dataframe'):
             try:
+                if format == '_dataframe':
+                    raise ImportError
                 import pandas as pd
             except ImportError:
                 raise ImportError('Pandas must be installed in order to use format="dataframe"')
@@ -424,15 +421,9 @@ class AESessionBase(object):
             return response.content
         if format == 'text':
             return response.text
-        ctype = response.headers['content-type']
-        if 'json' in ctype:
+        if 'json' in response.headers['content-type']:
             return response.json()
-        elif format in ('json', 'table'):
-            raise AEException(f'Content type {ctype} not compatible with json format')
-        elif 'text' in ctype:
-            return response.text
-        else:
-            return response.content
+        return response.text
 
     def api(self, method, endpoint, **kwargs):
         format = kwargs.pop('format', None)
@@ -472,15 +463,15 @@ class AEUserSession(AESessionBase):
             if self._k8s_endpoint.startswith('ssh:'):
                 self._k8s_client = AE5K8SLocalClient(self.hostname, self._k8s_endpoint.split(':', 1)[1])
             else:
-                try:
-                    response = self._head(f'/_errors/404.html', subdomain=self._k8s_endpoint, format='response')
-                    self._k8s_client = AE5K8SRemoteClient(self, self._k8s_endpoint)
-                except AEUnexpectedResponseError:
-                    self._k8s_endpoint = None
-                    raise AEException('No kubectl deployment was found')
-            if self._k8s_endpoint and not self._k8s_client.healthy():
+                self._k8s_client = AE5K8SRemoteClient(self, self._k8s_endpoint)
+            estr = self._k8s_client.error()
+            if estr:
                 self._k8s_endpoint = self._k8s_client = None
-                raise AEException('Error establishing kubectl connection')
+                msg = ['Error establishing k8s connection:']
+                msg.extend('  ' + x for x in estr.splitlines())
+                raise AEException('\n'.join(msg))
+        if self._k8s_client is None:
+            raise AEException('No k8s connection available')
         return getattr(self._k8s_client, method)(*args, **kwargs)
 
     def _set_header(self):
@@ -761,8 +752,6 @@ class AEUserSession(AESessionBase):
         id = prec["id"]
         if not filter:
             filter = ()
-        elif isinstance(filter, str):
-            filter = filter,
         if latest:
             filter = (f'latest=True',) + filter
         elif revision and revision != '*':
@@ -793,14 +782,15 @@ class AEUserSession(AESessionBase):
     def project_download(self, ident, filename=None, format=None):
         rrec = self._revision(ident, keep_latest=True)
         prec, rev = rrec['_project'], rrec['id']
-        if filename is None:
-            return response
-        if not filename:
+        need_filename = not bool(filename)
+        if need_filename:
             revdash = f'-{rrec["name"]}' if rrec['name'] != 'latest' else ''
             filename = f'{prec["name"]}{revdash}.tar.gz'
         response = self._get(f'projects/{prec["id"]}/revisions/{rev}/archive', format='blob')
         with open(filename, 'wb') as fp:
             fp.write(response)
+        if need_filename:
+            return filename
 
     def project_image(self, ident, command=None, condarc_path=None, dockerfile_path=None, debug=False, format=None):
         '''Build docker image'''
@@ -1094,7 +1084,7 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format)
 
     def endpoint_info(self, ident, format=None, quiet=False):
-        response = self._ident_record('endpoint')
+        response = self._ident_record('endpoint', ident)
         return self._format_response(response, format=format)
 
     def deployment_collaborator_list(self, ident, filter=None, format=None):
@@ -1103,8 +1093,9 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format)
 
     def deployment_collaborator_info(self, ident, userid, format=None, quiet=False):
-        response = self.deployment_collaborator_list(ident, quiet=quiet)
-        response = self._should_be_one(response, f'id={userid}', quiet)
+        filter = f'id={userid}'
+        response = self.deployment_collaborator_list(ident, filter=filter)
+        response = self._should_be_one(response, filter, quiet)
         return self._format_response(response, format=format)
 
     def deployment_collaborator_list_set(self, ident, collabs, format=None):
@@ -1123,7 +1114,7 @@ class AEUserSession(AESessionBase):
             userid = userid,
         collabs = [c for c in collabs if c['id'] not in userid]
         if len(collabs) != ncollabs:
-            self.deployment_collaborator_list_set(id, collabs)
+            self.deployment_collaborator_list_set(drec, collabs)
         collabs.extend({'id': u, 'type': 'group' if group else 'user', 'permission': 'r'} for u in userid)
         return self.deployment_collaborator_list_set(drec, collabs, format=format)
 

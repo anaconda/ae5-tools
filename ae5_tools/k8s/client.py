@@ -9,15 +9,22 @@ from .ssh import tunneled_k8s_url
 
 class AE5K8SLocalClient(object):
     def __init__(self, hostname, username):
-        url = tunneled_k8s_url(hostname, username)
-        self.xfrm = AE5K8STransformer(url)
+        self._error = self.xfrm = None
+        try:
+            url = tunneled_k8s_url(hostname, username)
+            self.xfrm = AE5K8STransformer(url)
+        except RuntimeError as exc:
+            self._error = str(exc)
 
     def _run(self, request):
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(request)
 
-    def healthy(self):
-        return True
+    def error(self):
+        return self._error
+
+    def status(self):
+        return 'Alive and kicking'
 
     def node_info(self):
         return self._run(self.xfrm.node_info())
@@ -31,17 +38,26 @@ class AE5K8SLocalClient(object):
 
 class AE5K8SRemoteClient(object):
     def __init__(self, session, subdomain):
-        self._session = session
-        self._subdomain = subdomain
+        self._error = None
+        try: 
+            session._head('/_errors/404.html', subdomain=subdomain, format='response')
+            response = session._get('/', subdomain=subdomain, format='text')
+            if response == 'Alive and kicking':
+                self._session = session
+                self._subdomain = subdomain
+            else:
+                self._error = f'Unexpected response at endpoint {subdomain}'
+        except RuntimeError:
+            self._error = f'No deployment found at endpoint {subdomain}'
 
     def _get(self, path, **kwargs):
         return self._session._get(path, subdomain=self._subdomain, **kwargs)
 
-    def healthy(self):
-        try:
-            return self._get('__status__', format='text') == 'Alive and kicking'
-        except Exception:
-            return False
+    def error(self):
+        return self._error
+
+    def status(self):
+        return self._get('/', format='text')
 
     def node_info(self):
         return self._get('nodes', format='json')

@@ -24,7 +24,7 @@ def list(**kwargs):
 @endpoint.command()
 @ident_filter('endpoint', required=True)
 @global_options
-def info(kwargs):
+def info(**kwargs):
     '''Retrieve the record of a single endpoint.
 
        The ENDPOINT identifier need not be fully specified, and may even include
