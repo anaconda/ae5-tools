@@ -13,6 +13,16 @@ import click
 import click_repl
 from prompt_toolkit.history import FileHistory
 
+
+from ..exceptions import AE5FatalError, AE5ConfigError
+# Import first as it has side-effects that can fail
+# this ensures the ~/.ae5 dir exists - and can raise AE5FatalError
+try:
+    from ..config import config  # noqa
+except AE5ConfigError as e:
+    click.echo(f'Configuration Error: {e}')
+    sys.exit(-1)
+
 from .commands.project import project
 from .commands.account import account
 from .commands.session import session
@@ -37,8 +47,11 @@ from .utils import stash_defaults, global_options
 @global_options
 @click.pass_context
 def cli(ctx):
-    if ctx.invoked_subcommand is None:
-        ctx.invoke(repl)
+    try:
+        if ctx.invoked_subcommand is None:
+            ctx.invoke(repl)
+    except AE5FatalError as e:
+        click.echo(f'Fatal Error: {e}')
 
 
 @cli.command(hidden=True)
