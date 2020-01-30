@@ -6,14 +6,36 @@ from datetime import datetime
 from dateutil import tz
 
 
+RC_DIR = "~/.ae5"
+CONFIG_FILE = "config.py"
+
+
+class AE5_Fatal_Error(Exception):
+    pass
+
+
 class ConfigManager:
     def __init__(self):
-        self._path = os.path.expanduser(os.getenv('AE5_TOOLS_CONFIG_DIR') or '~/.ae5')
+        self._path = os.path.expanduser(os.getenv('AE5_TOOLS_CONFIG_DIR') or RC_DIR)
+        self._data = {}
         self.load()
 
+    def init_path(self):
+        try:
+            os.makedirs(self._path, mode=0o700, exist_ok=True)
+        except OSError as e:
+            # todo:  log e.errno - 13 means bad permissions
+            #        17: file exists
+            msg = f"Cannot create directory {self._path}. Please check directory permissions."
+            raise AE5_Fatal_Error(msg)
+
+    @property
+    def config_path(self):
+        return os.path.join(self._path, CONFIG_FILE)
+
     def load(self):
-        cpath = os.path.join(self._path, 'config.json')
         self._data = {}
+        cpath = self.config_path
         if os.path.isfile(cpath):
             with open(cpath, 'r') as fp:
                 data = fp.read()
@@ -31,9 +53,8 @@ class ConfigManager:
             setattr(self, label, files)
 
     def save(self):
-        os.makedirs(self._path, mode=0o700, exist_ok=True)
-        cpath = os.path.join(self._path, 'config.json')
-        with open(cpath, 'w') as fp:
+        self.init_path()
+        with open(self.config_path, 'w') as fp:
             json.dump(self._data, fp)
 
     def list(self):
@@ -96,3 +117,4 @@ class ConfigManager:
 
 
 config = ConfigManager()
+config.init_path()
