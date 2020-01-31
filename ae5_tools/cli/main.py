@@ -30,10 +30,18 @@ from .commands.pod import pod
 from .login import login_options, cluster_call, cluster_disconnect
 from .format import format_options
 from .utils import stash_defaults, global_options
+from .._version import get_versions
+
+
+version = get_versions().get('version', 'UNKNOWN')
+# todo: Add prog_name and start using these everywhere
+SHORT_BRAND = "AE5"
+LONG_BRAND = "Anaconda Enterprise 5"
 
 
 @click.group(invoke_without_command=True,
              epilog='Type "ae5 <command> --help" for help on a specific command.')
+@click.version_option(version=version, message="%(prog)s %(version)s")
 @global_options
 @click.pass_context
 def cli(ctx):
@@ -46,7 +54,7 @@ def cli(ctx):
 @click.pass_context
 def repl(ctx):
     stash_defaults()
-    click.echo('Anaconda Enterprise 5 REPL')
+    click.echo(f'{LONG_BRAND} REPL')
     click.echo('Type "--help" for a list of commands.')
     click.echo('Type "<command> --help" for help on a specific command.')
     click_repl.repl(ctx, prompt_kwargs={'history': FileHistory(os.path.expanduser('~/.ae5/history'))})
