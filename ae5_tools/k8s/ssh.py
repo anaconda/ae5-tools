@@ -1,6 +1,7 @@
 import subprocess
 import socket
 import atexit
+import time
 import os
 import sys
 
@@ -54,6 +55,20 @@ def find_local_port():
 
 
 def tunneled_k8s_url(hostname, username):
+    """Race condition on finding a port and binging to it, so retry as a hack"""
+    retry = 3
+    captured_exception = None
+    for i in range(retry):
+        try:
+            _tunneled_k8s_url(hostname, username)
+        except RuntimeError as e:
+            captured_exception = e
+        else:
+            return
+    raise captured_exception
+
+
+def _tunneled_k8s_url(hostname, username):
     remote_port = find_remote_port(hostname, username)
     local_port = find_local_port()
     cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-t', '-t', '-L',
