@@ -60,11 +60,9 @@ def tunneled_k8s_url(hostname, username):
     captured_exception = None
     for i in range(retry):
         try:
-            _tunneled_k8s_url(hostname, username)
+            return _tunneled_k8s_url(hostname, username)
         except RuntimeError as e:
             captured_exception = e
-        else:
-            return
     raise captured_exception
 
 
