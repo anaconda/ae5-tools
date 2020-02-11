@@ -47,27 +47,30 @@ class AE5K8SHandler(object):
         result = await self.xfrm.node_info()
         return _json(result)
 
-    async def _podinfo(self, ids):
+    async def _podinfo(self, ids, quiet=False):
         is_single = isinstance(ids, str)
         idset = [ids] if is_single else ids
         results = await self.xfrm.pod_info(idset, return_exceptions=True)
         invalid = [id for id, q in zip(idset, results) if isinstance(q, Exception)]
-        if invalid:
+        if invalid and not quiet:
             plural = "s" if len(invalid) > 1 else ""
             raise web.HTTPUnprocessableEntity(reason=f'Invalid or missing ID{plural}: {", ".join(invalid)}')
         if is_single:
             return results[0]
-        values = dict(zip(idset, results))
+        values = {id: q for id, q in zip(idset, results) if not isinstance(q, Exception)}
         return values
 
     async def podinfo_get_query(self, request):
         if not request.query:
             raise web.HTTPUnprocessableEntity(reason='Must supply an ID')
-        invalid_keys = set(k for k in request.query if k != 'id')
+        invalid_keys = set(k for k in request.query if k not in ('id', 'quiet'))
+        values = [v for k, v in request.query.items() if k == 'id']
+        quiet = any(k for k in request.query if k == 'quiet')
         if invalid_keys:
             query = urlencode(request.query)
             raise web.HTTPUnprocessableEntity(reason=f'Invalid query: {query}')
-        return _json(await self._podinfo(list(request.query.values())))
+        result = await self._podinfo(values, quiet)
+        return _json()
 
     async def podinfo_get_path(self, request):
         return _json(await self._podinfo(request.match_info['id']))

@@ -210,14 +210,19 @@ class AE5K8STransformer(object):
         if not re.match(r'[a-f0-9]{2}-[a-f0-9]{32}', id) or not id.startswith(('a1', 'a2')):
             return _or_raise(ValueError(f'Invalid ID: {id}'), return_exceptions)
         prefix, slug = id.split('-', 1)
-        label = 'anaconda-session-id' if prefix == 'a1' else 'anaconda-app-id'
-        query = urlencode({'labelSelector': f'{label}={slug}', 'limit': 1})
-        path = f'namespaces/default/pods?{query}'
-        resp1 = await self.get(path)
-        resp1 = resp1['items']
-        if len(resp1) != 1:
+        if prefix == 'a1':
+            queries = f'anaconda-session-id={slug}',
+        else:
+            queries = (f'anaconda-app-id={slug}',
+                       f'job-name=anaconda-job-{slug}')
+        for query in queries:
+            query = urlencode({'labelSelector': query, 'limit': 1})
+            path = f'namespaces/default/pods?{query}'
+            resp1 = await self.get(path)
+            if isinstance(resp1, dict) and resp1.get('items'):
+                return _k8s_pod_to_record(resp1['items'][0])
+        else:
             return _or_raise(KeyError(f'Pod not found: {id}'), return_exceptions)
-        return _k8s_pod_to_record(resp1[0])
     
     async def _exec_pod(self, pod, namespace, container, command):
         path = f'namespaces/{namespace}/pods/{pod}/exec'

@@ -29,8 +29,11 @@ class AE5K8SLocalClient(object):
     def node_info(self):
         return self._run(self.xfrm.node_info())
 
-    def pod_info(self, ids):
-        return self._run(self.xfrm.pod_info(ids))
+    def pod_info(self, ids, quiet=True):
+        result = self._run(self.xfrm.pod_info(ids, return_exceptions=quiet))
+        if quiet:
+            result = [None if isinstance(v, Exception) else v for v in result]
+        return result
 
     def pod_log(self, id, container=None, follow=False):
         self._run(self.xfrm.pod_log(id, container, follow))
@@ -62,10 +65,12 @@ class AE5K8SRemoteClient(object):
     def node_info(self):
         return self._get('nodes', format='json')
 
-    def pod_info(self, ids):
+    def pod_info(self, ids, quiet=True):
         path = f'pods?' + '&'.join('id=' + x for x in ids)
+        if quiet:
+            path += '&quiet=1'
         result = self._get(path, format='json')
-        result = [result[x] for x in ids]
+        result = [result.get(x) for x in ids]
         return result
 
     def pod_log(self, id, container=None, follow=False):
