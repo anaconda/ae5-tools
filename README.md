@@ -138,14 +138,19 @@ releases, but for now, it can be installed as follows.
       string created in the previous step.
 2. Clone this source repository and `cd` to its root.
 3. Activate a conda environment with a current version of `ae5-tools`.
-4. Run the following commands as any normal AE5 user:
+4. Edit the file `anaconda-project.yml` with your preferred editor:
+   1. Make sure that all of the packages listed in the `packages:`
+      section are available in your internal repository.
+   2. Modify the `channels:` section as needed so that it includes the
+      channels where those packages reside.
+5. Run the following commands as any normal AE5 user:
    1. `ae5 project upload . --name k8s`
    2. `ae5 deployment start k8s --endpoint k8s --private --wait`
    3. `ae5 deployment collaborator add k8s everyone --group`
    4. `ae5 call --endpoint k8s /`
    
    This last command should return the text `Alive and kicking`.
-5. If you need to update the deployment, you should remove the existing
+6. If you need to update the deployment, you should remove the existing
    deployment and project first:
    1. `ae5 deployment stop k8s --yes`
    2. `ae5 project delete k8s --yes`
