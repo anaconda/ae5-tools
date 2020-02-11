@@ -1419,6 +1419,7 @@ class AEUserSession(AESessionBase):
                 '_k8s': rec,
                 '_record_type': 'node'
             })
+        result = self._fix_records('node', result, filter)
         return self._format_response(result, format=format)
 
     def node_info(self, node, format=None, quiet=False):
