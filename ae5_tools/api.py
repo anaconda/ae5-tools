@@ -454,7 +454,7 @@ class AEUserSession(AESessionBase):
         self._filename = os.path.join(config._path, 'cookies', f'{username}@{hostname}')
         super(AEUserSession, self).__init__(hostname, username, password=password,
                                             prefix='api/v2', persist=persist)
-        self._k8s_endpoint = k8s_endpoint or 'k8s'
+        self._k8s_endpoint = k8s_endpoint or os.environ.get('AE5_K8S_ENDPOINT') or 'k8s'
         self._k8s_client = None
 
     def _k8s(self, method, *args, **kwargs):
