@@ -459,13 +459,15 @@ class AEUserSession(AESessionBase):
 
     def _k8s(self, method, *args, **kwargs):
         quiet = kwargs.pop('quiet', False)
-        if self._k8s_endpoint:
+        if self._k8s_client is None and self._k8s_endpoint is not None:
             if self._k8s_endpoint.startswith('ssh:'):
-                self._k8s_client = AE5K8SLocalClient(self.hostname, self._k8s_endpoint.split(':', 1)[1])
+                username = self._k8s_endpoint[4:]
+                self._k8s_client = AE5K8SLocalClient(self.hostname, username)
             else:
                 self._k8s_client = AE5K8SRemoteClient(self, self._k8s_endpoint)
             estr = self._k8s_client.error()
             if estr:
+                del self._k8s_client
                 self._k8s_endpoint = self._k8s_client = None
                 msg = ['Error establishing k8s connection:']
                 msg.extend('  ' + x for x in estr.splitlines())

@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 import json
 import asyncio
 
@@ -7,7 +8,6 @@ from aiohttp import web
 from urllib.parse import urlencode
 
 from .transformer import AE5K8STransformer
-from .ssh import tunneled_k8s_url
 
 
 DEFAULT_K8S_URL = 'https://10.100.0.1/'
@@ -63,14 +63,12 @@ class AE5K8SHandler(object):
     async def podinfo_get_query(self, request):
         if not request.query:
             raise web.HTTPUnprocessableEntity(reason='Must supply an ID')
-        invalid_keys = set(k for k in request.query if k not in ('id', 'quiet'))
-        values = [v for k, v in request.query.items() if k == 'id']
-        quiet = any(k for k in request.query if k == 'quiet')
+        invalid_keys = set(k for k in request.query if k != 'id')
         if invalid_keys:
             query = urlencode(request.query)
             raise web.HTTPUnprocessableEntity(reason=f'Invalid query: {query}')
-        result = await self._podinfo(values, quiet)
-        return _json()
+        result = await self._podinfo(list(request.query.values()), True)
+        return _json(result)
 
     async def podinfo_get_path(self, request):
         return _json(await self._podinfo(request.match_info['id']))
@@ -96,17 +94,13 @@ class AE5K8SHandler(object):
 
 def main(url=None, token=None, port=None):
     url = url or os.environ.get('AE5_K8S_URL', DEFAULT_K8S_URL)
-    if url.startswith('ssh:'):
-        username, hostname = url[4:].split('@', 1)
-        url = tunneled_k8s_url(hostname, username)
-        token = None
-    else:
-        token = token or os.environ.get('AE5_K8S_TOKEN')
-        if token is None:
-            token_file = os.environ.get('AE5_K8S_TOKEN_FILE', DEFAULT_K8S_TOKEN_FILE)
-            if token_file and os.path.exists(token_file):
-                with open(token_file, 'r') as fp:
-                    token = fp.read().strip()
+    if token is None:
+        token = os.environ.get('AE5_K8S_TOKEN')
+    if token is None:
+        token_file = os.environ.get('AE5_K8S_TOKEN_FILE', DEFAULT_K8S_TOKEN_FILE)
+        if token_file and os.path.exists(token_file):
+            with open(token_file, 'r') as fp:
+                token = fp.read().strip()
     app = web.Application()
     handler = AE5K8SHandler(url, token)
     app.add_routes([web.get('/', handler.hello),
@@ -120,4 +114,5 @@ def main(url=None, token=None, port=None):
 
 
 if __name__ == '__main__':
-    main()
+    url = sys.argv[1] if len(sys.argv) > 1 else None
+    main(url=url, token=False if url else None)
