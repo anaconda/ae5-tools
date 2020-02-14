@@ -8,6 +8,7 @@ from aiohttp import web
 from urllib.parse import urlencode
 
 from .transformer import AE5K8STransformer
+from .ssh import tunneled_k8s_url
 
 
 DEFAULT_K8S_URL = 'https://10.100.0.1/'
@@ -70,6 +71,16 @@ class AE5K8SHandler(object):
         result = await self._podinfo(list(request.query.values()), True)
         return _json(result)
 
+    async def podinfo_post(self, request):
+        try:
+            data = await request.json()
+        except json.decoder.JSONDecodeError:
+            data = None
+        if not isinstance(data, list):
+            raise web.HTTPUnprocessableEntity(reason='Must be a list of IDs')
+        result = await self._podinfo(data, True)
+        return _json(result)
+
     async def podinfo_get_path(self, request):
         return _json(await self._podinfo(request.match_info['id']))
 
@@ -107,6 +118,7 @@ def main(url=None, token=None, port=None):
                     web.get('/__status__', handler.hello),
                     web.get('/nodes', handler.nodeinfo),
                     web.get('/pods', handler.podinfo_get_query),
+                    web.post('/pods', handler.podinfo_post),
                     web.get('/pod/{id}', handler.podinfo_get_path),
                     web.get('/pod/{id}/log', handler.podlog)])
     port = port or int(os.environ.get('AE5_K8S_PORT') or '8086')
@@ -115,4 +127,7 @@ def main(url=None, token=None, port=None):
 
 if __name__ == '__main__':
     url = sys.argv[1] if len(sys.argv) > 1 else None
+    if url and url.startswith('ssh:'):
+        username, hostname = url[4:].split('@', 1)
+        proc, url = tunneled_k8s_url(hostname, username)
     main(url=url, token=False if url else None)

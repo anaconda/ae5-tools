@@ -16,8 +16,7 @@ class AE5K8SClient(object):
         return self._api('get', 'nodes').json()
 
     def pod_info(self, ids):
-        path = f'pods?' + '&'.join('id=' + x for x in ids)
-        result = self._api('get', path).json()
+        result = self._api('post', 'pods', json=ids).json()
         result = [result.get(x) for x in ids]
         return result
 
