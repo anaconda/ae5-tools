@@ -14,6 +14,7 @@ def run():
 
 @run.command()
 @ident_filter('run')
+@click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
 @global_options
 def list(**kwargs):
     '''List all available run records.
@@ -28,6 +29,7 @@ def list(**kwargs):
 
 @run.command()
 @ident_filter('run', required=True)
+@click.option('--k8s', is_flag=True, help='Include Kubernetes-derived columns (requires additional API calls).')
 @global_options
 def info(**kwargs):
     '''Retrieve information about a single run.

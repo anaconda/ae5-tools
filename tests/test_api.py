@@ -61,8 +61,7 @@ def test_user_session(monkeypatch, capsys):
     assert f'Password for {username}@{hostname}' in captured.err
     assert f'Invalid username or password; please try again.' in captured.err
     assert f'Must supply a password' in captured.err
-    assert c._k8s('status') == 'Alive and kicking'
-    c._k8s_client, c._k8s_endpoint = None, 'ssh:fakeuser'
+    true_endpoint, c._k8s_endpoint = c._k8s_endpoint, 'ssh:fakeuser'
     with pytest.raises(AEException) as excinfo:
         c._k8s('status')
     assert 'Error establishing k8s connection' in str(excinfo.value)
@@ -73,6 +72,8 @@ def test_user_session(monkeypatch, capsys):
     with pytest.raises(AEException) as excinfo:
         c._k8s('status')
     assert 'No k8s connection available' in str(excinfo.value)
+    c._k8s_endpoint = true_endpoint
+    assert c._k8s('status') == 'Alive and kicking'
 
 
 @pytest.fixture(scope='module')

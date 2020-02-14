@@ -454,18 +454,20 @@ class AEUserSession(AESessionBase):
         self._filename = os.path.join(config._path, 'cookies', f'{username}@{hostname}')
         super(AEUserSession, self).__init__(hostname, username, password=password,
                                             prefix='api/v2', persist=persist)
-        self._k8s_endpoint = k8s_endpoint or 'k8s'
+        self._k8s_endpoint = k8s_endpoint or os.environ.get('AE5_K8S_ENDPOINT') or 'k8s'
         self._k8s_client = None
 
     def _k8s(self, method, *args, **kwargs):
         quiet = kwargs.pop('quiet', False)
-        if self._k8s_endpoint:
+        if self._k8s_client is None and self._k8s_endpoint is not None:
             if self._k8s_endpoint.startswith('ssh:'):
-                self._k8s_client = AE5K8SLocalClient(self.hostname, self._k8s_endpoint.split(':', 1)[1])
+                username = self._k8s_endpoint[4:]
+                self._k8s_client = AE5K8SLocalClient(self.hostname, username)
             else:
                 self._k8s_client = AE5K8SRemoteClient(self, self._k8s_endpoint)
             estr = self._k8s_client.error()
             if estr:
+                del self._k8s_client
                 self._k8s_endpoint = self._k8s_client = None
                 msg = ['Error establishing k8s connection:']
                 msg.extend('  ' + x for x in estr.splitlines())
@@ -918,8 +920,12 @@ class AEUserSession(AESessionBase):
         is_single = isinstance(record, dict)
         rlist = [record] if is_single else record
         if rlist:
+            rlist2 = []
             record2 = self._k8s('pod_info', [r['id'] for r in rlist])
             for rec, rec2 in zip(rlist, record2):
+                if not rec2:
+                    continue
+                rlist2.append(rec)
                 rec['phase'] = rec2['phase']
                 rec['since'] = rec2['since']
                 rec['rst'] = rec2['restarts']
@@ -937,11 +943,15 @@ class AEUserSession(AESessionBase):
                         rec['changes'] = ''
                 rec['node'] = rec2['node']
                 rec['_k8s'] = rec2
-        elif hasattr(rlist, '_columns'):
+            if not rlist2:
+                rlist2 = EmptyRecordList(rlist[0]['_record_type'], rlist[0])
+            rlist = rlist2
+        if not rlist and hasattr(rlist, '_columns'):
             rlist._columns.extend(('phase', 'since', 'rst', 'usage/mem', 'usage/cpu', 'usage/gpu'))
             if changes:
                 rlist._columns.extend(('changes', 'modified'))
             rlist._columns.extend(('node', '_k8s'))
+        return record if is_single else rlist
 
     def _pre_session(self, records):
         # The "name" value in an internal AE5 session record is nothing
@@ -959,7 +969,7 @@ class AEUserSession(AESessionBase):
 
     def _post_session(self, records, k8s=False):
         if k8s:
-            self._join_k8s(records, True)
+            return self._join_k8s(records, changes=True)
         return records
 
     def session_list(self, filter=None, k8s=False, format=None):
@@ -1040,9 +1050,9 @@ class AEUserSession(AESessionBase):
 
     def _post_deployment(self, records, collaborators=False, k8s=False):
         if collaborators:
-             self._join_collaborators('deployments', records)
+            self._join_collaborators('deployments', records)
         if k8s:
-            self._join_k8s(records, False)
+            return self._join_k8s(records, changes=False)
         return records
 
     def deployment_list(self, filter=None, collaborators=False, k8s=False, format=None):
@@ -1232,6 +1242,15 @@ class AEUserSession(AESessionBase):
             response = response['token']
         return self._format_response(response, format=format)
 
+    def _pre_job(self, records):
+        precs = {x['id']: x for x in self._get_records('projects')}
+        for rec in records:
+            pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
+            prec = precs.get(pid, {})
+            rec['project_id'] = pid
+            rec['_project'] = prec
+        return records
+
     def job_list(self, filter=None, format=None):
         response = self._get_records('jobs', filter=filter)
         return self._format_response(response, format=format)
@@ -1342,12 +1361,17 @@ class AEUserSession(AESessionBase):
             jrec = self._ident_record('job', id)
         return self._format_response(jrec, format=format)
 
-    def run_list(self, filter=None, format=None):
-        response = self._get_records('runs', filter=filter)
+    # runs need the same preprocessing as jobs,
+    # and the same postprocessing as sessions
+    _pre_run = _pre_job
+    _post_run = _post_session
+
+    def run_list(self, k8s=False, filter=None, format=None):
+        response = self._get_records('runs', k8s=k8s, filter=filter)
         return self._format_response(response, format=format)
 
-    def run_info(self, ident, format=None, quiet=False):
-        response = self._ident_record('run', ident, quiet=quiet)
+    def run_info(self, ident, k8s=False, format=None, quiet=False):
+        response = self._ident_record('run', ident, k8s=k8s, quiet=quiet)
         return self._format_response(response, format=format)
 
     def run_log(self, ident, format=None):
@@ -1373,8 +1397,7 @@ class AEUserSession(AESessionBase):
         return records
 
     def _post_pod(self, records):
-        self._join_k8s(records, True)
-        return records
+        return self._join_k8s(records, changes=True)
 
     def pod_list(self, filter=None, format=None):
         records = (self.session_list(filter=filter) + 

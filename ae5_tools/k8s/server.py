@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 import json
 import asyncio
 
@@ -47,17 +48,17 @@ class AE5K8SHandler(object):
         result = await self.xfrm.node_info()
         return _json(result)
 
-    async def _podinfo(self, ids):
+    async def _podinfo(self, ids, quiet=False):
         is_single = isinstance(ids, str)
         idset = [ids] if is_single else ids
         results = await self.xfrm.pod_info(idset, return_exceptions=True)
         invalid = [id for id, q in zip(idset, results) if isinstance(q, Exception)]
-        if invalid:
+        if invalid and not quiet:
             plural = "s" if len(invalid) > 1 else ""
             raise web.HTTPUnprocessableEntity(reason=f'Invalid or missing ID{plural}: {", ".join(invalid)}')
         if is_single:
             return results[0]
-        values = dict(zip(idset, results))
+        values = {id: q for id, q in zip(idset, results) if not isinstance(q, Exception)}
         return values
 
     async def podinfo_get_query(self, request):
@@ -67,7 +68,18 @@ class AE5K8SHandler(object):
         if invalid_keys:
             query = urlencode(request.query)
             raise web.HTTPUnprocessableEntity(reason=f'Invalid query: {query}')
-        return _json(await self._podinfo(list(request.query.values())))
+        result = await self._podinfo(list(request.query.values()), True)
+        return _json(result)
+
+    async def podinfo_post(self, request):
+        try:
+            data = await request.json()
+        except json.decoder.JSONDecodeError:
+            data = None
+        if not isinstance(data, list):
+            raise web.HTTPUnprocessableEntity(reason='Must be a list of IDs')
+        result = await self._podinfo(data, True)
+        return _json(result)
 
     async def podinfo_get_path(self, request):
         return _json(await self._podinfo(request.match_info['id']))
@@ -93,23 +105,20 @@ class AE5K8SHandler(object):
 
 def main(url=None, token=None, port=None):
     url = url or os.environ.get('AE5_K8S_URL', DEFAULT_K8S_URL)
-    if url.startswith('ssh:'):
-        username, hostname = url[4:].split('@', 1)
-        url = tunneled_k8s_url(hostname, username)
-        token = None
-    else:
-        token = token or os.environ.get('AE5_K8S_TOKEN')
-        if token is None:
-            token_file = os.environ.get('AE5_K8S_TOKEN_FILE', DEFAULT_K8S_TOKEN_FILE)
-            if token_file and os.path.exists(token_file):
-                with open(token_file, 'r') as fp:
-                    token = fp.read().strip()
+    if token is None:
+        token = os.environ.get('AE5_K8S_TOKEN')
+    if token is None:
+        token_file = os.environ.get('AE5_K8S_TOKEN_FILE', DEFAULT_K8S_TOKEN_FILE)
+        if token_file and os.path.exists(token_file):
+            with open(token_file, 'r') as fp:
+                token = fp.read().strip()
     app = web.Application()
     handler = AE5K8SHandler(url, token)
     app.add_routes([web.get('/', handler.hello),
                     web.get('/__status__', handler.hello),
                     web.get('/nodes', handler.nodeinfo),
                     web.get('/pods', handler.podinfo_get_query),
+                    web.post('/pods', handler.podinfo_post),
                     web.get('/pod/{id}', handler.podinfo_get_path),
                     web.get('/pod/{id}/log', handler.podlog)])
     port = port or int(os.environ.get('AE5_K8S_PORT') or '8086')
@@ -117,4 +126,8 @@ def main(url=None, token=None, port=None):
 
 
 if __name__ == '__main__':
-    main()
+    url = sys.argv[1] if len(sys.argv) > 1 else None
+    if url and url.startswith('ssh:'):
+        username, hostname = url[4:].split('@', 1)
+        proc, url = tunneled_k8s_url(hostname, username)
+    main(url=url, token=False if url else None)
