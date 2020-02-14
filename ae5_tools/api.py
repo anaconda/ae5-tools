@@ -943,8 +943,10 @@ class AEUserSession(AESessionBase):
                         rec['changes'] = ''
                 rec['node'] = rec2['node']
                 rec['_k8s'] = rec2
+            if not rlist2:
+                rlist2 = EmptyRecordList(rlist[0]['_record_type'], rlist[0])
             rlist = rlist2
-        elif hasattr(rlist, '_columns'):
+        if not rlist and hasattr(rlist, '_columns'):
             rlist._columns.extend(('phase', 'since', 'rst', 'usage/mem', 'usage/cpu', 'usage/gpu'))
             if changes:
                 rlist._columns.extend(('changes', 'modified'))
