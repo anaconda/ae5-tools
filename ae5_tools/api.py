@@ -200,6 +200,7 @@ class AESessionBase(object):
             self._set_header()
             if self.persist:
                 self._save()
+        self._v1_token = self._get_v1_token(password)
 
     def disconnect(self):
         self._disconnect()
@@ -519,6 +520,26 @@ class AEUserSession(AESessionBase):
             if 'Invalid username or password.' in resp.text:
                 self.session.cookies.clear()
 
+    def _get_v1_token(self, password):
+        if isinstance(password, AEAdminSession):
+            #TODO: impersonate
+            raise NotImplementedError('We do not have impersonation working to get the authorization token.')
+        else:
+
+            data = {
+                'username': self.username,
+                'password': password,
+                'grant_type': 'password',
+                'client_id': 'anaconda-platform',
+                'client_secret': 'ed7ec3ff-c535-455b-b431-5ed97d78b8be'
+            }
+
+            url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/token'
+            r = self.session.post(url, data=data)
+            r.raise_for_status()
+
+            return r.json()
+
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
         # been captured for use elsewhere, it would no longer be useful.
@@ -709,7 +730,7 @@ class AEUserSession(AESessionBase):
     def project_sessions(self, ident, format=None):
         id = self._ident_record('project', ident)["id"]
         response = self._get_records(f'projects/{id}/sessions')
-        return self._format_response(response, format=format)    
+        return self._format_response(response, format=format)
 
     def project_deployments(self, ident, format=None):
         id = self._ident_record('project', ident)["id"]
@@ -864,7 +885,7 @@ class AEUserSession(AESessionBase):
                 f.write(condarc_contents)
 
             self.project_download(ident, filename=os.path.join(tempdir, 'project.tar.gz'))
-            
+
             print('Starting image build. This may take several minutes.')
             build_image(tempdir, tag=tag, debug=debug)
 
@@ -1448,7 +1469,7 @@ class AEUserSession(AESessionBase):
         return self._join_k8s(records, changes=True)
 
     def pod_list(self, filter=None, format=None):
-        records = (self.session_list(filter=filter) + 
+        records = (self.session_list(filter=filter) +
                    self.deployment_list(filter=filter) +
                    self.run_list(filter=filter))
         records = self._fix_records('pod', records)
