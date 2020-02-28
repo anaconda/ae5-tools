@@ -24,6 +24,7 @@ from .k8s.client import AE5K8SLocalClient, AE5K8SRemoteClient
 
 from http.cookiejar import LWPCookieJar
 from requests.packages import urllib3
+import subprocess
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -200,7 +201,6 @@ class AESessionBase(object):
             self._set_header()
             if self.persist:
                 self._save()
-        self._v1_token = self._get_v1_token(password)
 
     def disconnect(self):
         self._disconnect()
@@ -520,25 +520,6 @@ class AEUserSession(AESessionBase):
             if 'Invalid username or password.' in resp.text:
                 self.session.cookies.clear()
 
-    def _get_v1_token(self, password):
-        if isinstance(password, AEAdminSession):
-            #TODO: impersonate
-            raise NotImplementedError('We do not have impersonation working to get the authorization token.')
-        else:
-
-            data = {
-                'username': self.username,
-                'password': password,
-                'grant_type': 'password',
-                'client_id': 'anaconda-platform',
-                'client_secret': 'ed7ec3ff-c535-455b-b431-5ed97d78b8be'
-            }
-
-            url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/token'
-            r = self.session.post(url, data=data)
-            r.raise_for_status()
-
-            return r.json()
 
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
@@ -1517,6 +1498,44 @@ class AEUserSession(AESessionBase):
     def node_info(self, node, format=None, quiet=False):
         record = self._ident_record('node', node, quiet=quiet)
         return self._format_response(record, format=format)
+
+    def _get_v1_token(self):
+        if isinstance(self, AEAdminSession):
+            # TODO: impersonate
+            raise NotImplementedError('We do not have impersonation working to get the authorization token.')
+        else:
+            # borrowed from .authorize()
+            key = f'{self.username}@{self.hostname}'
+            need_password = self.password is None
+            last_valid = True
+            if need_password:
+                password = self._password_prompt(key, last_valid)
+            else:
+                password = self.password
+            if not need_password:
+                raise AEException('Invalid username or password.')
+
+            data = {
+                'username': self.username,
+                'password': password,
+                'grant_type': 'password',
+                'client_id': 'anaconda-platform',
+                'client_secret': 'ed7ec3ff-c535-455b-b431-5ed97d78b8be'
+            }
+
+            url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/token'
+            r = self.session.post(url, data=data)
+            r.raise_for_status()
+
+            return r.json()
+
+    def git_config(self, *git_config_flags, **git_config_kwargs):
+        token = self._get_v1_token()['access_token']
+        extraheader = f'AUTHORIZATION: bearer {token}'
+
+        args = '--global'
+        subprocess.check_call(f'git config {args} http.https://{self.hostname}.extraheader "{extraheader}"',
+                              shell=True)
 
 
 class AEAdminSession(AESessionBase):
