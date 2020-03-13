@@ -253,3 +253,21 @@ def delete(**kwargs):
                  confirm='Delete project {ident}',
                  prefix='Deleting project {ident}...',
                  postfix='deleted.')
+
+
+@project.command()
+@ident_filter('project', required=True)
+@click.argument('directory', type=str, required=False, default="")
+@global_options
+def clone(directory):
+    '''Clone a project as a local git clone.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+       
+       If the local directory name is not supplied the project will be cloned
+       according to the repository field from "ae5 project info.
+
+       The project id is added to .git/config as remote.origin.project.
+    '''
+    cluster_call('project_clone', directory)

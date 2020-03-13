@@ -14,6 +14,8 @@ import getpass
 from tempfile import TemporaryDirectory
 import tarfile
 
+from anaconda_project.project import Project
+
 from .config import config
 from .filter import filter_vars, split_filter, filter_list_of_dicts
 from .identifier import Identifier
@@ -52,7 +54,7 @@ COLUMNS = {
     'resource_profile': ['name', 'description', 'cpu', 'memory', 'gpu', 'id'],
     'editor': ['name', 'id', 'is_default', 'packages'],
     'sample': ['name', 'id', 'is_template', 'is_default', 'description', 'download_url', 'owner', 'created', 'updated'],
-    'deployment': ['endpoint', 'name', 'owner', '?usage/mem', '?usage/cpu', '?usage/gpu', '?node', '?rst', 'public', '?collaborators', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', '?phase', '?since', '?rst', 'project_id', 'project_name', 'project_owner'],
+    'deployment': ['endpoint', 'name', 'owner', '?usage/mem', '?usage/cpu', '?usage/gpu', '?node', '?rst', 'public', '?collaborators', 'command', 'eevision', 'resource_profile', 'id', 'created', 'updated', 'state', '?phase', '?since', '?rst', 'project_id', 'project_name', 'project_owner'],
     'job': ['name', 'owner', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name'],
     'run': ['name', 'owner', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name'],
     'branch': ['branch', 'sha1'],
@@ -947,6 +949,13 @@ class AEUserSession(AESessionBase):
         if wait:
             return self.project_info(response['id'], format=format, retry=True)
 
+    def project_clone(self, ident, directory="", format=None):
+        if self.hostname in ident["repo_url"]:
+            # Make sure we have an updated token
+            self.git_config()
+
+        subprocess.check_call(f'git clone -c remote.origin.project={ident["id"]} {ident["repo_url"]} {directory}', shell=True)
+
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
             what, id = response['_record_type'], response['id']
@@ -1536,6 +1545,59 @@ class AEUserSession(AESessionBase):
         args = '--global'
         subprocess.check_call(f'git config {args} http.https://{self.hostname}.extraheader "{extraheader}"',
                               shell=True)
+
+    def post_revision_metadata(self, tag=None, verbose=True, dry_run=False, format=None):
+        # Determine the tag to POST
+        if tag is None:
+            # find the most recent tag
+            tag = subprocess.check_output('git describe --tags --abbrev=0', shell=True).decode().strip()
+        else:
+            tag = tag
+
+        if verbose:
+            print(f'-- The tag to POST: {tag}')
+        
+        project_id = subprocess.check_output('git config remote.origin.project', shell=True).decode().strip()
+        if not project_id:
+            raise RuntimeError('un able to determine project id.')
+
+        revisions = self.revision_list(project_id)
+
+        # To avoid conflicts later get the previously.
+        # Post tags (either from UI or this script).
+        versions = [v['id'] for v in revisions]
+
+        if verbose:
+            print(f"""-- Known version tags
+{versions}
+""")
+
+        ## If the tag already posted ignore exit
+        ## since there may be new un-tagged commits
+        ## in this git push.
+        if tag in versions:
+            if verbose:
+                print(f'-- Tag {tag} has already been created.')
+                print(f'-- Silent termination.')
+            return
+
+        project = Project('.')
+        body = {'data':{'type':'version','attributes':{'name':tag,'metadata':project.publication_info()}}}
+        
+        versions_url = os.path.join(self.project_info(project_id)['url'], 'versions')
+        token = self._get_v1_token()['access_token']
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/vnd.api+json'
+        }
+
+        res = self.session.post(versions_url, headers=headers, data=json.dumps(body))
+        if verbose:
+            print(f"""-- POST request returned
+{res}
+{res.reason}
+""")
+        res.raise_for_status()
 
 
 class AEAdminSession(AESessionBase):
