@@ -29,7 +29,8 @@ def config():
 @global_options
 def install_prepush():
     '''Setup .git/hooks/pre-push to enable metadata POST for tagged commits.'''
-    cluster_call('git_install_prepush')
+    from ...git import install_prepush
+    install_prepush()
 
 @click.group(short_help='Commands related to git push')
 @global_options

@@ -1556,7 +1556,7 @@ class AEUserSession(AESessionBase):
 
         if verbose:
             print(f'-- The tag to POST: {tag}')
-        
+
         project_id = subprocess.check_output('git config remote.origin.project', shell=True).decode().strip()
         if not project_id:
             raise RuntimeError('un able to determine project id.')
@@ -1572,9 +1572,9 @@ class AEUserSession(AESessionBase):
 {versions}
 """)
 
-        ## If the tag already posted ignore exit
-        ## since there may be new un-tagged commits
-        ## in this git push.
+        # If the tag already posted ignore exit
+        # since there may be new un-tagged commits
+        # in this git push.
         if tag in versions:
             if verbose:
                 print(f'-- Tag {tag} has already been created.')
