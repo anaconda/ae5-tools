@@ -550,7 +550,13 @@ class AEUserSession(AESessionBase):
         records = self._get_records('projects', filter, collaborators=collaborators)
         return self._format_response(records, format=format)
 
-    def project_info(self, ident, collaborators=False, format=None, quiet=False):
+    def project_info(self, ident, collaborators=False, format=None, quiet=False, retry=False):
+        if retry:
+            for attempt in range(4):
+                try:
+                    record = self._ident_record('project', ident, collaborators=collaborators, quiet=quiet)
+                except Exception:
+                    time.sleep(0.5)
         record = self._ident_record('project', ident, collaborators=collaborators, quiet=quiet)
         return self._format_response(record, format=format)
 
@@ -867,7 +873,7 @@ class AEUserSession(AESessionBase):
             self._wait(response)
         if response['action']['error']:
             raise RuntimeError('Error processing creation: {}'.format(response['action']['message']))
-        return self.project_info(response['id'], format=format)
+        return self.project_info(response['id'], format=format, retry=True)
 
     def project_upload(self, project_archive, name, tag, wait=True, format=None):
         if not name:
@@ -902,7 +908,7 @@ class AEUserSession(AESessionBase):
             self._wait(response)
         if response['action']['error']:
             raise RuntimeError('Error processing upload: {}'.format(response['action']['message']))
-        return self.project_info(response['id'], format=format)
+        return self.project_info(response['id'], format=format, retry=True)
 
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
