@@ -552,10 +552,13 @@ class AEUserSession(AESessionBase):
 
     def project_info(self, ident, collaborators=False, format=None, quiet=False, retry=False):
         if retry:
-            for attempt in range(4):
+            for attempt in range(9):
+                msg = 'No projects found matching id={}'.format(ident)
                 try:
                     record = self._ident_record('project', ident, collaborators=collaborators, quiet=quiet)
-                except Exception:
+                except Exception as exc:
+                    if str(exc) != msg:
+                        raise
                     time.sleep(0.5)
         record = self._ident_record('project', ident, collaborators=collaborators, quiet=quiet)
         return self._format_response(record, format=format)
