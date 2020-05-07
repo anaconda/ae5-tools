@@ -551,16 +551,17 @@ class AEUserSession(AESessionBase):
         return self._format_response(records, format=format)
 
     def project_info(self, ident, collaborators=False, format=None, quiet=False, retry=False):
-        if retry:
-            for attempt in range(9):
-                msg = 'No projects found matching id={}'.format(ident)
-                try:
-                    record = self._ident_record('project', ident, collaborators=collaborators, quiet=quiet)
-                except Exception as exc:
-                    if str(exc) != msg:
-                        raise
-                    time.sleep(0.5)
-        record = self._ident_record('project', ident, collaborators=collaborators, quiet=quiet)
+        # Retry loop added because project creation is now so fast that the API
+        # often needs time to catch up before it "sees" the new project. We only
+        # use the retry loop in project creation commands for that reason.
+        while True:
+            try:
+                record = self._ident_record('project', ident, collaborators=collaborators, quiet=quiet)
+                break
+            except AEException as exc:
+                if not retry or not str(exc).startswith('No projects found matching id'):
+                    raise
+                time.sleep(0.25)
         return self._format_response(record, format=format)
 
     def project_patch(self, ident, format=None, **kwargs):
@@ -876,7 +877,8 @@ class AEUserSession(AESessionBase):
             self._wait(response)
         if response['action']['error']:
             raise RuntimeError('Error processing creation: {}'.format(response['action']['message']))
-        return self.project_info(response['id'], format=format, retry=True)
+        if wait:
+            return self.project_info(response['id'], format=format, retry=True)
 
     def project_upload(self, project_archive, name, tag, wait=True, format=None):
         if not name:
@@ -911,7 +913,8 @@ class AEUserSession(AESessionBase):
             self._wait(response)
         if response['action']['error']:
             raise RuntimeError('Error processing upload: {}'.format(response['action']['message']))
-        return self.project_info(response['id'], format=format, retry=True)
+        if wait:
+            return self.project_info(response['id'], format=format, retry=True)
 
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
