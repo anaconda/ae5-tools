@@ -804,7 +804,7 @@ class AEUserSession(AESessionBase):
         if need_filename:
             return filename
 
-    def project_image(self, ident, command=None, condarc_path=None, dockerfile_path=None, debug=False, format=None):
+    def project_image(self, ident, command=None, condarc=None, dockerfile=None, debug=False, format=None):
         '''Build docker image'''
         rrec = self._revision(ident, keep_latest=True)
         prec, rev = rrec['_project'], rrec['id']
@@ -812,8 +812,8 @@ class AEUserSession(AESessionBase):
         owner = prec['owner'].replace('@','_at_')
         tag = f'{owner}/{name}:{rev}'
 
-        dockerfile = get_dockerfile(dockerfile_path)
-        condarc = get_condarc(condarc_path)
+        dockerfile_contents = get_dockerfile(dockerfile)
+        condarc_contents = get_condarc(condarc)
 
         if command:
             commands = [c['id'] for c in rrec['commands']]
@@ -822,7 +822,8 @@ class AEUserSession(AESessionBase):
                 print('Remove the --command option to build the container anyway.')
                 return
             if command in commands:
-                dockerfile = re.sub('(CMD anaconda-project run)(.*?)$', f'\g<1> {command}', dockerfile)
+                dockerfile_contents = re.sub('(CMD anaconda-project run)(.*?)$', f'\g<1> {command}',
+                                             dockerfile_contents)
             else:
                 print(f'The command {command} is not one of the configured commands.')
                 print('Available commands are:')
@@ -836,10 +837,10 @@ class AEUserSession(AESessionBase):
 
         with TemporaryDirectory() as tempdir:
             with open(os.path.join(tempdir, 'Dockerfile'), 'w') as f:
-                f.write(dockerfile)
+                f.write(dockerfile_contents)
 
             with open(os.path.join(tempdir, 'condarc'), 'w') as f:
-                f.write(condarc)
+                f.write(condarc_contents)
 
             self.project_download(ident, filename=os.path.join(tempdir, 'project.tar.gz'))
             
