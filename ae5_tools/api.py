@@ -816,24 +816,27 @@ class AEUserSession(AESessionBase):
         condarc_contents = get_condarc(condarc)
 
         if command:
-            commands = [c['id'] for c in rrec['commands']]
+            commands = [c['id'] for c in rrec['_commands']]
             if not commands:
                 print('There are no configured commands in this project.')
                 print('Remove the --command option to build the container anyway.')
                 return
             if command in commands:
-                dockerfile_contents = re.sub('(CMD anaconda-project run)(.*?)$', f'\g<1> {command}',
-                                             dockerfile_contents)
+                dockerfile_contents += f'\nCMD anaconda-project run {command} --anaconda-project-port 8086'
             else:
                 print(f'The command {command} is not one of the configured commands.')
                 print('Available commands are:')
-                for c in rrec['commands']:
+                for c in rrec['_commands']:
                     default = c.get('default', False)
                     if default:
                         print(f'  {c["id"]:15s} (default)')
                     else:
                         print(f'  {c["id"]:15s}')
                 return
+        else:
+            default_cmd = [c["id"] for c in rrec['_commands'] if c.get('default')]
+            if default_cmd:
+                dockerfile_contents += f'\nCMD anaconda-project run {default_cmd[0]} --anaconda-project-port 8086'
 
         with TemporaryDirectory() as tempdir:
             with open(os.path.join(tempdir, 'Dockerfile'), 'w') as f:
