@@ -530,9 +530,16 @@ class AEUserSession(AESessionBase):
     def _api_records(self, method, endpoint, filter=None, **kwargs):
         record_type = kwargs.pop('record_type', None)
         api_kwargs = kwargs.pop('api_kwargs', None) or {}
+        retry_if_empty = kwargs.pop('retry_if_empty', False)
         if not record_type:
             record_type = endpoint.rsplit('/', 1)[-1].rstrip('s')
-        records = self._api(method, endpoint, **api_kwargs)
+        for attempt in range(20):
+            records = self._api(method, endpoint, **api_kwargs)
+            if records or not retry_if_empty:
+                break
+            time.sleep(0.25)
+        else:
+            raise AEException(f'Unexpected empty {record_type} recordset')
         return self._fix_records(record_type, records, filter, **kwargs)
 
     def _get_records(self, endpoint, filter=None, **kwargs):
@@ -768,7 +775,7 @@ class AEUserSession(AESessionBase):
             filter = (f'latest=True',) + filter
         elif revision and revision != '*':
             filter = (f'name={revision}',) + filter
-        response = self._get_records(f'projects/{id}/revisions', filter=filter, project=prec)
+        response = self._get_records(f'projects/{id}/revisions', filter=filter, project=prec, retry_if_empty=True)
         if latest == 'keep' and response:
             response[0]['name'] = 'latest'
         if single:
