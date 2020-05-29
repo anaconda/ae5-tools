@@ -17,7 +17,7 @@ RUN yum install -y bzip2 && \
     bash miniconda.sh -b -p /opt/conda && \
     cp condarc /opt/conda/.condarc && \
     conda config --set auto_update_conda False --set notify_outdated_conda false --system && \
-    conda install anaconda-project --yes && \
+    conda install anaconda-project=0.8.4 --yes && \
     conda clean --all --yes && \
     rm -f condarc miniconda.sh && \
     useradd anaconda
@@ -29,6 +29,5 @@ RUN tar xfz project.tar.gz --strip-components=1 && \
     anaconda-project --verbose prepare && \
     rm -rf ~/.conda project.tar.gz
 
-# This runs the specified deployment command, which could (for
-# instance launch a REST API or web app.
-CMD anaconda-project run
+# The CMD layer will be added by AE5-tools to execute the default
+# or desired command over port 8086
