@@ -1257,10 +1257,12 @@ class AEUserSession(AESessionBase):
     def _pre_job(self, records):
         precs = {x['id']: x for x in self._get_records('projects')}
         for rec in records:
-            pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
-            prec = precs.get(pid, {})
-            rec['project_id'] = pid
-            rec['_project'] = prec
+            if rec.get('project_url'):
+                pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
+                prec = precs.get(pid, {})
+                rec['project_id'] = pid
+                rec['_project'] = prec
+                rec
         return records
 
     def job_list(self, filter=None, format=None):
@@ -1401,12 +1403,14 @@ class AEUserSession(AESessionBase):
         self._delete(f'runs/{id}')
 
     def _pre_pod(self, records):
-        for ndx, rec in enumerate(records):
-            type = rec['_record_type']
-            value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id', 'project_id')}
-            value['type'] = type
-            records[ndx] = value
-        return records
+        result = []
+        for rec in records:
+            if 'project_id' in rec:
+                type = rec['_record_type']
+                value = {k: rec[k] for k in ('name', 'owner', 'resource_profile', 'id', 'project_id')}
+                value['type'] = type
+                result.append(rec)
+        return result
 
     def _post_pod(self, records):
         return self._join_k8s(records, changes=True)

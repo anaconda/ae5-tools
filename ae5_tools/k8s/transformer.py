@@ -181,7 +181,8 @@ class AE5K8STransformer(object):
             headers['authorization'] = f'Bearer {token}'
         self._headers = headers
         self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False))
-        self._url = url.rstrip('/') + '/api/v1/'
+        self._url = url.rstrip('/')
+        self._has_metrics = None
 
     async def close(self):
         if self._session is not None:
@@ -193,7 +194,14 @@ class AE5K8STransformer(object):
             loop = asyncio.get_event_loop()
             return loop.run_until_complete(self.close())
 
+    def has_metrics(self):
+        if self._has_metrics is None:
+            self._has_metrics = self.get('/apis/metrics.k8s.io/v1beta1', ok404=True) is not None
+        return self._has_metrics
+
     async def get(self, path, type='json', ok404=False):
+        if not path.startswith('/'):
+            path = '/api/v1/' + path
         url = self._url + path
         resp = await self._session.get(url, headers=self._headers)
         if resp.status == 404 and ok404:
@@ -225,7 +233,7 @@ class AE5K8STransformer(object):
             return _or_raise(KeyError(f'Pod not found: {id}'), return_exceptions)
     
     async def _exec_pod(self, pod, namespace, container, command):
-        path = f'namespaces/{namespace}/pods/{pod}/exec'
+        path = f'/api/v1/namespaces/{namespace}/pods/{pod}/exec'
         params = {'command': command, 'container': container,
                   'stdout': True, 'stderr': True,
                   'stdin': False, 'tty': False}
@@ -286,11 +294,14 @@ class AE5K8STransformer(object):
         if isinstance(nrec, Exception):
             return nrec
         name = nrec['name']
-        metrics_url = f'namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/namespaces/default/pods/{name}'
-        if id.startswith('a2-'):
-            resp2, resp3 = await self.get(metrics_url, ok404=True), None
+        if self.has_metrics():
+            url = f'/apis/metrics.k8s.io/v1beta1/namespaces/default/pods/{name}'
         else:
-            resp2, resp3 = await asyncio.gather(self.get(metrics_url, ok404=True), self._pod_changes(nrec))
+            url = f'namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/namespaces/default/pods/{name}'
+        if id.startswith('a2-'):
+            resp2, resp3 = await self.get(url, ok404=True), None
+        else:
+            resp2, resp3 = await asyncio.gather(self.get(url, ok404=True), self._pod_changes(nrec))
         _pod_merge_metrics(nrec, resp2)
         if resp3 is not None:
             nrec['changes'] = resp3
@@ -324,7 +335,11 @@ class AE5K8STransformer(object):
     async def node_info(self):
         resp1 = self.get('nodes')
         resp2 = self.get('pods')
-        resp3 = self.get('namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/pods')
+        if self.has_metrics():
+            url = '/apis/metrics.k8s.io/v1beta1/pods'
+        else:
+            url = 'namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/pods'
+        resp3 = self.get(url)
         resp1, resp2, resp3 = await asyncio.gather(resp1, resp2, resp3)
         resp1, resp2, resp3 = resp1['items'], resp2['items'], resp3['items']
 
