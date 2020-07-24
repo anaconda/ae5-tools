@@ -56,6 +56,7 @@ def test_ae5_dir_creation(random_home_dir, clear_config_import):
     assert config_dir == os.path.join(config.config._path)
 
 
+@pytest.mark.skipif(sys.platform.startswith('win'), reason="relies on Unix permissions")
 def test_ae5_dir_bad_perms(bad_home_dir, clear_config_import):
     """Bad permissions on home directory"""
     print(f'bad home directory: {bad_home_dir}')
