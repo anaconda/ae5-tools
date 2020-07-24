@@ -1,0 +1,89 @@
+name: Build and test the package
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Retrieve the source code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Build the package
+      run: |
+        source $CONDA/etc/profile.d/conda.sh
+        conda install -y conda-build conda-verify
+        conda build conda-recipe --no-test
+        conda config --prepend channels ae5-admin
+        mv $CONDA/conda-bld .
+    - name: Upload the build artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: package-${{ github.sha }}
+        path: ./conda-bld
+  tests:
+    runs-on: ${{ matrix.os }}
+    needs: package
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        os: [windows-latest,ubuntu-latest]
+    steps:
+    - name: Retrieve the source code
+      uses: actions/checkout@v2
+    - name: Download the build artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: package-${{ github.sha }}
+        path: ./conda-bld
+    - name: Create the test environment
+      shell: bash
+      run: |
+        mv conda-bld $CONDA/
+        source $CONDA/etc/profile.d/conda.sh
+        conda config --prepend channels ae5-admin
+        conda create -y -n ptest local::ae5-tools python=3.6 pytest pytest-cov codecov pandas
+    - name: Test the package
+      shell: bash
+      env:
+        AE5_HOSTNAME: aip.anaconda.com
+        AE5_USERNAME: tooltest
+        AE5_PASSWORD: ${{ secrets.AE5_PASSWORD }}
+        AE5_ADMIN_USERNAME: admin
+        AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
+      run: |
+        source $CONDA/etc/profile.d/conda.sh
+        conda activate ptest
+        py.test -v tests
+  upload:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    needs: tests
+    steps:
+    - name: Retrieve the source code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Download the build artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: package-${{ github.sha }}
+        path: ./conda-bld
+    - name: Upload to anaconda.org
+      env:
+        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+      run: |
+        source $CONDA/bin/activate
+        conda install -y anaconda-client
+        git tag describe --exact-match --tags HEAD || export LABEL="--label dev"
+        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $LABEL conda-bld/*/*.tar.bz2 --force
+    - name: Clean up older artifacts
+      uses: glassechidna/artifact-cleaner@master
+      with:
+        minimumAge: 86400

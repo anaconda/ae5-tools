@@ -36,7 +36,8 @@ def _cmd(cmd, table=True):
         cmd += f' --format csv'
     print(f'Executing: ae5 {cmd}')
     cmd = 'coverage run --source=ae5_tools -m ae5_tools.cli.main ' + cmd
-    p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    cmd_vec = shlex.split(cmd.replace("\\", "\\\\"))
+    p = subprocess.Popen(cmd_vec, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                          stdin=open(os.devnull))
     stdoutb, stderrb = p.communicate()
     if p.returncode != 0:
