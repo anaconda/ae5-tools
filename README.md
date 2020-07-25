@@ -1,6 +1,6 @@
 ## AE5 Command Line Tool
 
-[![Travis Status](https://travis-ci.com/Anaconda-Platform/ae5-tools.svg?branch=master)](https://travis-ci.com/Anaconda-Platform/ae5-tools) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/latest_release_date.svg)](https://anaconda.org/ae5-admin/ae5-tools) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/version.svg)](https://anaconda.org/ae5-admin/ae5-tools)
+[![GitHub Action](https://github.com/Anaconda-Platform/ae5-tools/workflows/Build%20and%20test/badge.svg)](https://github.com/Anaconda-Platform/ae5-tools/actions) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/latest_release_date.svg)](https://anaconda.org/ae5-admin/ae5-tools) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/version.svg)](https://anaconda.org/ae5-admin/ae5-tools)
 
 This tool uses AE5's internal APIs to do cool things, including:
 
