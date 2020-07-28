@@ -29,7 +29,9 @@ from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Maximum page size in keycloak
-KEYCLOAK_PAGE_MAX = os.environ.get('KEYCLOAK_PAGE_MAX', 1000)
+KEYCLOAK_PAGE_MAX = int(os.environ.get('KEYCLOAK_PAGE_MAX', '1000'))
+# Maximum number of ids to pass through json body to the k8s endpoint
+K8S_JSON_LIST_MAX = int(os.environ.get('K8S_JSON_LIST_MAX', '100'))
 
 # Default subdomain for kubectl service
 DEFAULT_K8S_ENDPOINT = 'k8s'
@@ -944,7 +946,10 @@ class AEUserSession(AESessionBase):
         rlist = [record] if is_single else record
         if rlist:
             rlist2 = []
-            record2 = self._k8s('pod_info', [r['id'] for r in rlist])
+            # Limit the size of the input to pod_info to avoid 413 errors
+            idchunks = [[r['id'] for r in rlist[k:k + K8S_JSON_LIST_MAX]]
+                        for k in range(0, len(rlist), K8S_JSON_LIST_MAX)]
+            record2 = sum((self._k8s('pod_info', ch) for ch in idchunks), [])
             for rec, rec2 in zip(rlist, record2):
                 if not rec2:
                     continue
