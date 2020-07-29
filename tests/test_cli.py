@@ -14,7 +14,7 @@ from datetime import datetime
 from collections import namedtuple
 from ae5_tools.api import AEUnexpectedResponseError
 
-from .utils import _cmd, CMDException
+from .utils import _cmd, _compare_tarfiles, CMDException
 
 
 @pytest.fixture(scope='module')
@@ -146,6 +146,7 @@ def test_project_upload(downloaded_project):
     fname2 = _cmd(f'project download test_upload1:{rev}', table=False).strip()
     assert fname2 == f'test_upload1-{rev}.tar.gz'
     assert os.path.exists(fname2)
+    _compare_tarfiles(fname, fname2)
     if rev == '0.0.1':
         pytest.xfail("5.4.1 revision issue")
     assert rev == '1.2.3'

@@ -2,6 +2,7 @@ import os
 import csv
 import json
 import shlex
+import tarfile
 import subprocess
 
 from io import StringIO
@@ -49,3 +50,26 @@ def _cmd(cmd, table=True):
     if result and list(result[0].keys()) == ['field', 'value']:
         return {rec['field']: rec['value'] for rec in result}
     return result
+
+def _compare_tarfiles(fname1, fname2):
+    content = ({}, {})
+    for fn, cdict in zip((fname1, fname2), content):
+        with tarfile.open(name=fn, mode='r') as tar:
+            for tinfo in tar:
+                if tinfo.isfile():
+                    cdict[tinfo.name.split('/', 1)[1]] = tar.extractfile(tinfo).read()
+    if content[0] == content[1]:
+        return
+    msg = []
+    for k in set(content[0]) | set(content[1]):
+        c1 = content[0].get(k)
+        c2 = content[1].get(k)
+        if c1 == c2:
+            continue
+        if not msg:
+            msg.append('Comparing: f1={}, f2={}'.format(fname, fname2))
+        if c1 is None or c2 is None:
+            msg.append('File {} only found in {}'.format(k, 'f1' if c1 else 'f2'))
+        else:
+            msg.append('File {} differs: f1: {}B, f2: {}zB'.format(k, len(c1), len(c2)))
+    assert False, '\n'.join(msg)

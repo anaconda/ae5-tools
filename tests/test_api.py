@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 
 from ae5_tools.api import AEUserSession, AEUnexpectedResponseError, AEException
-from .utils import _get_vars
+from .utils import _get_vars, _compare_tarfiles
 
 
 class AttrDict(dict):
@@ -230,6 +230,7 @@ def test_project_upload(user_session, downloaded_project):
     fname2 = user_session.project_download(f'test_upload1:{rev}')
     assert fname2 == f'test_upload1-{rev}.tar.gz'
     assert os.path.exists(fname2)
+    _compare_tarfiles(fname, fname2)
     if rev == '0.0.1':
         pytest.xfail("5.4.1 revision issue")
     assert rev == '1.2.3'

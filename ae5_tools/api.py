@@ -897,7 +897,11 @@ class AEUserSession(AESessionBase):
         if not name:
             if type(project_archive) == bytes:
                 raise RuntimeError('Project name must be supplied for binary input')
-            name = basename(abspath(project_archive)).split('.', 1)[0]
+            name = basename(abspath(project_archive))
+            for suffix in  ('.tar.gz', '.tar.bz2', '.tar.gz', '.zip', '.tgz', '.tbz', '.tbz2', '.tz2', '.txz'):
+                if name.endswith(suffix):
+                    name = name[:-len(suffix)]
+                    break
         try:
             f = None
             if type(project_archive) == bytes:
@@ -911,12 +915,13 @@ class AEUserSession(AESessionBase):
             else:
                 f = io.BytesIO()
                 create_tar_archive(project_archive, 'project', f)
-                f.seek(0)
+            f.seek(0)
             data = {'name': name}
             if tag:
                 data['tag'] = tag
             response = self._post_record('projects/upload', record_type='project',
-                                         api_kwargs={'files': {'project_file': f}, 'data': data})
+                                         api_kwargs={'files': {b'project_file': f},
+                                         'data': data})
         finally:
             if f is not None:
                 f.close()
