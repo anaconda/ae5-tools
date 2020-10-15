@@ -194,9 +194,10 @@ class AE5K8STransformer(object):
             loop = asyncio.get_event_loop()
             return loop.run_until_complete(self.close())
 
-    def has_metrics(self):
+    async def has_metrics(self):
         if self._has_metrics is None:
-            self._has_metrics = self.get('/apis/metrics.k8s.io/v1beta1', ok404=True) is not None
+            result = await self.get('/apis/metrics.k8s.io/v1beta1', ok404=True)
+            self._has_metrics = result is not None
         return self._has_metrics
 
     async def get(self, path, type='json', ok404=False):
@@ -294,7 +295,7 @@ class AE5K8STransformer(object):
         if isinstance(nrec, Exception):
             return nrec
         name = nrec['name']
-        if self.has_metrics():
+        if await self.has_metrics():
             url = f'/apis/metrics.k8s.io/v1beta1/namespaces/default/pods/{name}'
         else:
             url = f'namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/namespaces/default/pods/{name}'
@@ -335,7 +336,7 @@ class AE5K8STransformer(object):
     async def node_info(self):
         resp1 = self.get('nodes')
         resp2 = self.get('pods')
-        if self.has_metrics():
+        if await self.has_metrics():
             url = '/apis/metrics.k8s.io/v1beta1/pods'
         else:
             url = 'namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/pods'
