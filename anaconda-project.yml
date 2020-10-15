@@ -3,13 +3,9 @@ commands:
   default:
     unix: python -m ae5_tools.k8s.server
 channels:
-  - ae5-admin
   - defaults
 packages:
   - python-dateutil
-  - requests
-  - click=7
-  - click-repl
   - aiohttp
 env_specs:
   default: {}
