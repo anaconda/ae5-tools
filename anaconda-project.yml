@@ -2,6 +2,8 @@ name: ae5-tools
 commands:
   default:
     unix: python -m ae5_tools.k8s.server
+  promql:
+    unix: python -m ae5_tools.promql.server
 channels:
   - defaults
 packages:
