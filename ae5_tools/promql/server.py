@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import os
+import re
 import sys
 
 import aiohttp
@@ -41,29 +42,53 @@ class AE5PromQLHandler(object):
         return web.Response(text="Alive and kicking")
 
     async def query_range(self, request):
-        if ('id' not in request.query and 'query' not in request.query) or 'metric' not in request.query:
-            raise web.HTTPUnprocessableEntity(reason='Must supply an ID or query and a metric.')
-        valid = ('id', 'query', 'metric', 'start', 'end', 'step')
+        if not ('query' in request.query or ('id' in request.query and 'metric' in request.query)):
+            raise web.HTTPUnprocessableEntity(reason='Must supply an ID and metric or an explicit query.')
+        valid = ('id', 'query', 'metric', 'start', 'end', 'step', 'samples', 'period')
         invalid_keys = set(k for k in request.query if k not in valid)
         if invalid_keys:
             query = urlencode(request.query)
             raise web.HTTPUnprocessableEntity(reason=f'Invalid query: {query}')
 
-        now = datetime.datetime.utcnow()
-        end_timestamp = now.isoformat("T") + "Z"
-        start_limit = now - datetime.timedelta(weeks=52 * 10)
-        start_timestamp = start_limit.isoformat("T") + "Z"
+        # Compute date range and step
+        if 'period' in request.query:
+            timedelta = parse_timedelta(request.query['period'])
+        else:
+            timedelta = datetime.timedelta(weeks=4)
+        end = request.query.get('end', datetime.datetime.utcnow())
+        start = request.query.get('start', end-timedelta)
+        end_timestamp = end.isoformat("T") + "Z"
+        start_timestamp = start.isoformat("T") + "Z"
+        if 'step' in request.query:
+            step = request.query['step']
+        else:
+            samples = int(request.query.get('samples', 200))
+            step = int(((end-start)/samples).total_seconds())
 
-        query = request.query.get('query', None)
         metric = request.query.get('metric', None)
-        start = request.query.get('start', start_timestamp)
-        end = request.query.get('end', end_timestamp)
-
+        query = request.query.get('query', None)
         pod_id = request.query.get('id', None)
-        step = request.args.get('step', '100s')
 
-        resp = await self.xfrm.query_range(query, pod_id, metric, start, end, step)
-        return _json(resp['data']['result'][0]['values'])
+        resp = await self.xfrm.query_range(query, pod_id, metric, start_timestamp, end_timestamp, step)
+        if resp['status'] == 'success':
+            result = resp['data']['result']
+            return _json(result[0]['values'] if len(result) else [])
+        raise web.HTTPUnprocessableEntity(reason=f'Prometheus query returned status {resp["status"]}.')
+
+
+_period_regex = re.compile(r'((?P<weeks>\d+?)w)?((?P<days>\d+?)d)?((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?')
+
+
+def parse_timedelta(time_str):
+    parts = _period_regex.match(time_str)
+    if not parts:
+        return
+    parts = parts.groupdict()
+    time_params = {}
+    for (name, param) in parts.items():
+        if param:
+            time_params[name] = int(param)
+    return dt.timedelta(**time_params)
 
 
 class AE5PromQLTransformer(object):
@@ -111,6 +136,7 @@ class AE5PromQLTransformer(object):
 
 def main(url=None, token=None, port=None, promql_port=None):
     url = url or os.environ.get('AE5_K8S_URL', DEFAULT_K8S_URL)
+    port = port or int(os.environ.get('AE5_PROMQL_PORT') or '8086')
     if token is None:
         token = os.environ.get('AE5_K8S_TOKEN')
     if token is None:
@@ -126,10 +152,9 @@ def main(url=None, token=None, port=None, promql_port=None):
 
     app = web.Application()
     handler = AE5PromQLHandler(promql_url, token)
-    app.routes([web.get('/', handler.hello),
-                web.get('/__status__', handler.hello),
-                web.get('/query_range', handler.query_range)])
-    port = port or int(os.environ.get('AE5_PROMQL_PORT') or '8086')
+    app.add_routes([web.get('/', handler.hello),
+                    web.get('/__status__', handler.hello),
+                    web.get('/query_range', handler.query_range)])
     web.run_app(app, port=port)
 
 
