@@ -140,6 +140,10 @@ class AE5K8SHandler(object):
 
         query = dict(request.query)
         pod_id = request.query.pop('id', None)
+        if 'start' in query:
+            query['start'] = datetime.datetime.fromisoformat(query['start'][:-1])
+        if 'end' in query:
+            query['end'] = datetime.datetime.fromisoformat(query['end'][:-1])
         resp = await self.promql.query_range(pod_id, **query)
         if resp['status'] == 'success':
             result = resp['data']['result']
