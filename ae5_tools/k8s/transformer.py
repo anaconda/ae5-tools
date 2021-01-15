@@ -178,14 +178,19 @@ def parse_timedelta(time_str):
 
 
 class FileStream(object):
+
     def __init__(self, stream):
         self.stream = sys.stdout if stream is None else stream
+
     async def prepare(self, request):
         pass
+
     def closing(self):
         return False
+
     async def write(self, data):
         return self.stream.write(data.decode())
+
     async def finish(self):
         pass
 
@@ -251,7 +256,7 @@ class AE5K8STransformer(AE5BaseTransformer):
                 return _k8s_pod_to_record(resp1['items'][0])
         else:
             return _or_raise(KeyError(f'Pod not found: {id}'), return_exceptions)
-    
+
     async def _exec_pod(self, pod, namespace, container, command):
         path = f'/api/v1/namespaces/{namespace}/pods/{pod}/exec'
         params = {'command': command, 'container': container,
@@ -291,7 +296,7 @@ class AE5K8STransformer(AE5BaseTransformer):
         result = {'modified': [], 'deleted': [], 'added': [], 'mtime': None}
         try:
             output = await self._exec_pod(data['name'], 'default', data['containers']['sync']['name'], cmd)
-        except RuntimeError as exc:
+        except RuntimeError:
             return result
         found = False
         gitkeys = {' D': 'deleted', '??': 'added'}
@@ -306,7 +311,7 @@ class AE5K8STransformer(AE5BaseTransformer):
             else:
                 result['mtime'] = max(result.get('mtime') or '', line.split()[0])
         return result
-    
+
     async def pod_info(self, id, return_exceptions=False):
         if isinstance(id, list):
             return await asyncio.gather(*(self.pod_info(t) for t in id), return_exceptions=return_exceptions)
@@ -368,26 +373,28 @@ class AE5K8STransformer(AE5BaseTransformer):
         subsets = ('total', 'sessions', 'deployments', 'middleware', 'system')
         whiches = ('requests', 'limits', 'usage')
         for rec in resp1:
-            nodeRec = {'name': rec['metadata']['name'],
-                       'role': rec['metadata']['labels']['role'],
-                       'capacity': {
-                            'pods': rec['status']['allocatable']['pods'],
-                            'mem': _to_text2(rec['status']['allocatable']['memory']),
-                            'cpu': rec['status']['allocatable']['cpu'],
-                            'gpu': rec['status']['allocatable'].get('nvidia.com/gpu', "0"),
-                       },
-                       'ready': any(c['type'] == 'Ready' and c['status'] == "True" for c in rec['status']['conditions']),
-                       'conditions': [c['type'] for c in rec['status']['conditions']
-                                      if c['type'] != 'Ready' and c['status'] == "True"],
-                       'timestamp': None,
-                       'window': None}
+            nodeRec = {
+                'name': rec['metadata']['name'],
+                'role': rec['metadata']['labels']['role'],
+                'capacity': {
+                    'pods': rec['status']['allocatable']['pods'],
+                    'mem': _to_text2(rec['status']['allocatable']['memory']),
+                    'cpu': rec['status']['allocatable']['cpu'],
+                    'gpu': rec['status']['allocatable'].get('nvidia.com/gpu', "0"),
+                },
+                'ready': any(c['type'] == 'Ready' and c['status'] == "True" for c in rec['status']['conditions']),
+                'conditions': [c['type'] for c in rec['status']['conditions']
+                               if c['type'] != 'Ready' and c['status'] == "True"],
+                'timestamp': None,
+                'window': None
+            }
             for subset in subsets:
                 srec = nodeRec[subset] = {'pods': 0, 'pending': 0}
                 for which in whiches:
                     srec[which] = {'mem': 0, 'cpu': 0, 'gpu': 0}
             nodeMap[nodeRec['name']] = nodeRec
             nodeList.append(nodeRec)
-    
+
         podMap = {}
         for pod in resp2:
             nodeName = pod['spec']['nodeName']
@@ -418,7 +425,7 @@ class AE5K8STransformer(AE5BaseTransformer):
                             default = 'inf' if which == 'limits' and key != 'gpu' else '0'
                             dst[key] = value + _to_float(src.get(skey, src.get(key, default)))
                 subRec['usage']['gpu'] = subRec['requests']['gpu']
-                
+
         for pod in resp3:
             podName = pod['metadata']['name']
             if podName in podMap:

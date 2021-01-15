@@ -22,15 +22,20 @@ def _json(result):
 
 
 class WebStream(object):
+
     def __init__(self, request):
         self._request = request
+
     async def prepare(self, request):
         self._response = web.StreamResponse(headers={'Content-Type': 'text/plain'})
         await self._response.prepare(self._request)
+
     def closing(self):
         return self._request.protocol.transport.is_closing()
+
     async def write(self, data):
         await self._response.write(data)
+
     async def finish(self):
         return await self._response.write_eof()
 
@@ -106,7 +111,8 @@ class AE5K8SHandler(object):
         else:
             container = None
         if 'follow' in request.query:
-            value = ','.join(v for k, v in request.query.items() if k == 'follow')
+            values = [v for k, v in request.query.items() if k == 'follow']
+            value = ','.join(values)
             if value not in ('', 'true', 'false'):
                 raise web.HTTPUnprocessableEntity(reason=f'Invalid parameter: follow={values[0]}')
             follow = value != 'false'

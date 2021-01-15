@@ -1,6 +1,5 @@
 import sys
 import requests
-import subprocess
 
 from .ssh import launch_background, tunneled_k8s_url
 
@@ -70,7 +69,7 @@ class AE5K8SRemoteClient(AE5K8SClient):
                 self._error = None
             else:
                 self._error = f'Unexpected response at endpoint {subdomain}'
-        except RuntimeError as exc:
+        except RuntimeError:
             self._error = f'No deployment found at endpoint {subdomain}'
 
     def _api(self, method, path, **kwargs):
