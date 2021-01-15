@@ -5,7 +5,7 @@ import sys
 import requests
 
 from aiohttp import web
-from urllib.parse import urlencode
+from urllib.parse import urlencode, unquote
 
 from .transformer import AE5K8STransformer, AE5PromQLTransformer
 from .ssh import tunneled_k8s_url
@@ -139,11 +139,13 @@ class AE5K8SHandler(object):
             raise web.HTTPUnprocessableEntity(reason=f'Invalid query: {query}')
 
         query = dict(request.query)
-        pod_id = request.query.pop('id', None)
+        pod_id = query.pop('id', None)
         if 'start' in query:
-            query['start'] = datetime.datetime.fromisoformat(query['start'][:-1])
+            start = unquote(query['start'])[:-1]
+            query['start'] = datetime.datetime.fromisoformat(start)
         if 'end' in query:
-            query['end'] = datetime.datetime.fromisoformat(query['end'][:-1])
+            end = unquote(query['end'])[:-1]
+            query['end'] = datetime.datetime.fromisoformat(end)
         resp = await self.promql.query_range(pod_id, **query)
         if resp['status'] == 'success':
             result = resp['data']['result']
