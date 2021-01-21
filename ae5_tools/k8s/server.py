@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import sys
@@ -141,10 +142,10 @@ class AE5K8SHandler(object):
         query = dict(request.query)
         pod_id = query.pop('id', None)
         if 'start' in query:
-            start = unquote(query['start'])[:-1]
+            start = unquote(query['start']).replace('Z', '')
             query['start'] = datetime.datetime.fromisoformat(start)
         if 'end' in query:
-            end = unquote(query['end'])[:-1]
+            end = unquote(query['end']).replace('Z', '')
             query['end'] = datetime.datetime.fromisoformat(end)
         resp = await self.promql.query_range(pod_id, **query)
         if resp['status'] == 'success':
