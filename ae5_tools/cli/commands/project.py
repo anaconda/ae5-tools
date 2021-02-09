@@ -264,7 +264,7 @@ def clone(directory):
 
        The PROJECT identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one project.
-       
+
        If the local directory name is not supplied the project will be cloned
        according to the repository field from "ae5 project info.
 

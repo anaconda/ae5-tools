@@ -13,6 +13,7 @@ from dateutil import parser
 import getpass
 from tempfile import TemporaryDirectory
 import tarfile
+from pprint import pprint
 
 from anaconda_project.project import Project
 
@@ -950,11 +951,13 @@ class AEUserSession(AESessionBase):
             return self.project_info(response['id'], format=format, retry=True)
 
     def project_clone(self, ident, directory="", format=None):
+        extraheader = ''
         if self.hostname in ident["repo_url"]:
-            # Make sure we have an updated token
-            self.git_config()
+            token = self._get_v1_token()['access_token']
+            extraheader = f' -c http.extraheader="AUTHORIZATION: bearer {token}" '
 
-        subprocess.check_call(f'git clone -c remote.origin.project={ident["id"]} {ident["repo_url"]} {directory}', shell=True)
+        subprocess.check_call(f'git clone {extraheader} -c remote.origin.project={ident["id"]} {ident["repo_url"]} {directory}',
+                              shell=True)
 
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
@@ -1542,20 +1545,21 @@ class AEUserSession(AESessionBase):
         token = self._get_v1_token()['access_token']
         extraheader = f'AUTHORIZATION: bearer {token}'
 
-        args = '--global'
+        args = '--local'
         subprocess.check_call(f'git config {args} http.https://{self.hostname}.extraheader "{extraheader}"',
                               shell=True)
 
-    def post_revision_metadata(self, tag=None, verbose=True, dry_run=False, format=None):
+    def post_revision_metadata(self, tags=None, verbose=True, dry_run=False, format=None):
         # Determine the tag to POST
-        if tag is None:
+        if tags is None:
             # find the most recent tag
-            tag = subprocess.check_output('git describe --tags --abbrev=0', shell=True).decode().strip()
+            all_tags = subprocess.check_output("git tag --sort=creatordate",
+                                               shell=True).decode().splitlines()
         else:
-            tag = tag
+            all_tags = tags
 
         if verbose:
-            print(f'-- The tag to POST: {tag}')
+            print(f'-- All known tags: {all_tags}')
 
         project_id = subprocess.check_output('git config remote.origin.project', shell=True).decode().strip()
         if not project_id:
@@ -1565,39 +1569,49 @@ class AEUserSession(AESessionBase):
 
         # To avoid conflicts later get the previously.
         # Post tags (either from UI or this script).
-        versions = [v['id'] for v in revisions]
+        posted_tags = [v['id'] for v in revisions]
+        remaining_tags = [t for t in all_tags if t not in posted_tags]
 
         if verbose:
             print(f"""-- Known version tags
-{versions}
+{posted_tags}
+""")
+            print(f"""-- Version tags to post
+{remaining_tags}
 """)
 
         # If the tag already posted ignore exit
         # since there may be new un-tagged commits
         # in this git push.
-        if tag in versions:
-            if verbose:
-                print(f'-- Tag {tag} has already been created.')
-                print(f'-- Silent termination.')
-            return
+        for tag in remaining_tags:
+            with TemporaryDirectory() as tempdir:
+                project_file = subprocess.check_output(f'git --no-pager show {tag}:anaconda-project.yml',
+                                                       shell=True).decode()
+                with open(os.path.join(tempdir, 'anaconda-project.yml'), 'wt') as f:
+                    f.write(project_file)
 
-        project = Project('.')
-        body = {'data':{'type':'version','attributes':{'name':tag,'metadata':project.publication_info()}}}
-        
-        versions_url = os.path.join(self.project_info(project_id)['url'], 'versions')
-        token = self._get_v1_token()['access_token']
-        headers = {
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/vnd.api+json'
-        }
+                project = Project('.')
+                body = {'data':{'type':'version','attributes':{'name':tag,'metadata':project.publication_info()}}}
 
-        res = self.session.post(versions_url, headers=headers, data=json.dumps(body))
-        if verbose:
-            print(f"""-- POST request returned
+                if verbose:
+                    print('-- The metadata to be posted:')
+                    pprint(body)
+
+                if not dry_run:
+                    versions_url = os.path.join(self.project_info(project_id)['url'], 'versions')
+                    token = self._get_v1_token()['access_token']
+                    headers = {
+                        'Authorization': f'Bearer {token}',
+                        'Content-Type': 'application/vnd.api+json'
+                    }
+
+                    res = self.session.post(versions_url, headers=headers, data=json.dumps(body))
+                    if verbose:
+                        print(f"""-- POST request returned
 {res}
 {res.reason}
 """)
-        res.raise_for_status()
+                    res.raise_for_status()
 
 
 class AEAdminSession(AESessionBase):

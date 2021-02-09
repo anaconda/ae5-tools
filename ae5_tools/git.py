@@ -9,30 +9,31 @@ HAS_TAGS=0
 DRY_RUN=""
 VERBOSE=""
 
-## read git push command line arguments
-ARGS=`ps -p $PPID -o args=`
-for arg in $ARGS; do
-    if [[ "$arg" == '--tags' ]] || [[ "$arg" == '--tag' ]] ; then
-      HAS_TAGS=1
-    fi
-    if [[ "$arg" == '--dry-run' ]]; then
-	  DRY_RUN="--dry-run"
-    fi
-    if [[ "$arg" == "-v" ]] || [[ "$arg" == "--verbose" ]]; then
-	  VERBOSE='-v'
-    fi
-done
+ae5 git config
 
-### AE5 cannot accept annotated tags,
-### exit with error
-latest_tag=`git describe --tags --abbrev=0`
-tag_type=`git cat-file -t $latest_tag`
-if [[ "$tag_type" == "tag" ]]; then
-    echo "The tag $latest_tag is an annotated tag."
-    echo "It must be replaced with a lightweight tag"
-    echo "on the local clone and remote repository."
+## read git push command line arguments
+push_command=$(ps -ocommand= -p $PPID)
+
+with_tags="^(--tags|--follow-tags)"
+is_dry_run="^(--dry-run|-n)"
+is_destructive='^(--force|--delete|-f|-d)'
+is_verbose="^(--verbose|-v)"
+
+for arg in $push_command; do
+  if [[ $arg =~ $is_destructive ]]; then
+    echo "Force push and delete are disabled. You may wish to use 'git revert' instead."
     exit 1
-fi
+  fi
+  if [[ $arg =~ $is_dry_run ]]; then
+    DRY_RUN="--dry-run"
+  fi
+  if [[ $arg =~ $is_verbose ]]; then
+    VERBOSE="-v"
+  fi
+  if [[ $arg =~ $with_tags ]]; then
+    HAS_TAGS=1
+  fi
+done
 
 if [ "$HAS_TAGS" -eq "1" ]; then
     ## silent exit on git push --tags
