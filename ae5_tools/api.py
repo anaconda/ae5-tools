@@ -24,6 +24,7 @@ from .docker import get_dockerfile, get_condarc
 from .docker import build_image
 from .archiver import create_tar_archive
 from .k8s.client import AE5K8SLocalClient, AE5K8SRemoteClient
+from .git import install_prepush
 
 from http.cookiejar import LWPCookieJar
 from requests.packages import urllib3
@@ -953,11 +954,14 @@ class AEUserSession(AESessionBase):
     def project_clone(self, ident, directory="", format=None):
         extraheader = ''
         if self.hostname in ident["repo_url"]:
-            token = self._get_v1_token()['access_token']
+            token = self._get_v1_token()
             extraheader = f' -c http.extraheader="AUTHORIZATION: bearer {token}" '
 
         subprocess.check_call(f'git clone {extraheader} -c remote.origin.project={ident["id"]} {ident["repo_url"]} {directory}',
                               shell=True)
+        if not directory:
+            directory = os.path.basename(ident["repo_url"]).split('.git')[0]
+        install_prepush(directory)
 
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
@@ -1565,11 +1569,13 @@ class AEUserSession(AESessionBase):
             return sdata['access_token']
 
     def git_config(self, *git_config_flags, **git_config_kwargs):
-        token = self._get_v1_token()['access_token']
+        token = self._get_v1_token()
         extraheader = f'AUTHORIZATION: bearer {token}'
 
         args = '--local'
-        subprocess.check_call(f'git config {args} http.https://{self.hostname}.extraheader "{extraheader}"',
+        # subprocess.check_call(f'git config {args} http.https://{self.hostname}.extraheader "{extraheader}"',
+        #                       shell=True)
+        subprocess.check_call(f'git config {args} http.extraheader "{extraheader}"',
                               shell=True)
 
     def post_revision_metadata(self, tags=None, verbose=True, dry_run=False, format=None):
@@ -1622,7 +1628,7 @@ class AEUserSession(AESessionBase):
 
                 if not dry_run:
                     versions_url = os.path.join(self.project_info(project_id)['url'], 'versions')
-                    token = self._get_v1_token()['access_token']
+                    token = self._get_v1_token()
                     headers = {
                         'Authorization': f'Bearer {token}',
                         'Content-Type': 'application/vnd.api+json'

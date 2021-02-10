@@ -45,10 +45,13 @@ fi
 """
 
 
-def install_prepush():
-    git_dir = subprocess.check_output('git rev-parse --git-dir', shell=True).decode().strip()
+def install_prepush(directory=None):
+    if directory is None:
+        directory = subprocess.check_output('git rev-parse --git-dir', shell=True).decode().strip()
+    else:
+        directory = join(directory, '.git')
 
-    pre_push_script = join(git_dir, 'hooks', 'pre-push')
+    pre_push_script = join(directory, 'hooks', 'pre-push')
     with open(pre_push_script, 'wt') as f:
         f.write(PRE_PUSH)
 
