@@ -1516,30 +1516,53 @@ class AEUserSession(AESessionBase):
             # TODO: impersonate
             raise NotImplementedError('We do not have impersonation working to get the authorization token.')
         else:
-            # borrowed from .authorize()
-            key = f'{self.username}@{self.hostname}'
-            need_password = self.password is None
-            last_valid = True
-            if need_password:
-                password = self._password_prompt(key, last_valid)
-            else:
-                password = self.password
-            if not need_password:
-                raise AEException('Invalid username or password.')
-
-            data = {
-                'username': self.username,
-                'password': password,
-                'grant_type': 'password',
-                'client_id': 'anaconda-platform',
-                'client_secret': 'ed7ec3ff-c535-455b-b431-5ed97d78b8be'
-            }
-
             url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/token'
-            r = self.session.post(url, data=data)
-            r.raise_for_status()
+            v1_filename = os.path.join(config._path, 'v1-tokens', f'{self.username}@{self.hostname}')
+            os.makedirs(os.path.dirname(v1_filename), mode=0o700, exist_ok=True)
 
-            return r.json()
+            if os.path.exists(v1_filename):
+                with open(v1_filename, 'r') as fp:
+                    current_sdata = json.load(fp)
+                if isinstance(current_sdata, dict) and 'refresh_token' in current_sdata:
+                    resp = self.session.post(url,
+                                             data={'refresh_token': current_sdata['refresh_token'],
+                                                   'grant_type': 'refresh_token',
+                                                   'scope': 'offline_access',
+                                                   'client_id': 'anaconda-platform',
+                                                   'client_secret': 'ed7ec3ff-c535-455b-b431-5ed97d78b8be'
+                                                   })
+                    if resp.status_code == 200:
+                        sdata = resp.json()
+                        with open(v1_filename, 'w') as f:
+                            json.dump(sdata, f)
+            else:
+                # borrowed from .authorize()
+                key = f'{self.username}@{self.hostname}'
+                need_password = self.password is None
+                last_valid = True
+                if need_password:
+                    password = self._password_prompt(key, last_valid)
+                else:
+                    password = self.password
+                if not need_password:
+                    raise AEException('Invalid username or password.')
+
+                data = {
+                    'username': self.username,
+                    'password': password,
+                    'grant_type': 'password',
+                    'scope': 'offline_access',
+                    'client_id': 'anaconda-platform',
+                    'client_secret': 'ed7ec3ff-c535-455b-b431-5ed97d78b8be'
+                }
+
+                r = self.session.post(url, data=data)
+                r.raise_for_status()
+                sdata = r.json()
+                with open(v1_filename, 'w') as f:
+                    json.dump(sdata, f)
+
+            return sdata['access_token']
 
     def git_config(self, *git_config_flags, **git_config_kwargs):
         token = self._get_v1_token()['access_token']
