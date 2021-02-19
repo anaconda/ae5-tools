@@ -126,7 +126,15 @@ def main(url=None, token=None, port=None):
 
 
 if __name__ == '__main__':
-    url = sys.argv[1] if len(sys.argv) > 1 else None
+    url = None
+    skip = False
+    for arg in sys.argv[1:]:
+        if skip or arg.startswith('--'):
+            skip = not (skip or '=' in arg)
+            continue
+        if url is not None:
+            raise RuntimeError('No more than one positional argument expected')
+        url = arg
     if url and url.startswith('ssh:'):
         username, hostname = url[4:].split('@', 1)
         proc, url = tunneled_k8s_url(hostname, username)
