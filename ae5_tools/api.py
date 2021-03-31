@@ -1279,7 +1279,7 @@ class AEUserSession(AESessionBase):
         precs = {x['id']: x for x in self._get_records('projects')}
         for rec in records:
             if rec.get('project_url'):
-                pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
+                pid = 'a0-' + (rec.get('project_url') or '').rsplit('/', 1)[-1]
                 prec = precs.get(pid, {})
                 rec['project_id'] = pid
                 rec['_project'] = prec
