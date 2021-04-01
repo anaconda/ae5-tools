@@ -90,7 +90,7 @@ def test_samples():
 
 
 def test_sample_clone():
-    cname = 'nlp_api'
+    cname = 'NLP-API'
     pname = 'testclone'
     rrec1 = _cmd(f'sample clone {cname} --name {pname}')
     with pytest.raises(CMDException) as excinfo:
@@ -288,8 +288,10 @@ def test_session_branches(cli_session):
 def test_session_before_changes(cli_session):
     prec, srec = cli_session
     changes1 = _cmd(f'session changes {prec["id"]}')
+    changes1 = [c for c in changes1 if c['path'] != '.projectignore']
     assert changes1 == [], changes1
     changes2 = _cmd(f'session changes --master {prec["id"]}')
+    changes2 = [c for c in changes1 if c['path'] != '.projectignore']
     assert changes2 == [], changes2
 
 
