@@ -171,7 +171,7 @@ def test_samples(user_session):
 
 
 def test_sample_clone(user_session):
-    cname = 'nlp_api'
+    cname = 'NLP API'
     pname = 'testclone'
     rrec1 = user_session.sample_clone(cname, name=pname, wait=True)
     with pytest.raises(AEException) as excinfo:
@@ -402,8 +402,10 @@ def test_session_branches(user_session, api_session):
 def test_session_before_changes(user_session, api_session):
     prec, srec = api_session
     changes1 = user_session.session_changes(srec, format='json')
+    changes1 = [c for c in changes1 if c['path'] != '.projectignore']
     assert changes1 == [], changes1
     changes2 = user_session.session_changes(srec, master=True, format='json')
+    changes2 = [c for c in changes2 if c['path'] != '.projectignore']
     assert changes2 == [], changes2
 
 

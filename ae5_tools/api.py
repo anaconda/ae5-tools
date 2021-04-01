@@ -915,16 +915,18 @@ class AEUserSession(AESessionBase):
             else:
                 f = io.BytesIO()
                 create_tar_archive(project_archive, 'project', f)
+                project_archive = project_archive + '.tar.gz'
             f.seek(0)
             data = {'name': name}
             if tag:
                 data['tag'] = tag
+            f = (project_archive, f)
             response = self._post_record('projects/upload', record_type='project',
                                          api_kwargs={'files': {b'project_file': f},
                                          'data': data})
         finally:
             if f is not None:
-                f.close()
+                f[1].close()
         if response.get('error'):
             raise RuntimeError('Error uploading project: {}'.format(response['error']['message']))
         if wait:
@@ -1279,7 +1281,7 @@ class AEUserSession(AESessionBase):
         precs = {x['id']: x for x in self._get_records('projects')}
         for rec in records:
             if rec.get('project_url'):
-                pid = 'a0-' + rec['project_url'].rsplit('/', 1)[-1]
+                pid = 'a0-' + (rec.get('project_url') or '').rsplit('/', 1)[-1]
                 prec = precs.get(pid, {})
                 rec['project_id'] = pid
                 rec['_project'] = prec
