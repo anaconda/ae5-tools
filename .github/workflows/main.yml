@@ -50,7 +50,7 @@ jobs:
         mv conda-bld $CONDA/
         source $CONDA/etc/profile.d/conda.sh
         conda config --prepend channels ae5-admin
-        conda create -y -n ptest local::ae5-tools python=3.6 pytest pytest-cov codecov pandas
+        conda create -y -n ptest local::ae5-tools python=3.6 pytest pandas
     - name: Test the package
       shell: bash
       env:
