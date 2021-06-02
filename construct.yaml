@@ -1,0 +1,17 @@
+name: ae5-tools
+version: "0.4.1"
+
+install_in_dependency_order: True
+
+channels:
+  - http://repo.anaconda.com/pkgs/main/
+  - http://conda.anaconda.org/ae5-admin
+
+specs:
+  - python=3.6
+  - python-dateutil>=2.7
+  - requests
+  - click>=7
+  - click-repl
+  - aiohttp
+  - ae5-tools
