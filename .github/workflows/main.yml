@@ -89,3 +89,23 @@ jobs:
       uses: glassechidna/artifact-cleaner@master
       with:
         minimumAge: 86400
+  constructor:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Retrieve the source code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Build the installer
+      env:
+        CONDA_CHANNELS: defaults,https://conda.anaconda.org/ae5-admin
+      run: |
+        source $CONDA/bin/activate
+        conda install -y constructor 
+        constructor
+    - name: Upload installer
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{secrets.AWS_DEFAULT_REGION}}
+      run: aws s3 cp ae5-tools-*-Linux-x86_64.sh s3://airgap.svc.anaconda.com/misc/ --acl public-read
