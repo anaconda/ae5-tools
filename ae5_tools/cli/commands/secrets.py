@@ -16,7 +16,7 @@ def secret():
 def list(**kwargs):
     '''List the static endpoints on this cluster.
     '''
-    cluster_call('secrets_list', **kwargs)
+    cluster_call('secret_list', **kwargs)
 
 
 @secret.command()
@@ -28,7 +28,7 @@ def delete(key, **kwargs):
 
        The secret key must match exactly.
     '''
-    cluster_call('secrets_delete', key=key, **kwargs,
+    cluster_call('secret_delete', key=key, **kwargs,
                  confirm=f'Delete secret {key}',
                  prefix=f'Deleting secret {key}...',
                  postfix='deleted.')
@@ -44,7 +44,7 @@ def add(key, value, **kwargs):
 
        Must provide key and value as arguments.
     '''
-    cluster_call('secrets_add', key=key, value=value, **kwargs,
+    cluster_call('secret_add', key=key, value=value, **kwargs,
                  confirm=f'Adding secret {key}',
                  prefix=f'Adding secret {key}...',
                  postfix='added.')
