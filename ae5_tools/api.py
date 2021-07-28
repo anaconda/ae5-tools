@@ -558,6 +558,9 @@ class AEUserSession(AESessionBase):
     def secrets_add(self, key, value):
         self._post('credentials/user', json={'key': key, 'value': value})
 
+    def secrets_delete(self, key):
+        self._delete(f'credentials/user/{key}')
+
     def secrets_list(self):
         records = self._get('credentials/user')
         if 'data' in records:
