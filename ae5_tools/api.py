@@ -559,6 +559,9 @@ class AEUserSession(AESessionBase):
         self._post('credentials/user', json={'key': key, 'value': value})
 
     def secret_delete(self, key, format=None):
+        secrets = self.secret_list()
+        if key not in secrets:
+            raise AEException(f'User secret {key!r} was not found and cannot be deleted.')
         self._delete(f'credentials/user/{key}')
 
     def secret_list(self, filter=None, format=None):
