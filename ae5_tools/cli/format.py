@@ -333,7 +333,7 @@ def print_table(records, columns, header=True, width=0):
 def print_output(result):
     if result is None:
         return
-    elif isinstance(result, str):
+    elif isinstance(result, (list, str)):
         if result:
             print(result)
         return

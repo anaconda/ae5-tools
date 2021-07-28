@@ -555,13 +555,13 @@ class AEUserSession(AESessionBase):
             self._join_collaborators('projects', records)
         return records
 
-    def secrets_add(self, key, value):
+    def secrets_add(self, key, value, format=None):
         self._post('credentials/user', json={'key': key, 'value': value})
 
-    def secrets_delete(self, key):
+    def secrets_delete(self, key, format=None):
         self._delete(f'credentials/user/{key}')
 
-    def secrets_list(self):
+    def secrets_list(self, filter=None, format=None):
         records = self._get('credentials/user')
         if 'data' in records:
             return records['data']
