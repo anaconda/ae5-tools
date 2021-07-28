@@ -555,6 +555,16 @@ class AEUserSession(AESessionBase):
             self._join_collaborators('projects', records)
         return records
 
+    def secrets_add(self, key, value):
+        self._post('credentials/user', json={'key': key, 'value': value})
+
+    def secrets_list(self):
+        records = self._get('credentials/user')
+        if 'data' in records:
+            return records['data']
+        else:
+            raise AEException('Secrets endpoint did not return data.')
+
     def project_list(self, filter=None, collaborators=False, format=None):
         records = self._get_records('projects', filter, collaborators=collaborators)
         return self._format_response(records, format=format)
