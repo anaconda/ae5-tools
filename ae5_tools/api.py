@@ -1233,7 +1233,7 @@ class AEUserSession(AESessionBase):
         else:
             endpoint = None
         self.deployment_stop(drec)
-        return self.deployment_start(drec['project_id'],
+        return self.deployment_start('{}:{}'.format(drec['project_id'], drec['revision']),
                                      endpoint=endpoint, command=drec['command'],
                                      resource_profile=drec['resource_profile'],
                                      public=drec['public'],
