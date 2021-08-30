@@ -674,8 +674,17 @@ class AEUserSession(AESessionBase):
 
     def _pre_sample(self, records):
         for record in records:
-            record['is_template'] = 'is_default' in record
-            record.setdefault('is_default', False)
+            if record.get('is_default'):
+                record['is_default'] = False
+        first_template = None
+        found_default = False
+        for record in records:
+            record['is_default'] = bool(not found_default and record.get('is_template') and record.get('is_default'))
+            record.setdefault('is_template', False)
+            first_template = first_template or record
+            found_default = found_default or record['is_default']
+        if not found_default and first_template:
+            first_template['is_default'] = True
         return records
 
     def sample_list(self, filter=None, format=None):
