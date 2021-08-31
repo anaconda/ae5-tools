@@ -344,7 +344,8 @@ def test_deploy_token(user_session, cli_deployment):
     prec, drec = cli_deployment
     token = _cmd(f'deployment token {drec["id"]}', table=False).strip()
     resp = requests.get(f'https://{drec["endpoint"]}.' + user_session.hostname,
-                        headers={'Authorization': f'Bearer {token}'})
+                        headers={'Authorization': f'Bearer {token}'},
+                        verify=False)
     assert resp.status_code == 200
     assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
 
