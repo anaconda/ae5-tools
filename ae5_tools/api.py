@@ -1614,13 +1614,27 @@ class AEUserSession(AESessionBase):
         # in this git push.
         for tag in remaining_tags:
             with TemporaryDirectory() as tempdir:
-                project_file = subprocess.check_output(f'git --no-pager show {tag}:anaconda-project.yml',
-                                                       shell=True).decode()
-                with open(os.path.join(tempdir, 'anaconda-project.yml'), 'wt') as f:
-                    f.write(project_file)
-
-                project = Project('.')
-                body = {'data':{'type':'version','attributes':{'name':tag,'metadata':project.publication_info()}}}
+                try:
+                    project_file = subprocess.check_output(f'git --no-pager show {tag}:anaconda-project.yml',
+                                                           shell=True).decode()
+                    with open(os.path.join(tempdir, 'anaconda-project.yml'), 'wt') as f:
+                        f.write(project_file)
+                    project = Project('.')
+                    pubinfo = project.publication_info()
+                except Exception as exc:
+                    if verbose:
+                        print('-- Corrupt project metadata for tag {}; skipping'.format(tag))
+                        print('-- Exception: {}'.format(exc))
+                    pubinfo = {
+                        'commands': {
+                            'ERROR': {
+                                'description': 'This version of anaconda-project.yml is corrupt. Please fix and push a new commit.',
+                                'default': True
+                            }
+                        }
+                    }
+                    
+                body = {'data':{'type':'version','attributes':{'name':tag,'metadata':pubinfo}}}
 
                 if verbose:
                     print('-- The metadata to be posted:')
