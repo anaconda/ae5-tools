@@ -951,26 +951,33 @@ class AEUserSession(AESessionBase):
         if wait:
             return self.project_info(response['id'], format=format, retry=True)
 
-    def project_clone(self, ident, directory="", format=None):
+    def project_clone(self, ident, directory="", use_https=False, format=None):
         extraheader = ''
+        external_git = False
         if self.hostname in ident["repo_url"]:
             repo_url = ident['repo_url']
             token = self._get_v1_token()
             extraheader = f' -c http.extraheader="AUTHORIZATION: bearer {token}" '
-        if 'anaconda-enterprise-ap-git-storage' in ident['repo_url']:
+        elif 'anaconda-enterprise-ap-git-storage' in ident['repo_url']:
             ## newer versions of ae5
             repo_url = f'https://{self.hostname}/platform/git/anaconda/{ident["repository"]}.git'
             token = self._get_v1_token()
             extraheader = f' -c http.extraheader="AUTHORIZATION: bearer {token}" '
+        elif 'github.com' in ident['repo_url']:
+            if use_https:
+                repo_url = ident['repo_url']
+            else:
+                repo_url = ident['repo_url'].replace('https://github.com/','git@github.com:')
+            external_git = True
         else:
-            ## most likely external git
             repo_url = ident['repo_url']
+            external_git = True
 
         subprocess.check_call(f'git clone {extraheader} -c remote.origin.project={ident["id"]} {repo_url} {directory}',
                               shell=True)
         if not directory:
             directory = os.path.basename(ident["repo_url"]).split('.git')[0]
-        install_prepush(directory)
+        install_prepush(directory, external_git=external_git)
 
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
@@ -1582,8 +1589,6 @@ class AEUserSession(AESessionBase):
         extraheader = f'AUTHORIZATION: bearer {token}'
 
         args = '--local'
-        # subprocess.check_call(f'git config {args} http.https://{self.hostname}.extraheader "{extraheader}"',
-        #                       shell=True)
         subprocess.check_call(f'git config {args} http.extraheader "{extraheader}"',
                               shell=True)
 

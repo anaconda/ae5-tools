@@ -9,7 +9,7 @@ HAS_TAGS=0
 DRY_RUN=""
 VERBOSE=""
 
-ae5 git config
+{}
 
 ## read git push command line arguments
 push_command=$(ps -ocommand= -p $PPID)
@@ -45,7 +45,12 @@ fi
 """
 
 
-def install_prepush(directory=None):
+def install_prepush(directory=None, external_git=False):
+    if not external_git:
+        _PRE_PUSH = PRE_PUSH.format('ae5 git config')
+    else:
+        _PRE_PUSH = PRE_PUSH.format('')
+
     if directory is None:
         directory = subprocess.check_output('git rev-parse --git-dir', shell=True).decode().strip()
     else:
@@ -53,6 +58,6 @@ def install_prepush(directory=None):
 
     pre_push_script = join(directory, 'hooks', 'pre-push')
     with open(pre_push_script, 'wt') as f:
-        f.write(PRE_PUSH)
+        f.write(_PRE_PUSH)
 
     subprocess.check_call(f'chmod +x {pre_push_script}', shell=True)
