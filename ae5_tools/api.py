@@ -1592,7 +1592,7 @@ class AEUserSession(AESessionBase):
         subprocess.check_call(f'git config {args} http.extraheader "{extraheader}"',
                               shell=True)
 
-    def post_revision_metadata(self, tags=None, verbose=True, dry_run=False, format=None):
+    def post_revision_metadata(self, tags=None, project_id=None, verbose=True, dry_run=False, format=None):
         # Determine the tag to POST
         if tags is None:
             # find the most recent tag
@@ -1604,7 +1604,8 @@ class AEUserSession(AESessionBase):
         if verbose:
             print(f'-- All known tags: {all_tags}')
 
-        project_id = subprocess.check_output('git config remote.origin.project', shell=True).decode().strip()
+        if project_id is None:
+            project_id = subprocess.check_output('git config remote.origin.project', shell=True).decode().strip()
         if not project_id:
             raise RuntimeError('un able to determine project id.')
 

@@ -40,7 +40,8 @@ def post():
 
 @post.command()
 @ident_filter('post')
+@click.option('--project-id', type=str, default=None)
 @global_options
-def revision_metadata():
+def revision_metadata(**kwargs):
     '''POST revision metadata.'''
-    cluster_call('post_revision_metadata')
+    cluster_call('post_revision_metadata', **kwargs)
