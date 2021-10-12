@@ -954,10 +954,19 @@ class AEUserSession(AESessionBase):
     def project_clone(self, ident, directory="", format=None):
         extraheader = ''
         if self.hostname in ident["repo_url"]:
+            repo_url = ident['repo_url']
             token = self._get_v1_token()
             extraheader = f' -c http.extraheader="AUTHORIZATION: bearer {token}" '
+        if 'anaconda-enterprise-ap-git-storage' in ident['repo_url']:
+            ## newer versions of ae5
+            repo_url = f'https://{self.hostname}/platform/git/anaconda/{ident["repository"]}.git'
+            token = self._get_v1_token()
+            extraheader = f' -c http.extraheader="AUTHORIZATION: bearer {token}" '
+        else:
+            ## most likely external git
+            repo_url = ident['repo_url']
 
-        subprocess.check_call(f'git clone {extraheader} -c remote.origin.project={ident["id"]} {ident["repo_url"]} {directory}',
+        subprocess.check_call(f'git clone {extraheader} -c remote.origin.project={ident["id"]} {repo_url} {directory}',
                               shell=True)
         if not directory:
             directory = os.path.basename(ident["repo_url"]).split('.git')[0]
@@ -1641,7 +1650,14 @@ class AEUserSession(AESessionBase):
                     pprint(body)
 
                 if not dry_run:
-                    versions_url = os.path.join(self.project_info(project_id)['url'], 'versions')
+                    project_url = self.project_info(project_id)['url']
+                    if 'anaconda-enterprise-ap-storage' in project_url:
+                        _project_url = project_url.replace('http://anaconda-enterprise-ap-storage',
+                                                           f'https://{self.hostname}/platform/storage/api/v1')
+                        versions_url = os.path.join(_project_url, 'versions')
+                    else:
+                        versions_url = os.path.join(project_url, 'versions')
+                        
                     token = self._get_v1_token()
                     headers = {
                         'Authorization': f'Bearer {token}',
