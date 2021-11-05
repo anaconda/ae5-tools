@@ -106,10 +106,11 @@ jobs:
       env:
         CONDA_CHANNELS: local,defaults
       run: |
+        version=$(ls conda-bld/noarch/ae5-tools-* | sed 's@.*ae5-tools-@@;s@-.*@@')
+        mv ./conda-bld $CONDA
         source $CONDA/bin/activate
         conda install -y constructor
-        sed -i.bak "s@version: .*@version: $(git describe | sed 's/-/+/;s/-/./')" construct.yaml
-        grep ^version construct.yaml
+        sed -i.bak "s@version: .*@version: \"${version}\"@;s@- ae5-tools.*@- ae5-tools=${version}@" construct.yaml
         constructor
     - name: Upload installer
       if: github.event_name == 'push'
