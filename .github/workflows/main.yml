@@ -103,14 +103,14 @@ jobs:
         name: package-${{ github.sha }}
         path: ./conda-bld
     - name: Build the installer
-      env:
-        CONDA_CHANNELS: local,defaults
       run: |
-        version=$(ls conda-bld/noarch/ae5-tools-* | sed 's@.*ae5-tools-@@;s@-.*@@')
+        cversion=$(git describe --dirty)
+        pversion=$(echo $cversion | sed 's@-@+@;s@-@.@g')
+        sed -i.bak "s@version: .*@version: \"${cversion}\"@;s@- ae5-tools.*@- ae5-tools=${pversion}@" construct.yaml
+        cat construct.yaml
         mv ./conda-bld $CONDA
         source $CONDA/bin/activate
         conda install -y constructor
-        sed -i.bak "s@version: .*@version: \"${version}\"@;s@- ae5-tools.*@- ae5-tools=${version}@" construct.yaml
         constructor
     - name: Upload installer
       if: github.event_name == 'push'

@@ -1,11 +1,7 @@
 name: ae5-tools
 version: "0.4.1"
-
-install_in_dependency_order: True
-
 channels:
   - local
   - defaults
-
 specs:
   - ae5-tools
