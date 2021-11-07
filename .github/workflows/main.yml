@@ -104,8 +104,8 @@ jobs:
         path: ./conda-bld
     - name: Build the installer
       run: |
-        cversion=$(git describe --dirty)
-        pversion=$(echo $cversion | sed 's@-@+@;s@-@.@g')
+        pversion=$(ls ./conda-bld/noarch/ae5-tools-* | sed 's@^.*ae5-tools-@@;s@-.*@@')
+        cversion=$(echo $pversion | sed 's@+@-@')
         sed -i.bak "s@version: .*@version: \"${cversion}\"@;s@- ae5-tools.*@- ae5-tools=${pversion}@" construct.yaml
         cat construct.yaml
         mv ./conda-bld $CONDA
