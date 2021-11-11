@@ -186,7 +186,7 @@ def image(**kwargs):
 @click.argument('filename', type=click.Path(exists=True))
 @click.option('--name', default='', help='Name of the project.')
 @click.option('--tag', default='', help='Commit tag to use for initial revision of project.')
-@click.option('--no-wait', is_flag=True, help='Do not wait for the creation seesion to complete before exiting.')
+@click.option('--no-wait', is_flag=True, help='Do not wait for the creation session to complete before exiting.')
 @global_options
 def upload(filename, name, tag, no_wait):
     '''Upload a project.
