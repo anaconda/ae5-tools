@@ -1565,30 +1565,31 @@ class AEAdminSession(AESessionBase):
         records = self._get_paginated('events', limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=[])
 
-    def _post_user(self, users):
+    def _post_user(self, users, include_login=False):
         users = {u['id']: u for u in users}
-        events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
-        for e in events:
-            if 'response_mode' not in e['details']:
-                urec = users.get(e['userId'])
-                if urec and 'lastLogin' not in urec:
-                    urec['lastLogin'] = e['time']
+        if include_login:
+            events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
+            for e in events:
+                if 'response_mode' not in e['details']:
+                    urec = users.get(e['userId'])
+                    if urec and 'lastLogin' not in urec:
+                        urec['lastLogin'] = e['time']
         users = list(users.values())
         for urec in users:
             urec.setdefault('lastLogin', 0)
         return users
 
-    def user_list(self, filter=None, format=None):
+    def user_list(self, filter=None, format=None, include_login=True):
         users = self._get_paginated('users')
-        users = self._fix_records('user', users, filter)
+        users = self._fix_records('user', users, filter, include_login=include_login)
         return self._format_response(users, format=format)
 
-    def user_info(self, ident, format=None, quiet=False):
-        response = self._ident_record('user', ident, quiet=False)
+    def user_info(self, ident, format=None, quiet=False, include_login=True):
+        response = self._ident_record('user', ident, quiet=False, include_login=include_login)
         return self._format_response(response, format)
 
     def impersonate(self, user_or_id):
-        record = self.user_info(user_or_id)
+        record = self.user_info(user_or_id, include_login=False)
         old_headers = self.session.headers.copy()
         try:
             self._post(f'users/{record["id"]}/impersonation')
