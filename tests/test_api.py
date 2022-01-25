@@ -594,7 +594,7 @@ def test_job_run2(user_session, api_project):
 
 def test_login_time(admin_session, user_session):
     # The current session should already be authenticated
-    now = datetime.utcnow()
+    now = datetime.now()
     plist0 = user_session.project_list()
     user_list = admin_session.user_list()
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
