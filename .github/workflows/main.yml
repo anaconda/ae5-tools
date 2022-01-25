@@ -10,7 +10,7 @@ on:
       - master
 jobs:
   package:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
     - name: Retrieve the source code
       uses: actions/checkout@v2
@@ -35,7 +35,7 @@ jobs:
       fail-fast: true
       max-parallel: 1
       matrix:
-        os: [windows-latest,ubuntu-18.04]
+        os: [windows-latest,ubuntu-latest]
     steps:
     - name: Retrieve the source code
       uses: actions/checkout@v2
@@ -64,7 +64,7 @@ jobs:
         conda activate ptest
         py.test -v tests
   upload:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     if: github.event_name == 'push'
     needs: tests
     steps:
@@ -90,7 +90,7 @@ jobs:
       with:
         minimumAge: 86400
   constructor:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     needs: package
     steps:
     - name: Retrieve the source code
