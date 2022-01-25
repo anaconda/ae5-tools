@@ -475,7 +475,7 @@ def test_job_run2(cli_project):
 
 def test_login_time(admin_session, user_session):
     # The current login time should be before the present
-    now = datetime.utcnow()
+    now = datetime.now()
     _cmd('project list')
     user_list = _cmd('user list')
     urec = next((r for r in user_list if r['username'] == user_session.username), None)
