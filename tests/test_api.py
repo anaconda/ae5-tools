@@ -458,7 +458,8 @@ def test_deploy_token(user_session, api_deployment):
     prec, drec = api_deployment
     token = user_session.deployment_token(drec)
     resp = requests.get(f'https://{drec["endpoint"]}.' + user_session.hostname,
-                        headers={'Authorization': f'Bearer {token}'})
+                        headers={'Authorization': f'Bearer {token}'},
+                        verify=False)
     assert resp.status_code == 200
     assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
     with pytest.raises(AEException) as excinfo:
@@ -593,7 +594,7 @@ def test_job_run2(user_session, api_project):
 
 def test_login_time(admin_session, user_session):
     # The current session should already be authenticated
-    now = datetime.utcnow()
+    now = datetime.now()
     plist0 = user_session.project_list()
     user_list = admin_session.user_list()
     urec = next((r for r in user_list if r['username'] == user_session.username), None)

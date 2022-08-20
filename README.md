@@ -26,9 +26,8 @@ conda install -c https://conda.anaconda.org/ae5-admin/label/dev ae5-tools
 ```
 The package has the following particular dependencies:
 - Python 3.6 or later.
-- [Click](https://click.palletsprojects.com/en/7.x/) 7.0 or later
-- [click-repl](https://github.com/click-contrib/click-repl), which is in conda-forge, but also provided
-  in the `ae5-admin` channel for convenience.
+- [click](https://click.palletsprojects.com/en/7.x/) 7.0 or later
+- [click-repl](https://github.com/click-contrib/click-repl)
 
 ### General capabilities
 

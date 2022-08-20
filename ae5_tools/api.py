@@ -690,8 +690,17 @@ class AEUserSession(AESessionBase):
 
     def _pre_sample(self, records):
         for record in records:
-            record['is_template'] = 'is_default' in record
-            record.setdefault('is_default', False)
+            if record.get('is_default'):
+                record['is_default'] = False
+        first_template = None
+        found_default = False
+        for record in records:
+            record['is_default'] = bool(not found_default and record.get('is_template') and record.get('is_default'))
+            record.setdefault('is_template', False)
+            first_template = first_template or record
+            found_default = found_default or record['is_default']
+        if not found_default and first_template:
+            first_template['is_default'] = True
         return records
 
     def sample_list(self, filter=None, format=None):
@@ -1249,7 +1258,7 @@ class AEUserSession(AESessionBase):
         else:
             endpoint = None
         self.deployment_stop(drec)
-        return self.deployment_start(drec['project_id'],
+        return self.deployment_start('{}:{}'.format(drec['project_id'], drec['revision']),
                                      endpoint=endpoint, command=drec['command'],
                                      resource_profile=drec['resource_profile'],
                                      public=drec['public'],
@@ -1572,30 +1581,31 @@ class AEAdminSession(AESessionBase):
         records = self._get_paginated('events', limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=[])
 
-    def _post_user(self, users):
+    def _post_user(self, users, include_login=False):
         users = {u['id']: u for u in users}
-        events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
-        for e in events:
-            if 'response_mode' not in e['details']:
-                urec = users.get(e['userId'])
-                if urec and 'lastLogin' not in urec:
-                    urec['lastLogin'] = e['time']
+        if include_login:
+            events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
+            for e in events:
+                if 'response_mode' not in e['details']:
+                    urec = users.get(e['userId'])
+                    if urec and 'lastLogin' not in urec:
+                        urec['lastLogin'] = e['time']
         users = list(users.values())
         for urec in users:
             urec.setdefault('lastLogin', 0)
         return users
 
-    def user_list(self, filter=None, format=None):
+    def user_list(self, filter=None, format=None, include_login=True):
         users = self._get_paginated('users')
-        users = self._fix_records('user', users, filter)
+        users = self._fix_records('user', users, filter, include_login=include_login)
         return self._format_response(users, format=format)
 
-    def user_info(self, ident, format=None, quiet=False):
-        response = self._ident_record('user', ident, quiet=False)
+    def user_info(self, ident, format=None, quiet=False, include_login=True):
+        response = self._ident_record('user', ident, quiet=False, include_login=include_login)
         return self._format_response(response, format)
 
     def impersonate(self, user_or_id):
-        record = self.user_info(user_or_id)
+        record = self.user_info(user_or_id, include_login=False)
         old_headers = self.session.headers.copy()
         try:
             self._post(f'users/{record["id"]}/impersonation')

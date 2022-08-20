@@ -11,8 +11,9 @@ from ..utils import global_options, ident_filter
 def node():
     '''Commands related to the AE5 nodes.
 
-    These commands require that either K8S deployment to be live on the platform,
-    or the --k8s-ssh-user option be supplied with a valid username.
+    These commands require a live K8S deployment running on the
+    platform, or the use of the --k8s-ssh-user option with a valid
+    username.
     '''
     pass
 

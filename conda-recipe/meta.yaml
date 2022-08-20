@@ -35,7 +35,6 @@ test:
     - python-dateutil=2.7
     - pytest
     - pytest-cov
-    - codecov
     - pandas
   commands:
     - py.test --cov=ae5_tools -v tests
