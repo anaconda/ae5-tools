@@ -56,7 +56,7 @@ class AE5K8SLocalClient(AE5K8SClient):
                 self._ssh.communicate()
 
     def _api(self, method, path, **kwargs):
-        return getattr(requests, method)(f'http://localhost:8086/{path}', **kwargs)
+        return requests.request(method, f'http://localhost:8086/{path}', **kwargs)
 
 
 class AE5K8SRemoteClient(AE5K8SClient):
@@ -64,7 +64,11 @@ class AE5K8SRemoteClient(AE5K8SClient):
         self._session = session
         self._subdomain = subdomain
         try:
-            session._head('/_errors/404.html', format='response')
+            session._head('projects', format='response')
+        except Exception as exc:
+            self._error = f'Issue establishing session: {exc}'
+            return
+        try:
             response = session._get('', subdomain=subdomain, format='text')
             if response == 'Alive and kicking':
                 self._error = None
