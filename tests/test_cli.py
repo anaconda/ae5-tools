@@ -202,9 +202,10 @@ def test_project_patch(cli_project, editors, resource_profiles):
                         ('editor', (e['id'] for e in editors))):
         old[what] = prec[what.replace('-', '_')]
         new[what] = next(v for v in wlist if v != old)
-    prec2 = _cmd('project', 'patch', prec["id"], '' + ' '.join(f'--{k}={v}' for k, v in new.items()))
+    cmd0 = ['project', 'patch', prec["id"]]
+    prec2 = _cmd(*(cmd0 + [f'--{k}={v}' for k, v in new.items()]))
     assert {k: prec2[k.replace('-', '_')] for k in new} == new
-    prec3 = _cmd('project', 'patch', prec["id"], '' + ' '.join(f'--{k}={v}' for k, v in old.items()))
+    prec3 = _cmd(*(cmd0 + [f'--{k}={v}' for k, v in old.items()]))
     assert {k: prec3[k.replace('-', '_')] for k in old} == old
 
 
@@ -236,7 +237,7 @@ def test_project_collaborators(cli_project, project_list):
 
 def test_project_activity(cli_project):
     prec = cli_project
-    activity = _cmd('project', 'activity', '', prec["id"])
+    activity = _cmd('project', 'activity', prec["id"])
     assert 1 <= len(activity) <= 10
     activity2 = _cmd('project', 'activity', '--latest', prec["id"])
     assert activity[0] == activity2
@@ -458,9 +459,9 @@ def test_job_run2(cli_project):
     prec = cli_project
     # Test cleanup mode and variables in jobs
     variables = {'INTEGRATION_TEST_KEY_1': 'value1', 'INTEGRATION_TEST_KEY_2': 'value2'}
-    cmd = ['project', 'run', 'prec["id"]', '--command', 'run_with_env_vars', '--name', 'testjob2']
+    cmd = ['project', 'run', prec["id"], '--command', 'run_with_env_vars', '--name', 'testjob2']
     for k, v in variables.items():
-        vars.extend(('--variable', '{k}={v}'))
+        cmd.extend(('--variable', f'{k}={v}'))
     _cmd(*cmd)
     # The job record should have already been deleted
     assert not _cmd('job', 'list')
