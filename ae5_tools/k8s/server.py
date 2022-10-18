@@ -14,6 +14,7 @@ from .ssh import tunneled_k8s_url
 DEFAULT_K8S_URL = 'https://kubernetes.default/'
 DEFAULT_K8S_TOKEN_FILES = ('/var/run/secrets/kubernetes.io/serviceaccount/token',
                            '/var/run/secrets/user_credentials/k8s_token')
+K8S_ENDPOINT_PORT = int(os.environ.get('AE5_K8S_PORT') or '8086')
 
 
 def _json(result):
@@ -124,8 +125,7 @@ def main(url=None, token=None, port=None):
                     web.post('/pods', handler.podinfo_post),
                     web.get('/pod/{id}', handler.podinfo_get_path),
                     web.get('/pod/{id}/log', handler.podlog)])
-    port = port or int(os.environ.get('AE5_K8S_PORT') or '8086')
-    web.run_app(app, port=port)
+    web.run_app(app, port=port or K8S_ENDPOINT_PORT)
 
 
 if __name__ == '__main__':

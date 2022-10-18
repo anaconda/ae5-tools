@@ -31,7 +31,12 @@ def _get_vars(*vars):
 
 
 def _cmd(*cmd, table=True):
-    cmd_str = ' '.join(cmd)
+    if len(cmd) > 1:
+        cmd_str = ' '.join(cmd)
+    elif isinstance(cmd[0], tuple):
+        cmd_str, cmd = ' '.join(cmd[0]), cmd[0]
+    else:
+        cmd_str, cmd = cmd[0], tuple(cmd[0].split())
     print(f'Executing: ae5 {cmd_str}')
     cmd = ('coverage', 'run', '--source=ae5_tools', '-m', 'ae5_tools.cli.main') + cmd + ('--yes',)
     if table:

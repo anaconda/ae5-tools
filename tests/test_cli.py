@@ -408,6 +408,7 @@ def test_deploy_broken(cli_deployment):
 
 
 def test_k8s_node(user_session):
+    user_session.disconnect()
     nlist = _cmd('node', 'list')
     for nrec in nlist:
         nrec2 = _cmd('node', 'info', nrec["name"])
@@ -415,6 +416,7 @@ def test_k8s_node(user_session):
 
 
 def test_k8s_pod(user_session, cli_session, cli_deployment):
+    user_session.disconnect()
     _, srec = cli_session
     _, drec = cli_deployment
     plist = _cmd('pod', 'list')
