@@ -17,43 +17,6 @@ jobs:
       with:
         fetch-depth: 0
     - name: Build the package
-      run: |
-        source $CONDA/etc/profile.d/conda.sh
-        conda install -y conda-build conda-verify
-        conda build conda-recipe --no-test
-        conda config --prepend channels ae5-admin
-        mv $CONDA/conda-bld .
-    - name: Upload the build artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: package-${{ github.sha }}
-        path: ./conda-bld
-  tests:
-    runs-on: self-hosted
-    # runs-on: ${{ matrix.os }}
-    needs: package
-    strategy:
-      fail-fast: true
-      max-parallel: 1
-      matrix:
-        os: [windows-latest,ubuntu-latest]
-    steps:
-    - name: Retrieve the source code
-      uses: actions/checkout@v2
-    - name: Download the build artifact
-      uses: actions/download-artifact@v2
-      with:
-        name: package-${{ github.sha }}
-        path: ./conda-bld
-    - name: Create the test environment
-      shell: bash
-      run: |
-        mv conda-bld $CONDA/
-        source $CONDA/etc/profile.d/conda.sh
-        conda config --prepend channels ae5-admin
-        conda create -y -n ptest local::ae5-tools python=3.6 pytest-cov pandas
-    - name: Test the package
-      shell: bash
       env:
         AE5_HOSTNAME: aip.anaconda.com
         AE5_USERNAME: tooltest
@@ -62,61 +25,14 @@ jobs:
         AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
       run: |
         source $CONDA/etc/profile.d/conda.sh
-        conda activate ptest
-        py.test -v tests
-  upload:
-    runs-on: self-hosted
-    if: github.event_name == 'push'
-    needs: tests
-    steps:
-    - name: Retrieve the source code
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Download the build artifact
-      uses: actions/download-artifact@v2
-      with:
-        name: package-${{ github.sha }}
-        path: ./conda-bld
+        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
+        conda install -y conda-build conda-verify anaconda-client
+        conda build conda-recipe
     - name: Upload to anaconda.org
+      if: github.event_name == 'push'
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
       run: |
         source $CONDA/bin/activate
-        conda install -y anaconda-client
         git tag describe --exact-match --tags HEAD || export LABEL="--label dev"
-        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $LABEL conda-bld/*/*.tar.bz2 --force
-    - name: Clean up older artifacts
-      uses: glassechidna/artifact-cleaner@master
-      with:
-        minimumAge: 86400
-  constructor:
-    runs-on: self-hosted
-    needs: package
-    steps:
-    - name: Retrieve the source code
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Download the build artifact
-      uses: actions/download-artifact@v2
-      with:
-        name: package-${{ github.sha }}
-        path: ./conda-bld
-    - name: Build the installer
-      run: |
-        pversion=$(ls ./conda-bld/noarch/ae5-tools-* | sed 's@^.*ae5-tools-@@;s@-.*@@')
-        cversion=$(echo $pversion | sed 's@+@-@')
-        sed -i.bak "s@version: .*@version: \"${cversion}\"@;s@- ae5-tools.*@- ae5-tools=${pversion}@" construct.yaml
-        cat construct.yaml
-        mv ./conda-bld $CONDA
-        source $CONDA/bin/activate
-        conda install -y constructor
-        constructor
-    - name: Upload installer
-      if: github.event_name == 'push'
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_DEFAULT_REGION: ${{secrets.AWS_DEFAULT_REGION}}
-      run: aws s3 cp ae5-tools-*-Linux-x86_64.sh s3://airgap-svc/misc/ --acl public-read --region us-east-1
+        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $LABEL $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
