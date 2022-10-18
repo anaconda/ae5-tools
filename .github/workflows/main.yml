@@ -23,6 +23,7 @@ jobs:
         AE5_PASSWORD: ${{ secrets.AE5_PASSWORD }}
         AE5_ADMIN_USERNAME: admin
         AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
+        AE5_K8S_ENDPOINT: ssh:centos
       run: |
         source $CONDA/etc/profile.d/conda.sh
         rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
