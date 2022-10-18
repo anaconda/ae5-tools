@@ -64,7 +64,7 @@ class AE5K8SRemoteClient(AE5K8SClient):
         self._session = session
         self._subdomain = subdomain
         try:
-            session._head('projects', format='response')
+            session._get('projects/actions', params={'q': 'create_action'})
         except Exception as exc:
             self._error = f'Issue establishing session: {exc}'
             return

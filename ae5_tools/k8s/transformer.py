@@ -205,8 +205,7 @@ class AE5K8STransformer(object):
         return self._has_metrics
 
     async def get(self, path, type='json', ok404=False):
-        if self._session is None:
-            await self.connect()
+        await self.connect()
         if not path.startswith('/'):
             path = '/api/v1/' + path
         url = self._url + path
@@ -240,8 +239,7 @@ class AE5K8STransformer(object):
             return _or_raise(KeyError(f'Pod not found: {id}'), return_exceptions)
     
     async def _exec_pod(self, pod, namespace, container, command):
-        if self._session is None:
-            await self.connect()
+        await self.connect()
         path = f'/api/v1/namespaces/{namespace}/pods/{pod}/exec'
         params = {'command': command, 'container': container,
                   'stdout': True, 'stderr': True,

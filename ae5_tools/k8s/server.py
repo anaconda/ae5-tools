@@ -11,8 +11,9 @@ from .transformer import AE5K8STransformer
 from .ssh import tunneled_k8s_url
 
 
-DEFAULT_K8S_URL = 'https://10.100.0.1/'
-DEFAULT_K8S_TOKEN_FILE = '/var/run/secrets/user_credentials/k8s_token'
+DEFAULT_K8S_URL = 'https://kubernetes.default/'
+DEFAULT_K8S_TOKEN_FILES = ('/var/run/secrets/kubernetes.io/serviceaccount/token',
+                           '/var/run/secrets/user_credentials/k8s_token')
 
 
 def _json(result):
@@ -108,10 +109,12 @@ def main(url=None, token=None, port=None):
     if token is None:
         token = os.environ.get('AE5_K8S_TOKEN')
     if token is None:
-        token_file = os.environ.get('AE5_K8S_TOKEN_FILE', DEFAULT_K8S_TOKEN_FILE)
-        if token_file and os.path.exists(token_file):
-            with open(token_file, 'r') as fp:
-                token = fp.read().strip()
+        for token_file in (os.environ.get('AE5_K8S_TOKEN_FILE'),) + DEFAULT_K8S_TOKEN_FILES:
+            if token_file and os.path.exists(token_file):
+                print('Using Kubernetes API token:', token_file)
+                with open(token_file, 'r') as fp:
+                    token = fp.read().strip()
+                    break
     app = web.Application()
     handler = AE5K8SHandler(url, token)
     app.add_routes([web.get('/', handler.hello),
