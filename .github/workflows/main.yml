@@ -29,7 +29,8 @@ jobs:
         name: package-${{ github.sha }}
         path: ./conda-bld
   tests:
-    runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
+    # runs-on: ${{ matrix.os }}
     needs: package
     strategy:
       fail-fast: true
@@ -64,7 +65,7 @@ jobs:
         conda activate ptest
         py.test -v tests
   upload:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'push'
     needs: tests
     steps:
@@ -90,7 +91,7 @@ jobs:
       with:
         minimumAge: 86400
   constructor:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: package
     steps:
     - name: Retrieve the source code
