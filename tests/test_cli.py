@@ -320,7 +320,7 @@ def test_deploy(cli_deployment):
             ldata = _cmd('call', '/', '--endpoint', drec["endpoint"], table=False)
             break
         except AEUnexpectedResponseError:
-            time.sleep(attempt * 5)
+            time.sleep(attempt * 10)
             pass
     else:
         raise RuntimeError("Could not get the endpoint to respond")
@@ -416,7 +416,6 @@ def test_k8s_node(user_session):
 
 
 def test_k8s_pod(user_session, cli_session, cli_deployment):
-    user_session.disconnect()
     _, srec = cli_session
     _, drec = cli_deployment
     plist = _cmd('pod', 'list')
