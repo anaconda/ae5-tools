@@ -180,9 +180,13 @@ class AE5K8STransformer(object):
         if token:
             headers['authorization'] = f'Bearer {token}'
         self._headers = headers
-        self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False))
+        self._session = None
         self._url = url.rstrip('/')
         self._has_metrics = None
+
+    async def connect(self):
+        if self._session is None:
+            self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False))
 
     async def close(self):
         if self._session is not None:
@@ -201,19 +205,20 @@ class AE5K8STransformer(object):
         return self._has_metrics
 
     async def get(self, path, type='json', ok404=False):
+        await self.connect()
         if not path.startswith('/'):
             path = '/api/v1/' + path
         url = self._url + path
-        resp = await self._session.get(url, headers=self._headers)
-        if resp.status == 404 and ok404:
-            return
-        resp.raise_for_status()
-        if type == 'json':
-            return await resp.json()
-        elif type == 'text':
-            return await resp.text()
-        else:
-            return resp
+        async with self._session.get(url, headers=self._headers) as resp:
+            if resp.status == 404 and ok404:
+                return
+            resp.raise_for_status()
+            if type == 'json':
+                return await resp.json()
+            elif type == 'text':
+                return await resp.text()
+            else:
+                return resp
 
     async def _pod_info(self, id, return_exceptions=False):
         if not re.match(r'[a-f0-9]{2}-[a-f0-9]{32}', id) or not id.startswith(('a1', 'a2')):
@@ -234,6 +239,7 @@ class AE5K8STransformer(object):
             return _or_raise(KeyError(f'Pod not found: {id}'), return_exceptions)
     
     async def _exec_pod(self, pod, namespace, container, command):
+        await self.connect()
         path = f'/api/v1/namespaces/{namespace}/pods/{pod}/exec'
         params = {'command': command, 'container': container,
                   'stdout': True, 'stderr': True,

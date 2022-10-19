@@ -523,6 +523,10 @@ class AEUserSession(AESessionBase):
         # This will actually close out the session, so even if the cookie had
         # been captured for use elsewhere, it would no longer be useful.
         self._get('/logout')
+        if self._k8s_client is not None:
+            self._k8s_client.disconnect()
+            del self._k8s_client
+            self._k8s_client = None
 
     def _save(self):
         os.makedirs(os.path.dirname(self._filename), mode=0o700, exist_ok=True)

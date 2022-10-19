@@ -30,19 +30,22 @@ def _get_vars(*vars):
 
 
 
-def _cmd(cmd, table=True):
-    # We go through Pandas to CSV to JSON instead of directly to JSON to improve coverage
-    cmd += ' --yes'
+def _cmd(*cmd, table=True):
+    if len(cmd) > 1:
+        cmd_str = ' '.join(cmd)
+    elif isinstance(cmd[0], tuple):
+        cmd_str, cmd = ' '.join(cmd[0]), cmd[0]
+    else:
+        cmd_str, cmd = cmd[0], tuple(cmd[0].split())
+    print(f'Executing: ae5 {cmd_str}')
+    cmd = ('coverage', 'run', '--source=ae5_tools', '-m', 'ae5_tools.cli.main') + cmd + ('--yes',)
     if table:
-        cmd += f' --format csv'
-    print(f'Executing: ae5 {cmd}')
-    cmd = 'coverage run --source=ae5_tools -m ae5_tools.cli.main ' + cmd
-    cmd_vec = shlex.split(cmd.replace("\\", "\\\\"))
-    p = subprocess.Popen(cmd_vec, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        cmd += '--format', 'csv'
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                          stdin=open(os.devnull))
     stdoutb, stderrb = p.communicate()
     if p.returncode != 0:
-        raise CMDException(cmd, p.returncode, stdoutb, stderrb)
+        raise CMDException(cmd_str, p.returncode, stdoutb, stderrb)
     text = stdoutb.decode()
     if not table or not text.strip():
         return text

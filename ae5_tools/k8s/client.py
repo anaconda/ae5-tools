@@ -1,3 +1,4 @@
+import os
 import sys
 import requests
 import subprocess
@@ -46,17 +47,23 @@ class AE5K8SLocalClient(AE5K8SClient):
         except RuntimeError as exc:
             self._error = str(exc)
 
+    def disconnect(self):
+        if self._server is not None and self._server.returncode is None:
+            self._server.terminate()
+            self._server.communicate()
+            self._server = None
+        if self._ssh is not None and self._ssh.returncode is None:
+            self._ssh.terminate()
+            self._ssh.communicate()
+            self._ssh = None
+
     def __del__(self):
         if sys.meta_path is not None:
-            if self._server is not None and self._server.returncode is None:
-                self._server.terminate()
-                self._server.communicate()
-            if self._ssh is not None and self._ssh.returncode is None:
-                self._ssh.terminate()
-                self._ssh.communicate()
+            self.disconnect()
 
     def _api(self, method, path, **kwargs):
-        return getattr(requests, method)(f'http://localhost:8086/{path}', **kwargs)
+        from .server import K8S_ENDPOINT_PORT
+        return requests.request(method, f'http://localhost:{K8S_ENDPOINT_PORT}/{path}', **kwargs)
 
 
 class AE5K8SRemoteClient(AE5K8SClient):
@@ -64,7 +71,11 @@ class AE5K8SRemoteClient(AE5K8SClient):
         self._session = session
         self._subdomain = subdomain
         try:
-            session._head('/_errors/404.html', format='response')
+            session._get('projects/actions', params={'q': 'create_action'})
+        except Exception as exc:
+            self._error = f'Issue establishing session: {exc}'
+            return
+        try:
             response = session._get('', subdomain=subdomain, format='text')
             if response == 'Alive and kicking':
                 self._error = None
