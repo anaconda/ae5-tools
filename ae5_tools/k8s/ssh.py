@@ -64,7 +64,8 @@ def find_local_port():
     s = socket.socket()
     s.bind(("", 0))
     local_port = s.getsockname()[1]
-    if local_port == 8086:
+    from .server import K8S_ENDPOINT_PORT
+    if local_port == K8S_ENDPOINT_PORT:
         # Don't use 8086 so we can be sure it's available when running this server locally
         local_port = find_local_port()
     s.close()

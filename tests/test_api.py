@@ -150,9 +150,10 @@ def test_editors(user_session, editors):
     for rec in editors:
         assert rec == user_session.editor_info(rec['id'])
     assert sum(rec['is_default'] for rec in editors) == 1
-    assert set(rec['id'] for rec in editors).issuperset({'zeppelin', 'jupyterlab', 'notebook'})
+    assert set(rec['id'] for rec in editors).issuperset({'jupyterlab', 'notebook'})
 
 
+@pytest.mark.xfail
 def test_endpoints(user_session):
     slist = user_session.endpoint_list()
     for rec in slist:
@@ -171,7 +172,7 @@ def test_samples(user_session):
 
 
 def test_sample_clone(user_session):
-    cname = 'nlp_api'
+    cname = 'NLP API'
     pname = 'testclone'
     rrec1 = user_session.sample_clone(cname, name=pname, wait=True)
     with pytest.raises(AEException) as excinfo:
@@ -402,8 +403,10 @@ def test_session_branches(user_session, api_session):
 def test_session_before_changes(user_session, api_session):
     prec, srec = api_session
     changes1 = user_session.session_changes(srec, format='json')
+    changes1 = [c for c in changes1 if c['path'] != '.projectignore']
     assert changes1 == [], changes1
     changes2 = user_session.session_changes(srec, master=True, format='json')
+    changes2 = [c for c in changes2 if c['path'] != '.projectignore']
     assert changes2 == [], changes2
 
 
@@ -456,7 +459,8 @@ def test_deploy_token(user_session, api_deployment):
     prec, drec = api_deployment
     token = user_session.deployment_token(drec)
     resp = requests.get(f'https://{drec["endpoint"]}.' + user_session.hostname,
-                        headers={'Authorization': f'Bearer {token}'})
+                        headers={'Authorization': f'Bearer {token}'},
+                        verify=False)
     assert resp.status_code == 200
     assert resp.text.strip() == 'Hello Anaconda Enterprise!', resp.text
     with pytest.raises(AEException) as excinfo:
@@ -591,7 +595,7 @@ def test_job_run2(user_session, api_project):
 
 def test_login_time(admin_session, user_session):
     # The current session should already be authenticated
-    now = datetime.utcnow()
+    now = datetime.now()
     plist0 = user_session.project_list()
     user_list = admin_session.user_list()
     urec = next((r for r in user_list if r['username'] == user_session.username), None)

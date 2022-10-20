@@ -201,9 +201,13 @@ class AE5BaseTransformer(object):
         if token:
             headers['authorization'] = f'Bearer {token}'
         self._headers = headers
-        self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False))
+        self._session = None
         self._url = url.rstrip('/')
         self._has_metrics = None
+
+    async def connect(self):
+        if self._session is None:
+            self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False))
 
     async def close(self):
         if self._session is not None:
@@ -216,19 +220,20 @@ class AE5BaseTransformer(object):
             return loop.run_until_complete(self.close())
 
     async def get(self, path, type='json', ok404=False):
+        await self.connect()
         if not path.startswith('/'):
             path = '/api/v1/' + path
         url = self._url + path
-        resp = await self._session.get(url, headers=self._headers)
-        if resp.status == 404 and ok404:
-            return
-        resp.raise_for_status()
-        if type == 'json':
-            return await resp.json()
-        elif type == 'text':
-            return await resp.text()
-        else:
-            return resp
+        async with self._session.get(url, headers=self._headers) as resp:
+            if resp.status == 404 and ok404:
+                return
+            resp.raise_for_status()
+            if type == 'json':
+                return await resp.json()
+            elif type == 'text':
+                return await resp.text()
+            else:
+                return resp
 
 
 class AE5K8STransformer(AE5BaseTransformer):
@@ -258,6 +263,7 @@ class AE5K8STransformer(AE5BaseTransformer):
             return _or_raise(KeyError(f'Pod not found: {id}'), return_exceptions)
 
     async def _exec_pod(self, pod, namespace, container, command):
+        await self.connect()
         path = f'/api/v1/namespaces/{namespace}/pods/{pod}/exec'
         params = {'command': command, 'container': container,
                   'stdout': True, 'stderr': True,

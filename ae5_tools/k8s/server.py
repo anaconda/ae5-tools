@@ -11,9 +11,10 @@ from urllib.parse import urlencode, unquote
 from .transformer import AE5K8STransformer, AE5PromQLTransformer
 from .ssh import tunneled_k8s_url
 
-
-DEFAULT_K8S_URL = 'https://10.100.0.1/'
-DEFAULT_K8S_TOKEN_FILE = '/var/run/secrets/user_credentials/k8s_token'
+DEFAULT_K8S_URL = 'https://kubernetes.default/'
+DEFAULT_K8S_TOKEN_FILES = ('/var/run/secrets/kubernetes.io/serviceaccount/token',
+                           '/var/run/secrets/user_credentials/k8s_token')
+K8S_ENDPOINT_PORT = int(os.environ.get('AE5_K8S_PORT') or '8086')
 DEFAULT_PROMETHEUS_PORT = 9090
 
 
@@ -159,10 +160,13 @@ def main(url=None, token=None, port=None, promql_port=None):
     if token is None:
         token = os.environ.get('AE5_K8S_TOKEN')
     if token is None:
-        token_file = os.environ.get('AE5_K8S_TOKEN_FILE', DEFAULT_K8S_TOKEN_FILE)
-        if token_file and os.path.exists(token_file):
-            with open(token_file, 'r') as fp:
-                token = fp.read().strip()
+        for token_file in (os.environ.get('AE5_K8S_TOKEN_FILE'),) + DEFAULT_K8S_TOKEN_FILES:
+            if token_file and os.path.exists(token_file):
+                print('Using Kubernetes API token:', token_file)
+                with open(token_file, 'r') as fp:
+                    token = fp.read().strip()
+                    break
+                  
     if promql_port is None:
         promql_port = os.environ.get('PROMETHEUS_PORT', DEFAULT_PROMETHEUS_PORT)
 
@@ -180,16 +184,23 @@ def main(url=None, token=None, port=None, promql_port=None):
                     web.get('/pods', handler.podinfo_get_query),
                     web.post('/pods', handler.podinfo_post),
                     web.get('/pod/{id}', handler.podinfo_get_path),
-                    web.get('/pod/{id}/log', handler.podlog),
                     web.get('/promql/', handler.promql_status),
                     web.get('/promql/__status__', handler.promql_status),
-                    web.get('/promql/query_range', handler.query_range)])
+                    web.get('/promql/query_range', handler.query_range),
+                    web.get('/pod/{id}/log', handler.podlog)])
     port = port or int(os.environ.get('AE5_K8S_PORT') or '8086')
-    web.run_app(app, port=port)
-
+    web.run_app(app, port=port or K8S_ENDPOINT_PORT)
 
 if __name__ == '__main__':
-    url = sys.argv[1] if len(sys.argv) > 1 else None
+    url = None
+    skip = False
+    for arg in sys.argv[1:]:
+        if skip or arg.startswith('--'):
+            skip = not (skip or '=' in arg)
+            continue
+        if url is not None:
+            raise RuntimeError('No more than one positional argument expected')
+        url = arg
     if url and url.startswith('ssh:'):
         username, hostname = url[4:].split('@', 1)
         proc, url = tunneled_k8s_url(hostname, username)
