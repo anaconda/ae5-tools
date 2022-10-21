@@ -5,6 +5,7 @@ commands:
 channels:
   - defaults
 packages:
+  - requests
   - python-dateutil
   - aiohttp
 env_specs:
