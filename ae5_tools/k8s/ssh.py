@@ -1,9 +1,6 @@
-import subprocess
-import socket
 import atexit
-import time
-import os
-import sys
+import socket
+import subprocess
 
 
 def register_cleanup(proc):
@@ -60,6 +57,7 @@ def find_remote_port(hostname, username):
             stderr += f'\nLocal exception:\n{exc}\n'
     raise_error(stdout, stderr, errcode, cmd,
                 'Could not determine available remote port')
+
 
 def find_local_port():
     # https://stackoverflow.com/questions/2838244/get-open-tcp-port-in-python/2838309#2838309
