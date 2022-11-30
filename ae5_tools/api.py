@@ -1382,6 +1382,7 @@ class AEUserSession(AESessionBase):
             run = self._get_records(f'jobs/{jid}/runs')[-1]
             if wait:
                 rid = run['id']
+                # wait for run to complete one way or another.
                 while run['state'] not in ('completed', 'error', 'failed'):
                     time.sleep(5)
                     run = self._get(f'runs/{rid}')
