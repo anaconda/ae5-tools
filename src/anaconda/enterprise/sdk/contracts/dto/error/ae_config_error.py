@@ -1,0 +1,2 @@
+class AEConfigError(Exception):
+    """ """
