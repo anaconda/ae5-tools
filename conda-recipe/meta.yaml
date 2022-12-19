@@ -1,8 +1,9 @@
-{% set data = load_setup_py_data() %}
+{% set name = "anaconda.enterprise.sdk" %}
+{% set version = "0.1.0" %}
 
 package:
-  name: ae5-tools
-  version: {{ data.get('version').lstrip('v') }}
+  name: "{{ name|lower }}"
+  version: "{{ version }}"
 
 source:
   path: ../
@@ -12,35 +13,20 @@ build:
   noarch: python
   script:
     - {{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv
-  entry_points:
-    - ae5 = ae5_tools.cli.main:main
 
 requirements:
   host:
-    - python
+    - pip
+    - python>=3.9
     - setuptools
   run:
-    - python>=3.6
-    - python-dateutil>=2.7
+    - python>=3.9
     - requests
-    - click>=7
-    - click-repl
     - aiohttp
-
-test:
-  source_files:
-    - tests
-  requires:
-    - python=3.6
-    - python-dateutil=2.7
-    - pytest
-    - pytest-cov
-    - pandas
-  commands:
-    - py.test --cov=ae5_tools -v tests
+    - pydantic
 
 about:
-  home: https://github.com/Anaconda-Platform/ae5-tools
-  summary: 'Command-line manipulation of Anaconda Enterprise 5.'
+  home: https://github.com/shapeandshare/anaconda.enterprise.sdk
+  summary: "Anaconda Enterprise SDK"
   license: BSD
   license_file: LICENSE

@@ -1,0 +1,22 @@
+name: anaconda.enterprise.sdk
+channels:
+  - defaults
+  - conda-forge
+  - joshburt
+dependencies:
+  - black
+  - conda-build
+  - black-jupyter
+  - coverage
+  - isort
+  - pip
+  - pydantic
+  - pylint
+  - python=3.10.8
+  - python-dotenv
+  - setuptools
+  - anaconda-client
+  - requests
+  - aiohttp
+  - pip:
+    - sacr
