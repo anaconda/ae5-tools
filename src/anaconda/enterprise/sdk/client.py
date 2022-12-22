@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Any, Optional, Union
 
 from .ae.session.admin import AEAdminSession
@@ -5,6 +6,7 @@ from .ae.session.factory import AESessionFactory
 from .ae.session.user import AEUserSession
 from .command.deployment.token_get import DeploymentTokenGetCommand
 from .command.project.get import ProjectsGetCommand
+from .command.project.patch import ProjectPatchCommand
 from .command.secret.delete import SecretDeleteCommand
 from .command.secret.get import SecretNamesGetCommand
 from .command.secret.put import SecretPutCommand
@@ -33,6 +35,7 @@ class AEClient(BaseModel):
 
     # Project Commands
     projects_get_command: Optional[ProjectsGetCommand]
+    project_patch_command: Optional[ProjectPatchCommand]
 
     def __init__(self, **data: Any):
         super().__init__(**data)
@@ -46,12 +49,14 @@ class AEClient(BaseModel):
             self.secret_delete_command = SecretDeleteCommand()
         if not self.projects_get_command:
             self.projects_get_command = ProjectsGetCommand()
+        if not self.project_patch_command:
+            self.project_patch_command = ProjectPatchCommand()
 
     # Deployment Commands
 
-    def deployment_token_get(self, ident: str, admin: bool = False) -> str:
+    def deployment_token_get(self, id: str, admin: bool = False) -> str:
         session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
-        request: DeploymentTokenRequest = DeploymentTokenRequest(ident=ident)
+        request: DeploymentTokenRequest = DeploymentTokenRequest(id=id)
         response: DeploymentTokenResponse = self.deployment_token_get_command.execute(request=request, session=session)
         return response.token
 
@@ -83,3 +88,34 @@ class AEClient(BaseModel):
         request: ProjectsGetRequest = ProjectsGetRequest(filter=filter, collaborators=collaborators)
         response: ProjectsGetResponse = self.projects_get_command.execute(request=request, session=session)
         return response.records
+
+    def project_get(
+        self, id: str, filter: Optional[str] = None, collaborators: bool = False, admin: bool = False
+    ) -> Optional[AERecordProject]:
+        records: list[AERecordProject] = self.projects_get(filter=filter, collaborators=collaborators, admin=admin)
+        for record in records:
+            if record.id == id:
+                return record
+
+    def project_patch(
+        self, project: dict, filter: Optional[str] = None, collaborators: bool = False, admin: bool = False
+    ) -> Optional[AERecordProject]:
+        # Note:
+        # This is not transactional (in that if the record changes after we read it but before we commit changes we will lose data).
+
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
+
+        if "id" not in project:
+            raise AEError(f"No project id specified to patch")
+
+        previous_record: Optional[AERecordProject] = self.project_get(
+            id=project["id"], filter=filter, collaborators=collaborators, admin=admin
+        )
+        if previous_record is None:
+            raise AEError(f"No existing project {project['id']} found to patch")
+
+        project_proto: dict = {**previous_record.dict(by_alias=True), **project}
+        new_project: AERecordProject = AERecordProject.parse_obj(project_proto)
+        self.project_patch_command.execute(project=new_project, session=session)
+
+        return self.project_get(id=new_project.id, filter=filter, collaborators=collaborators, admin=admin)

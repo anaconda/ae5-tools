@@ -11,5 +11,5 @@ class DeploymentTokenGetCommand(AbstractCommand):
     def execute(
         self, request: DeploymentTokenRequest, session: Union[AEAdminSession, AEUserSession]
     ) -> DeploymentTokenResponse:
-        response = session._post(f"deployments/{request.ident}/token")
+        response = session._post(f"deployments/{request.id}/token")
         return DeploymentTokenResponse.parse_obj(response)

@@ -16,7 +16,4 @@ class ProjectsGetCommand(AbstractCommand):
         records_raw: list[dict] = session._get_records(
             "projects", filter=request.filter, collaborators=request.collaborators
         )
-        # records: list[AERecordProject] = []
-        # for record in records_raw:
-        #     records.append(AERecordProject.parse_obj(record))
         return ProjectsGetResponse.parse_obj({"records": records_raw})

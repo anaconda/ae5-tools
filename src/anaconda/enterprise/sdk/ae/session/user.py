@@ -42,29 +42,6 @@ class AEUserSession(AbstractAESession):
         # been captured for use elsewhere, it would no longer be useful.
         self._get("/logout")
 
-    def project_info(self, ident, collaborators=False, format=None, quiet=False, retry=False):
-        # Retry loop added because project creation is now so fast that the API
-        # often needs time to catch up before it "sees" the new project. We only
-        # use the retry loop in project creation commands for that reason.
-        while True:
-            try:
-                record = self.ident_record("project", ident, collaborators=collaborators, quiet=quiet)
-                break
-            except AEError as exc:
-                if not retry or not str(exc).startswith("No projects found matching id"):
-                    raise
-                time.sleep(0.25)
-        return self._format_response(record, format=format)
-
-    def project_patch(self, ident, format=None, **kwargs):
-        prec = self.ident_record("project", ident)
-        data = {k: v for k, v in kwargs.items() if v is not None}
-        if data:
-            id = prec["id"]
-            self._patch(f"projects/{id}", json=data)
-            prec = self.ident_record("project", id)
-        return self._format_response(prec, format=format)
-
     def project_delete(self, ident):
         id = self.ident_record("project", ident)["id"]
         self._delete(f"projects/{id}")
