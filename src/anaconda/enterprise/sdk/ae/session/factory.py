@@ -37,7 +37,7 @@ class AESessionFactory(BaseModel):
 
         return hostname, username
 
-    def login(self, admin=False) -> Union[AEAdminSession, AEUserSession]:
+    def get(self, admin=False) -> Union[AEAdminSession, AEUserSession]:
         hostname, username = self._get_account(admin=admin)
         return self._connect(hostname, username, admin)
 
@@ -59,7 +59,7 @@ class AESessionFactory(BaseModel):
             )
         else:
             if self.options.impersonate:
-                password = self.login(admin=True)
+                password = self.get(admin=True)
             else:
                 password = self.options.password
 

@@ -1,10 +1,9 @@
 from typing import Any, Optional, Union
 
-from anaconda.enterprise.sdk.command.deployment.token_get import DeploymentTokenGetCommand
-
 from .ae.session.admin import AEAdminSession
 from .ae.session.factory import AESessionFactory
 from .ae.session.user import AEUserSession
+from .command.deployment.token_get import DeploymentTokenGetCommand
 from .command.secret.delete import SecretDeleteCommand
 from .command.secret.get import SecretGetCommand
 from .command.secret.put import SecretPutCommand
@@ -38,23 +37,27 @@ class AEClient(BaseModel):
         if not self.secret_delete_command:
             self.secret_delete_command = SecretDeleteCommand()
 
+    # Deployment Commands
+
     def deployment_token_get(self, ident: str, admin: bool = False) -> str:
-        session: Union[AEAdminSession, AEUserSession] = self.session_factory.login(admin=admin)
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
         request: DeploymentTokenRequest = DeploymentTokenRequest(ident=ident)
         response: DeploymentTokenResponse = self.deployment_token_get_command.execute(request=request, session=session)
         return response.token
 
+    # `Secret` Commands
+
     def secret_put(self, key: str, value: str, admin: bool = False) -> None:
-        session: Union[AEAdminSession, AEUserSession] = self.session_factory.login(admin=admin)
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
         request: SecretPutRequest = SecretPutRequest(key=key, value=value)
         self.secret_put_command.execute(request=request, session=session)
 
     def secret_get(self, admin: bool = False) -> list[str]:
-        session: Union[AEAdminSession, AEUserSession] = self.session_factory.login(admin=admin)
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
         return self.secret_get_command.execute(session=session)
 
     def secret_delete(self, key: str, admin: bool = False) -> None:
-        session: Union[AEAdminSession, AEUserSession] = self.session_factory.login(admin=admin)
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
         secrets: list[str] = self.secret_get(admin=admin)
         if key not in secrets:
             raise AEError(f"User secret {key} was not found and cannot be deleted.")
