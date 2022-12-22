@@ -1,10 +1,10 @@
-from copy import deepcopy
 from typing import Any, Optional, Union
 
 from .ae.session.admin import AEAdminSession
 from .ae.session.factory import AESessionFactory
 from .ae.session.user import AEUserSession
 from .command.deployment.token_get import DeploymentTokenGetCommand
+from .command.project.create import ProjectCreateCommand
 from .command.project.delete import ProjectDeleteCommand
 from .command.project.get import ProjectsGetCommand
 from .command.project.patch import ProjectPatchCommand
@@ -15,6 +15,7 @@ from .contract.dto.ae.record.project import AERecordProject
 from .contract.dto.base_model import BaseModel
 from .contract.dto.error.ae_error import AEError
 from .contract.dto.request.deployment_token import DeploymentTokenRequest
+from .contract.dto.request.project_create import ProjectCreateRequest
 from .contract.dto.request.projects_get import ProjectsGetRequest
 from .contract.dto.request.secret_delete import SecretDeleteRequest
 from .contract.dto.request.secret_put import SecretPutRequest
@@ -38,6 +39,7 @@ class AEClient(BaseModel):
     projects_get_command: Optional[ProjectsGetCommand]
     project_patch_command: Optional[ProjectPatchCommand]
     project_delete_command: Optional[ProjectDeleteCommand]
+    project_create_command: Optional[ProjectCreateCommand]
 
     def __init__(self, **data: Any):
         super().__init__(**data)
@@ -55,6 +57,8 @@ class AEClient(BaseModel):
             self.project_patch_command = ProjectPatchCommand()
         if not self.project_delete_command:
             self.project_delete_command = ProjectDeleteCommand()
+        if not self.project_create_command:
+            self.project_create_command = ProjectCreateCommand()
 
     # Deployment Commands
 
@@ -127,3 +131,8 @@ class AEClient(BaseModel):
     def project_delete(self, id: str, admin: bool = False) -> None:
         session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
         self.project_delete_command.execute(id=id, session=session)
+
+    def project_create(self, uri: str, name=None, tag=None, make_unique: bool = True, admin: bool = False) -> Any:
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
+        request: ProjectCreateRequest = ProjectCreateRequest(uri=uri, name=name, tag=tag, make_unique=make_unique)
+        return self.project_create_command.execute(request=request, session=session)
