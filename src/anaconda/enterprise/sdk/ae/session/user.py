@@ -5,18 +5,15 @@ import time
 import webbrowser
 from os.path import abspath, basename, isdir, isfile, join
 from tempfile import TemporaryDirectory
-from typing import Any, Optional, Union
 
 import urllib3
 
 from ...cluster.identifier import Identifier
-from ...common.config.environment import demand_env_var_as_int, get_env_var
+from ...common.config.environment import demand_env_var_as_int
 from ...contracts.dto.error.ae_error import AEError
 from ...contracts.dto.error.ae_unexpected_response_error import AEUnexpectedResponseError
 from ...contracts.dto.requests.deployment_token import DeploymentTokenRequest
 from ...contracts.dto.responses.deployment_token import DeploymentTokenResponse
-from ...k8s.client.ae_k8s_local_client import AEK8SLocalClient
-from ...k8s.client.ae_k8s_remote_client import AEK8SRemoteClient
 from .abstract import AbstractAESession
 from .utils.archiver import create_tar_archive
 from .utils.docker import build_image, get_condarc, get_dockerfile
@@ -26,40 +23,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class AEUserSession(AbstractAESession):
-    k8s_endpoint: str = "k8s"
-    k8s_client: Optional[Union[AEK8SLocalClient, AEK8SRemoteClient]] = None
-
-    def __init__(
-        self,
-        k8s_endpoint: str = "k8s",
-        k8s_client: Optional[Union[AEK8SLocalClient, AEK8SRemoteClient]] = None,
-        **data: Any,
-    ):
-        super().__init__(**data)
-
-        env_var: Optional[str] = get_env_var(name="AE5_K8S_ENDPOINT")
-        if env_var:
-            self.k8s_endpoint = env_var
-
-    def _k8s(self, method, *args, **kwargs):
-        quiet = kwargs.pop("quiet", False)
-        if self.k8s_client is None and self.k8s_endpoint is not None:
-            if self.k8s_endpoint.startswith("ssh:"):
-                username = self.k8s_endpoint[4:]
-                self.k8s_client = AEK8SLocalClient(self.hostname, username)
-            else:
-                self.k8s_client = AEK8SRemoteClient(self, self.k8s_endpoint)
-            estr = self.k8s_client.error()
-            if estr:
-                del self.k8s_client
-                self._k8s_endpoint = self.k8s_client = None
-                msg = ["Error establishing k8s connection:"]
-                msg.extend("  " + x for x in estr.splitlines())
-                raise AEError("\n".join(msg))
-        if self.k8s_client is None:
-            raise AEError("No k8s connection available")
-        return getattr(self.k8s_client, method)(*args, **kwargs)
-
     def _set_header(self):
         s = self.session
         for cookie in s.cookies:
@@ -80,10 +43,6 @@ class AEUserSession(AbstractAESession):
         # This will actually close out the session, so even if the cookie had
         # been captured for use elsewhere, it would no longer be useful.
         self._get("/logout")
-        if self.k8s_client is not None:
-            self.k8s_client.disconnect()
-            del self.k8s_client
-            self.k8s_client = None
 
     def _api_records(self, method, endpoint, filter=None, **kwargs):
         record_type = kwargs.pop("record_type", None)
@@ -1080,65 +1039,9 @@ class AEUserSession(AbstractAESession):
         id = self.ident_record("run", ident)["id"]
         self._delete(f"runs/{id}")
 
-    def _pre_pod(self, records):
-        result = []
-        for rec in records:
-            if "project_id" in rec:
-                type = rec["_record_type"]
-                value = {k: rec[k] for k in ("name", "owner", "resource_profile", "id", "project_id")}
-                value["type"] = type
-                result.append(rec)
-        return result
+    # TODO:
+    # Hello Josh, this is past Josh.  You need to remember to create placeholders
+    # for the commands that come from the k8s sdk.  This unifies us, so that
+    # consumers only need worry about this level of imports for requirements accessing
+    # ae5 and subsystems/appliances.
 
-    def _post_pod(self, records):
-        return self._join_k8s(records, changes=True)
-
-    def pod_list(self, filter=None, format=None):
-        records = self.session_list(filter=filter) + self.deployment_list(filter=filter) + self.run_list(filter=filter)
-        records = self._fix_records("pod", records)
-        return self._format_response(records, format=format)
-
-    def pod_info(self, pod, format=None, quiet=False):
-        record = self.ident_record("pod", pod, quiet=quiet)
-        return self._format_response(record, format=format)
-
-    def node_list(self, filter=None, format=None):
-        result = []
-        for rec in self._k8s("node_info"):
-            result.append(
-                {
-                    "name": rec["name"],
-                    "role": rec["role"],
-                    "ready": rec["ready"],
-                    "capacity/pod": rec["capacity"]["pods"],
-                    "capacity/mem": rec["capacity"]["mem"],
-                    "capacity/cpu": rec["capacity"]["cpu"],
-                    "capacity/gpu": rec["capacity"]["gpu"],
-                    "usage/pod": rec["total"]["pods"],
-                    "usage/mem": rec["total"]["usage"]["mem"],
-                    "usage/cpu": rec["total"]["usage"]["cpu"],
-                    "usage/gpu": rec["total"]["usage"]["gpu"],
-                    "sessions/pod": rec["sessions"]["pods"],
-                    "sessions/mem": rec["sessions"]["usage"]["mem"],
-                    "sessions/cpu": rec["sessions"]["usage"]["cpu"],
-                    "sessions/gpu": rec["sessions"]["usage"]["gpu"],
-                    "deployments/pod": rec["deployments"]["pods"],
-                    "deployments/mem": rec["deployments"]["usage"]["mem"],
-                    "deployments/cpu": rec["deployments"]["usage"]["cpu"],
-                    "deployments/gpu": rec["deployments"]["usage"]["gpu"],
-                    "middleware/pod": rec["middleware"]["pods"],
-                    "middleware/mem": rec["middleware"]["usage"]["mem"],
-                    "middleware/cpu": rec["middleware"]["usage"]["cpu"],
-                    "system/pod": rec["system"]["pods"],
-                    "system/mem": rec["system"]["usage"]["mem"],
-                    "system/cpu": rec["system"]["usage"]["cpu"],
-                    "_k8s": rec,
-                    "_record_type": "node",
-                }
-            )
-        result = self._fix_records("node", result, filter)
-        return self._format_response(result, format=format)
-
-    def node_info(self, node, format=None, quiet=False):
-        record = self.ident_record("node", node, quiet=quiet)
-        return self._format_response(record, format=format)
