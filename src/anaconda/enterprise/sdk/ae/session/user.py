@@ -42,10 +42,6 @@ class AEUserSession(AbstractAESession):
         # been captured for use elsewhere, it would no longer be useful.
         self._get("/logout")
 
-    def project_delete(self, ident):
-        id = self.ident_record("project", ident)["id"]
-        self._delete(f"projects/{id}")
-
     def project_collaborator_list(self, ident, filter=None, format=None):
         id = self.ident_record("project", ident)["id"]
         response = self._get_records(f"projects/{id}/collaborators", filter)

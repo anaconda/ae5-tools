@@ -5,6 +5,7 @@ from .ae.session.admin import AEAdminSession
 from .ae.session.factory import AESessionFactory
 from .ae.session.user import AEUserSession
 from .command.deployment.token_get import DeploymentTokenGetCommand
+from .command.project.delete import ProjectDeleteCommand
 from .command.project.get import ProjectsGetCommand
 from .command.project.patch import ProjectPatchCommand
 from .command.secret.delete import SecretDeleteCommand
@@ -36,6 +37,7 @@ class AEClient(BaseModel):
     # Project Commands
     projects_get_command: Optional[ProjectsGetCommand]
     project_patch_command: Optional[ProjectPatchCommand]
+    project_delete_command: Optional[ProjectDeleteCommand]
 
     def __init__(self, **data: Any):
         super().__init__(**data)
@@ -51,6 +53,8 @@ class AEClient(BaseModel):
             self.projects_get_command = ProjectsGetCommand()
         if not self.project_patch_command:
             self.project_patch_command = ProjectPatchCommand()
+        if not self.project_delete_command:
+            self.project_delete_command = ProjectDeleteCommand()
 
     # Deployment Commands
 
@@ -119,3 +123,7 @@ class AEClient(BaseModel):
         self.project_patch_command.execute(project=new_project, session=session)
 
         return self.project_get(id=new_project.id, filter=filter, collaborators=collaborators, admin=admin)
+
+    def project_delete(self, id: str, admin: bool = False) -> None:
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
+        self.project_delete_command.execute(id=id, session=session)
