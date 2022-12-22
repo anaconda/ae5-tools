@@ -42,31 +42,10 @@ class AEUserSession(AbstractAESession):
         # been captured for use elsewhere, it would no longer be useful.
         self._get("/logout")
 
-    def _api_records(self, method, endpoint, filter=None, **kwargs):
-        record_type = kwargs.pop("record_type", None)
-        api_kwargs = kwargs.pop("api_kwargs", None) or {}
-        retry_if_empty = kwargs.pop("retry_if_empty", False)
-        if not record_type:
-            record_type = endpoint.rsplit("/", 1)[-1].rstrip("s")
-        for attempt in range(20):
-            records = self._api(method, endpoint, **api_kwargs)
-            if records or not retry_if_empty:
-                break
-            time.sleep(0.25)
-        else:
-            raise AEError(f"Unexpected empty {record_type} recordset")
-        return self._fix_records(record_type, records, filter, **kwargs)
-
-    def _get_records(self, endpoint, filter=None, **kwargs):
-        return self._api_records("get", endpoint, filter=filter, **kwargs)
-
-    def _post_record(self, endpoint, filter=None, **kwargs):
-        return self._api_records("post", endpoint, filter=filter, **kwargs)
-
-    def _post_project(self, records, collaborators=False):
-        if collaborators:
-            self._join_collaborators("projects", records)
-        return records
+    # def _post_project(self, records, collaborators=False):
+    #     if collaborators:
+    #         self._join_collaborators("projects", records)
+    #     return records
 
     def project_list(self, filter=None, collaborators=False, format=None):
         records = self._get_records("projects", filter, collaborators=collaborators)

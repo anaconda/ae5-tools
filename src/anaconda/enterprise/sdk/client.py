@@ -13,6 +13,7 @@ from .contract.dto.request.deployment_token import DeploymentTokenRequest
 from .contract.dto.request.secret_delete import SecretDeleteRequest
 from .contract.dto.request.secret_put import SecretPutRequest
 from .contract.dto.response.deployment_token import DeploymentTokenResponse
+from .contract.dto.response.secret_get import SecretGetResponse
 
 
 class AEClient(BaseModel):
@@ -54,7 +55,8 @@ class AEClient(BaseModel):
 
     def secret_get(self, admin: bool = False) -> list[str]:
         session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
-        return self.secret_get_command.execute(session=session)
+        response: SecretGetResponse = self.secret_get_command.execute(session=session)
+        return response.secrets
 
     def secret_delete(self, key: str, admin: bool = False) -> None:
         session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
