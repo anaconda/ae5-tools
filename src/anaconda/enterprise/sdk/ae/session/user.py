@@ -15,9 +15,6 @@ from ...contract.dto.error.ae_unexpected_response_error import AEUnexpectedRespo
 from ...contract.dto.session.empty_record_list import EmptyRecordList
 from ...service.archiver import create_tar_archive
 from ...service.docker import build_image, get_condarc, get_dockerfile
-
-# from ...contract.dto.request.deployment_token import DeploymentTokenRequest
-# from ...contract.dto.response.deployment_token import DeploymentTokenResponse
 from .abstract import AbstractAESession
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -70,22 +67,6 @@ class AEUserSession(AbstractAESession):
         if collaborators:
             self._join_collaborators("projects", records)
         return records
-
-    def secret_add(self, key, value):
-        self._post("credentials/user", json={"key": key, "value": value})
-
-    def secret_delete(self, key):
-        secrets = self.secret_list()
-        if key not in secrets:
-            raise AEError(f"User secret {key!r} was not found and cannot be deleted.")
-        self._delete(f"credentials/user/{key}")
-
-    def secret_list(self):
-        records = self._get("credentials/user")
-        if "data" in records:
-            return records["data"]
-        else:
-            raise AEError("Secrets endpoint did not return data.")
 
     def project_list(self, filter=None, collaborators=False, format=None):
         records = self._get_records("projects", filter, collaborators=collaborators)
@@ -864,11 +845,6 @@ class AEUserSession(AbstractAESession):
         if which is not None:
             response = response[which]
         return self._format_response(response, format=format)
-
-    # def deployment_token(self, request: DeploymentTokenRequest) -> DeploymentTokenResponse:
-    #     id = self.ident_record("deployment", request.ident)["id"]
-    #     response = self._post(f"deployments/{id}/token", format="json")
-    #     return DeploymentTokenResponse.parse_obj(response)
 
     def _pre_job(self, records):
         precs = {x["id"]: x for x in self._get_records("projects")}
