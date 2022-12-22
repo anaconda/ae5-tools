@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from os import path
 
-from src.anaconda.enterprise.sdk.common.config.environment import get_env_var
+from ..common.config.environment import get_env_var
 
 
 def get_condarc(custom_path):

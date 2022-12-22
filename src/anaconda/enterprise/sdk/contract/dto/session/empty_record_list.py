@@ -1,4 +1,4 @@
-from ...constants import COLUMNS
+from ....ae.constants import COLUMNS
 
 
 class EmptyRecordList(list):

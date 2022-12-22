@@ -10,12 +10,12 @@ import requests
 from dateutil import parser
 from requests import Session
 
-from ...cluster.identifier import Identifier
-from ...contracts.dto.base_model import BaseModel
-from ...contracts.dto.error.ae_error import AEError
-from ...contracts.dto.error.ae_unexpected_response_error import AEUnexpectedResponseError
-from ..constants import _DTYPES, COLUMNS, IDENT_FILTERS
-from .utils.empty_record_list import EmptyRecordList
+from ...contract.dto.base_model import BaseModel
+from ...contract.dto.cluster.identifier import Identifier
+from ...contract.dto.error.ae_error import AEError
+from ...contract.dto.error.ae_unexpected_response_error import AEUnexpectedResponseError
+from ...contract.dto.session.empty_record_list import EmptyRecordList
+from ..constants import _DTYPES, COLUMNS
 from .utils.filter import filter_list_of_dicts, filter_vars, split_filter
 
 
@@ -60,7 +60,7 @@ class AbstractAESession(BaseModel):
         """Base class constructor.
 
         Args:
-                hostname: The FQDN of the AE5 _login
+                hostname: The FQDN of the AE5 login
             username: The username associated with the connection.
             password (str, AEAdminSession, or None): nominally, this is
                 the password used to log in, if it is necessary. If password=None, and
@@ -163,22 +163,6 @@ class AbstractAESession(BaseModel):
         if is_single:
             return records[0] if records else None
         return records
-
-    def ident_record(self, record_type, ident, quiet=False, **kwargs):
-        if isinstance(ident, dict) and ident.get("_record_type", "") == record_type:
-            return ident
-        itype = record_type + "s"
-        if isinstance(ident, Identifier):
-            filter = ident.project_filter(itype=itype, ignore_revision=True)
-        elif isinstance(ident, tuple):
-            ident, filter = ",".join(ident), ident
-        elif record_type in IDENT_FILTERS:
-            ident = filter = IDENT_FILTERS[record_type].format(value=ident)
-        else:
-            ident = Identifier.from_string(ident, itype)
-            filter = ident.project_filter(itype=itype, ignore_revision=True)
-        matches = getattr(self, f"{record_type}_list")(filter=filter, **kwargs)
-        return self._should_be_one(matches, filter, quiet)
 
     def _format_table(self, response, columns):
         is_series = isinstance(response, dict)

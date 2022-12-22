@@ -7,7 +7,7 @@ from http.cookiejar import LWPCookieJar
 from dateutil import tz
 
 from ..common.config.environment import get_env_var
-from ..contracts.dto.error.ae_config_error import AEConfigError
+from ..contract.dto.error.ae_config_error import AEConfigError
 
 logger = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@ import sys
 from http.cookiejar import LWPCookieJar
 from typing import Any, Optional
 
-from ...cluster.identifier import Identifier
 from ...common.config.environment import demand_env_var_as_int
+from ...contract.dto.cluster.identifier import Identifier
 from ..constants import IDENT_FILTERS
 from .abstract import AbstractAESession
 

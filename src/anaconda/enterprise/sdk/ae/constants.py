@@ -1,15 +1,3 @@
-K8S_COLUMNS: tuple = (
-    "phase",
-    "since",
-    "rst",
-    "usage/mem",
-    "usage/cpu",
-    "usage/gpu",
-    "changes",
-    "modified",
-    "node",
-)
-
 # Column labels prefixed with a '?' are not included in an initial empty record list.
 # For instance, if the --collaborators flag is not set, then projects do not include a
 # "collaborators" column. This allows us to provide a consistent header for record outputs

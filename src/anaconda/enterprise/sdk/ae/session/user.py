@@ -8,16 +8,17 @@ from tempfile import TemporaryDirectory
 
 import urllib3
 
-from ...cluster.identifier import Identifier
 from ...common.config.environment import demand_env_var_as_int
-from ...contracts.dto.error.ae_error import AEError
-from ...contracts.dto.error.ae_unexpected_response_error import AEUnexpectedResponseError
-from ...contracts.dto.requests.deployment_token import DeploymentTokenRequest
-from ...contracts.dto.responses.deployment_token import DeploymentTokenResponse
+from ...contract.dto.cluster.identifier import Identifier
+from ...contract.dto.error.ae_error import AEError
+from ...contract.dto.error.ae_unexpected_response_error import AEUnexpectedResponseError
+from ...contract.dto.session.empty_record_list import EmptyRecordList
+from ...service.archiver import create_tar_archive
+from ...service.docker import build_image, get_condarc, get_dockerfile
+
+# from ...contract.dto.request.deployment_token import DeploymentTokenRequest
+# from ...contract.dto.response.deployment_token import DeploymentTokenResponse
 from .abstract import AbstractAESession
-from .utils.archiver import create_tar_archive
-from .utils.docker import build_image, get_condarc, get_dockerfile
-from .utils.empty_record_list import EmptyRecordList
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -864,10 +865,10 @@ class AEUserSession(AbstractAESession):
             response = response[which]
         return self._format_response(response, format=format)
 
-    def deployment_token(self, request: DeploymentTokenRequest) -> DeploymentTokenResponse:
-        id = self.ident_record("deployment", request.ident)["id"]
-        response = self._post(f"deployments/{id}/token", format="json")
-        return DeploymentTokenResponse.parse_obj(response)
+    # def deployment_token(self, request: DeploymentTokenRequest) -> DeploymentTokenResponse:
+    #     id = self.ident_record("deployment", request.ident)["id"]
+    #     response = self._post(f"deployments/{id}/token", format="json")
+    #     return DeploymentTokenResponse.parse_obj(response)
 
     def _pre_job(self, records):
         precs = {x["id"]: x for x in self._get_records("projects")}
@@ -1044,4 +1045,3 @@ class AEUserSession(AbstractAESession):
     # for the commands that come from the k8s sdk.  This unifies us, so that
     # consumers only need worry about this level of imports for requirements accessing
     # ae5 and subsystems/appliances.
-
