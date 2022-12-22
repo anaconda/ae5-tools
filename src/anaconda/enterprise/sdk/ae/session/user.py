@@ -42,15 +42,6 @@ class AEUserSession(AbstractAESession):
         # been captured for use elsewhere, it would no longer be useful.
         self._get("/logout")
 
-    # def _post_project(self, records, collaborators=False):
-    #     if collaborators:
-    #         self._join_collaborators("projects", records)
-    #     return records
-
-    def project_list(self, filter=None, collaborators=False, format=None):
-        records = self._get_records("projects", filter, collaborators=collaborators)
-        return self._format_response(records, format=format)
-
     def project_info(self, ident, collaborators=False, format=None, quiet=False, retry=False):
         # Retry loop added because project creation is now so fast that the API
         # often needs time to catch up before it "sees" the new project. We only

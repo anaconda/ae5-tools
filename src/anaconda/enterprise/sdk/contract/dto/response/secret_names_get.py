@@ -1,5 +1,5 @@
 from ....contract.dto.base_model import BaseModel
 
 
-class SecretGetResponse(BaseModel):
+class SecretNamesGetResponse(BaseModel):
     secrets: list[str]
