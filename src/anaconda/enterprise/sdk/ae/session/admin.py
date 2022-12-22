@@ -3,7 +3,8 @@ from http.cookiejar import LWPCookieJar
 from typing import Any, Optional
 
 from ...cluster.identifier import Identifier
-from ..constants import IDENT_FILTERS, KEYCLOAK_PAGE_MAX
+from ...common.config.environment import demand_env_var_as_int
+from ..constants import IDENT_FILTERS
 from .abstract import AbstractAESession
 
 
@@ -43,7 +44,7 @@ class AEAdminSession(AbstractAESession):
         limit = kwargs.pop("limit", sys.maxsize)
         kwargs.setdefault("first", 0)
         while True:
-            kwargs["max"] = min(KEYCLOAK_PAGE_MAX, limit)
+            kwargs["max"] = min(demand_env_var_as_int(name="KEYCLOAK_PAGE_MAX"), limit)
             t_records = self._get(path, params=kwargs)
             records.extend(t_records)
             n_records = len(t_records)

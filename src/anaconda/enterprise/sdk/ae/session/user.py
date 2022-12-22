@@ -10,21 +10,17 @@ from typing import Any, Optional, Union
 import urllib3
 
 from ...cluster.identifier import Identifier
-from ...common.config.environment import get_env_var
+from ...common.config.environment import demand_env_var_as_int, get_env_var
 from ...contracts.dto.error.ae_error import AEError
 from ...contracts.dto.error.ae_unexpected_response_error import AEUnexpectedResponseError
 from ...contracts.dto.requests.deployment_token import DeploymentTokenRequest
 from ...contracts.dto.responses.deployment_token import DeploymentTokenResponse
 from ...k8s.client.ae_k8s_local_client import AEK8SLocalClient
 from ...k8s.client.ae_k8s_remote_client import AEK8SRemoteClient
-from ..constants import K8S_JSON_LIST_MAX
 from .abstract import AbstractAESession
 from .utils.archiver import create_tar_archive
 from .utils.docker import build_image, get_condarc, get_dockerfile
 from .utils.empty_record_list import EmptyRecordList
-
-# import urllib3
-
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -555,13 +551,16 @@ class AEUserSession(AbstractAESession):
             response._columns.extend(("collaborators", "_collaborators"))
 
     def _join_k8s(self, record, changes=False):
+        # Maximum number of ids to pass through json body to the k8s endpoint
+        k8_s_json_list_max: int = demand_env_var_as_int(name="K8S_JSON_LIST_MAX")
+
         is_single = isinstance(record, dict)
         rlist = [record] if is_single else record
         if rlist:
             rlist2 = []
             # Limit the size of the input to pod_info to avoid 413 errors
             idchunks = [
-                [r["id"] for r in rlist[k : k + K8S_JSON_LIST_MAX]] for k in range(0, len(rlist), K8S_JSON_LIST_MAX)
+                [r["id"] for r in rlist[k : k + k8_s_json_list_max]] for k in range(0, len(rlist), k8_s_json_list_max)
             ]
             record2 = sum((self._k8s("pod_info", ch) for ch in idchunks), [])
             for rec, rec2 in zip(rlist, record2):

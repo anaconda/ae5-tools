@@ -5,6 +5,8 @@ import shutil
 import subprocess
 from os import path
 
+from src.anaconda.enterprise.sdk.common.config.environment import get_env_var
+
 
 def get_condarc(custom_path):
     """return contents of condarc
@@ -17,7 +19,7 @@ def get_condarc(custom_path):
     3. <site-packages>/ae5_tools/condarc.dist (copied to #2)
     """
 
-    _path = path.expanduser(os.getenv("AE5_TOOLS_CONFIG_DIR") or "~/.ae5")
+    _path = path.expanduser(get_env_var("AE5_TOOLS_CONFIG_DIR") or "~/.ae5")
     user_file = path.join(_path, "condarc")
     dist_file = path.join(path.dirname(__file__), "condarc.dist")
 
@@ -56,7 +58,7 @@ def get_dockerfile(custom_path=None):
     3. <site-packages>/ae5_tools/Dockerfile.dist (copied to #2)
     """
 
-    _path = path.expanduser(os.getenv("AE5_TOOLS_CONFIG_DIR") or "~/.ae5")
+    _path = path.expanduser(get_env_var("AE5_TOOLS_CONFIG_DIR") or "~/.ae5")
     user_file = path.join(_path, "Dockerfile")
     dist_file = path.join(path.dirname(__file__), "Dockerfile.dist")
 

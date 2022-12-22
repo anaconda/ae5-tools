@@ -9,7 +9,6 @@ dependencies:
   - black-jupyter
   - coverage
   - isort
-  - pip
   - pydantic
   - pylint
   - python=3.10.8
@@ -18,5 +17,4 @@ dependencies:
   - anaconda-client
   - requests
   - aiohttp
-  - pip:
-    - sacr
+  - shapeandshare.command.runner
