@@ -253,3 +253,23 @@ def delete(**kwargs):
                  confirm='Delete project {ident}',
                  prefix='Deleting project {ident}...',
                  postfix='deleted.')
+
+
+@project.command()
+@ident_filter('project', required=True)
+@click.argument('directory', type=str, required=False, default="")
+@click.option('--use-https', is_flag=True, default=None, required=False,
+                help="When using external git (i.e., Github.com) clone will use SSH. Set this flag to use HTTPs instead.")
+@global_options
+def clone(directory, use_https):
+    '''Clone a project as a local git clone.
+
+       The PROJECT identifier need not be fully specified, and may even include
+       wildcards. But it must match exactly one project.
+
+       If the local directory name is not supplied the project will be cloned
+       according to the repository field from "ae5 project info.
+
+       The project id is added to .git/config as remote.origin.project.
+    '''
+    cluster_call('project_clone', directory, use_https)

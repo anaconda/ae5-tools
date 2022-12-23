@@ -21,6 +21,7 @@ requirements:
     - setuptools
   run:
     - python>=3.6
+    - anaconda-project
     - python-dateutil>=2.7
     - requests
     - click>=7

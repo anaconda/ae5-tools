@@ -13,6 +13,9 @@ from dateutil import parser
 import getpass
 from tempfile import TemporaryDirectory
 import tarfile
+from pprint import pprint
+
+from anaconda_project.project import Project
 
 from .config import config
 from .filter import filter_vars, split_filter, filter_list_of_dicts
@@ -21,9 +24,11 @@ from .docker import get_dockerfile, get_condarc
 from .docker import build_image
 from .archiver import create_tar_archive
 from .k8s.client import AE5K8SLocalClient, AE5K8SRemoteClient
+from .git import install_prepush
 
 from http.cookiejar import LWPCookieJar
 from requests.packages import urllib3
+import subprocess
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -51,7 +56,7 @@ COLUMNS = {
     'resource_profile': ['name', 'description', 'cpu', 'memory', 'gpu', 'id'],
     'editor': ['name', 'id', 'is_default', 'packages'],
     'sample': ['name', 'id', 'is_template', 'is_default', 'description', 'download_url', 'owner', 'created', 'updated'],
-    'deployment': ['endpoint', 'name', 'owner', '?usage/mem', '?usage/cpu', '?usage/gpu', '?node', '?rst', 'public', '?collaborators', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', '?phase', '?since', '?rst', 'project_id', 'project_name', 'project_owner'],
+    'deployment': ['endpoint', 'name', 'owner', '?usage/mem', '?usage/cpu', '?usage/gpu', '?node', '?rst', 'public', '?collaborators', 'command', 'eevision', 'resource_profile', 'id', 'created', 'updated', 'state', '?phase', '?since', '?rst', 'project_id', 'project_name', 'project_owner'],
     'job': ['name', 'owner', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name'],
     'run': ['name', 'owner', 'command', 'revision', 'resource_profile', 'id', 'created', 'updated', 'state', 'project_id', 'project_name'],
     'branch': ['branch', 'sha1'],
@@ -519,6 +524,7 @@ class AEUserSession(AESessionBase):
             if 'Invalid username or password.' in resp.text:
                 self.session.cookies.clear()
 
+
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
         # been captured for use elsewhere, it would no longer be useful.
@@ -713,7 +719,7 @@ class AEUserSession(AESessionBase):
     def project_sessions(self, ident, format=None):
         id = self._ident_record('project', ident)["id"]
         response = self._get_records(f'projects/{id}/sessions')
-        return self._format_response(response, format=format)    
+        return self._format_response(response, format=format)
 
     def project_deployments(self, ident, format=None):
         id = self._ident_record('project', ident)["id"]
@@ -868,7 +874,7 @@ class AEUserSession(AESessionBase):
                 f.write(condarc_contents)
 
             self.project_download(ident, filename=os.path.join(tempdir, 'project.tar.gz'))
-            
+
             print('Starting image build. This may take several minutes.')
             build_image(tempdir, tag=tag, debug=debug)
 
@@ -948,6 +954,34 @@ class AEUserSession(AESessionBase):
             raise RuntimeError('Error processing upload: {}'.format(response['action']['message']))
         if wait:
             return self.project_info(response['id'], format=format, retry=True)
+
+    def project_clone(self, ident, directory="", use_https=False, format=None):
+        extraheader = ''
+        external_git = False
+        if self.hostname in ident["repo_url"]:
+            repo_url = ident['repo_url']
+            token = self._get_v1_token()
+            extraheader = f' -c http.extraheader="AUTHORIZATION: bearer {token}" '
+        elif 'anaconda-enterprise-ap-git-storage' in ident['repo_url']:
+            ## newer versions of ae5
+            repo_url = f'https://{self.hostname}/platform/git/anaconda/{ident["repository"]}.git'
+            token = self._get_v1_token()
+            extraheader = f' -c http.extraheader="AUTHORIZATION: bearer {token}" '
+        elif 'github.com' in ident['repo_url']:
+            if use_https:
+                repo_url = ident['repo_url']
+            else:
+                repo_url = ident['repo_url'].replace('https://github.com/','git@github.com:')
+            external_git = True
+        else:
+            repo_url = ident['repo_url']
+            external_git = True
+
+        subprocess.check_call(f'git clone {extraheader} -c remote.origin.project={ident["id"]} {repo_url} {directory}',
+                              shell=True)
+        if not directory:
+            directory = os.path.basename(ident["repo_url"]).split('.git')[0]
+        install_prepush(directory, external_git=external_git)
 
     def _join_collaborators(self, what, response):
         if isinstance(response, dict):
@@ -1452,7 +1486,7 @@ class AEUserSession(AESessionBase):
         return self._join_k8s(records, changes=True)
 
     def pod_list(self, filter=None, format=None):
-        records = (self.session_list(filter=filter) + 
+        records = (self.session_list(filter=filter) +
                    self.deployment_list(filter=filter) +
                    self.run_list(filter=filter))
         records = self._fix_records('pod', records)
@@ -1500,6 +1534,153 @@ class AEUserSession(AESessionBase):
     def node_info(self, node, format=None, quiet=False):
         record = self._ident_record('node', node, quiet=quiet)
         return self._format_response(record, format=format)
+
+    def _get_v1_token(self):
+        if isinstance(self, AEAdminSession):
+            # TODO: impersonate
+            raise NotImplementedError('We do not have impersonation working to get the authorization token.')
+        else:
+            url = f'https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/token'
+            v1_filename = os.path.join(config._path, 'v1-tokens', f'{self.username}@{self.hostname}')
+            os.makedirs(os.path.dirname(v1_filename), mode=0o700, exist_ok=True)
+
+            if os.path.exists(v1_filename):
+                with open(v1_filename, 'r') as fp:
+                    current_sdata = json.load(fp)
+                if isinstance(current_sdata, dict) and 'refresh_token' in current_sdata:
+                    resp = self.session.post(url,
+                                             data={'refresh_token': current_sdata['refresh_token'],
+                                                   'grant_type': 'refresh_token',
+                                                   'scope': 'offline_access',
+                                                   'client_id': 'anaconda-platform',
+                                                   'client_secret': 'ed7ec3ff-c535-455b-b431-5ed97d78b8be'
+                                                   })
+                    if resp.status_code == 200:
+                        sdata = resp.json()
+                        with open(v1_filename, 'w') as f:
+                            json.dump(sdata, f)
+            else:
+                # borrowed from .authorize()
+                key = f'{self.username}@{self.hostname}'
+                need_password = self.password is None
+                last_valid = True
+                if need_password:
+                    password = self._password_prompt(key, last_valid)
+                else:
+                    password = self.password
+                if not need_password:
+                    raise AEException('Invalid username or password.')
+
+                data = {
+                    'username': self.username,
+                    'password': password,
+                    'grant_type': 'password',
+                    'scope': 'offline_access',
+                    'client_id': 'anaconda-platform',
+                    'client_secret': 'ed7ec3ff-c535-455b-b431-5ed97d78b8be'
+                }
+
+                r = self.session.post(url, data=data)
+                r.raise_for_status()
+                sdata = r.json()
+                with open(v1_filename, 'w') as f:
+                    json.dump(sdata, f)
+
+            return sdata['access_token']
+
+    def git_config(self, *git_config_flags, **git_config_kwargs):
+        token = self._get_v1_token()
+        extraheader = f'AUTHORIZATION: bearer {token}'
+
+        args = '--local'
+        subprocess.check_call(f'git config {args} http.extraheader "{extraheader}"',
+                              shell=True)
+
+    def post_revision_metadata(self, tags=None, project_id=None, verbose=True, dry_run=False, format=None):
+        # Determine the tag to POST
+        if tags is None:
+            # find the most recent tag
+            all_tags = subprocess.check_output("git tag --sort=creatordate",
+                                               shell=True).decode().splitlines()
+        else:
+            all_tags = tags
+
+        if verbose:
+            print(f'-- All known tags: {all_tags}')
+
+        if project_id is None:
+            project_id = subprocess.check_output('git config remote.origin.project', shell=True).decode().strip()
+        if not project_id:
+            raise RuntimeError('un able to determine project id.')
+
+        revisions = self.revision_list(project_id)
+
+        # To avoid conflicts later get the previously.
+        # Post tags (either from UI or this script).
+        posted_tags = [v['id'] for v in revisions]
+        remaining_tags = [t for t in all_tags if t not in posted_tags]
+
+        if verbose:
+            print(f"""-- Known version tags
+{posted_tags}
+""")
+            print(f"""-- Version tags to post
+{remaining_tags}
+""")
+
+        # If the tag already posted ignore exit
+        # since there may be new un-tagged commits
+        # in this git push.
+        for tag in remaining_tags:
+            with TemporaryDirectory() as tempdir:
+                try:
+                    project_file = subprocess.check_output(f'git --no-pager show {tag}:anaconda-project.yml',
+                                                           shell=True).decode()
+                    with open(os.path.join(tempdir, 'anaconda-project.yml'), 'wt') as f:
+                        f.write(project_file)
+                    project = Project('.')
+                    pubinfo = project.publication_info()
+                except Exception as exc:
+                    if verbose:
+                        print('-- Corrupt project metadata for tag {}; skipping'.format(tag))
+                        print('-- Exception: {}'.format(exc))
+                    pubinfo = {
+                        'commands': {
+                            'ERROR': {
+                                'description': 'This version of anaconda-project.yml is corrupt. Please fix and push a new commit.',
+                                'default': True
+                            }
+                        }
+                    }
+                    
+                body = {'data':{'type':'version','attributes':{'name':tag,'metadata':pubinfo}}}
+
+                if verbose:
+                    print('-- The metadata to be posted:')
+                    pprint(body)
+
+                if not dry_run:
+                    project_url = self.project_info(project_id)['url']
+                    if 'anaconda-enterprise-ap-storage' in project_url:
+                        _project_url = project_url.replace('http://anaconda-enterprise-ap-storage',
+                                                           f'https://{self.hostname}/platform/storage/api/v1')
+                        versions_url = os.path.join(_project_url, 'versions')
+                    else:
+                        versions_url = os.path.join(project_url, 'versions')
+                        
+                    token = self._get_v1_token()
+                    headers = {
+                        'Authorization': f'Bearer {token}',
+                        'Content-Type': 'application/vnd.api+json'
+                    }
+
+                    res = self.session.post(versions_url, headers=headers, data=json.dumps(body))
+                    if verbose:
+                        print(f"""-- POST request returned
+{res}
+{res.reason}
+""")
+                    res.raise_for_status()
 
 
 class AEAdminSession(AESessionBase):
