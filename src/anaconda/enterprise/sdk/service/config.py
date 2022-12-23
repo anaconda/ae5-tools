@@ -107,7 +107,7 @@ class ConfigManager:
             result.append((hostname, username, is_admin, last, status))
         return result
 
-    def resolve(self, hostname=None, username=None, admin=False):
+    def resolve(self, hostname=None, username=None, admin=False) -> list:
         if hostname and username:
             return [(hostname, username)]
         matches = []
