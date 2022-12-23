@@ -1,30 +1,3 @@
-# Maximum page size in keycloak
-from ..common.config.environment import demand_env_var_as_int, get_env_var
-
-KEYCLOAK_PAGE_MAX: int = (
-    demand_env_var_as_int(name="KEYCLOAK_PAGE_MAX") if get_env_var(name="KEYCLOAK_PAGE_MAX") else 1000
-)
-
-# Maximum number of ids to pass through json body to the k8s endpoint
-K8S_JSON_LIST_MAX: int = (
-    demand_env_var_as_int(name="K8S_JSON_LIST_MAX") if get_env_var(name="K8S_JSON_LIST_MAX") else 100
-)
-
-# Default subdomain for kubectl service
-DEFAULT_K8S_ENDPOINT: str = "k8s"
-
-K8S_COLUMNS: tuple = (
-    "phase",
-    "since",
-    "rst",
-    "usage/mem",
-    "usage/cpu",
-    "usage/gpu",
-    "changes",
-    "modified",
-    "node",
-)
-
 # Column labels prefixed with a '?' are not included in an initial empty record list.
 # For instance, if the --collaborators flag is not set, then projects do not include a
 # "collaborators" column. This allows us to provide a consistent header for record outputs
