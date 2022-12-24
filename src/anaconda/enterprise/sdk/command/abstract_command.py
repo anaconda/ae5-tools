@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Any, Optional
 
-from ..contract.dto.base_model import BaseModel
+from anaconda.enterprise.server.contracts import BaseModel
 
 
 class AbstractCommand(BaseModel):

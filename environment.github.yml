@@ -1,4 +1,4 @@
-name: anaconda.enterprise.sdk
+name: anaconda.enterprise.server.sdk
 channels:
   - defaults
   - conda-forge
@@ -7,6 +7,7 @@ dependencies:
   - black
   - conda-build
   - black-jupyter
+  - jupyter
   - coverage
   - isort
   - pydantic
@@ -15,6 +16,6 @@ dependencies:
   - python-dotenv
   - setuptools
   - anaconda-client
-  - requests
-  - aiohttp
   - shapeandshare.command.runner
+  - anaconda.enterprise.server.common.sdk
+  - anaconda.enterprise.server.contracts

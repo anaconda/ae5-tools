@@ -1,10 +1,10 @@
 from typing import Union
 
-from ...ae.session.admin import AEAdminSession
-from ...ae.session.user import AEUserSession
+from anaconda.enterprise.sdk.session.admin import AEAdminSession
+from anaconda.enterprise.sdk.session.user import AEUserSession
+from anaconda.enterprise.server.contracts import DeploymentTokenRequest, DeploymentTokenResponse
+
 from ...command.abstract_command import AbstractCommand
-from ...contract.dto.request.deployment_token import DeploymentTokenRequest
-from ...contract.dto.response.deployment_token import DeploymentTokenResponse
 
 
 class DeploymentTokenGetCommand(AbstractCommand):

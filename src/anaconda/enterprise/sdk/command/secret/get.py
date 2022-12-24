@@ -1,8 +1,9 @@
 from typing import Union
 
-from ...ae.session.admin import AEAdminSession
-from ...ae.session.user import AEUserSession
-from ...contract.dto.response.secret_names_get import SecretNamesGetResponse
+from anaconda.enterprise.sdk.session.admin import AEAdminSession
+from anaconda.enterprise.sdk.session.user import AEUserSession
+from anaconda.enterprise.server.contracts import SecretNamesGetResponse
+
 from ..abstract_command import AbstractCommand
 
 

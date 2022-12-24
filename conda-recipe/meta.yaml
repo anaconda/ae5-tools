@@ -1,5 +1,5 @@
-{% set name = "anaconda.enterprise.sdk" %}
-{% set version = "0.2.0" %}
+{% set name = "anaconda.enterprise.server.sdk" %}
+{% set version = "0.1.0" %}
 
 package:
   name: "{{ name|lower }}"
@@ -16,17 +16,16 @@ build:
 
 requirements:
   host:
-    - pip
     - python>=3.9
     - setuptools
   run:
     - python>=3.9
-    - requests
-    - aiohttp
     - pydantic
+    - anaconda.enterprise.server.common.sdk
+    - anaconda.enterprise.server.contracts
 
 about:
-  home: https://github.com/shapeandshare/anaconda.enterprise.sdk
-  summary: "Anaconda Enterprise SDK"
+  home: https://github.com/shapeandshare/anaconda.enterprise.server.sdk
+  summary: "Anaconda Enterprise Server SDK"
   license: BSD
   license_file: LICENSE

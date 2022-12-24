@@ -1,8 +1,9 @@
-from typing import Any, Union
+from typing import Union
 
-from ...ae.session.admin import AEAdminSession
-from ...ae.session.user import AEUserSession
-from ...contract.dto.ae.record.project import AERecordProject
+from anaconda.enterprise.sdk.session.admin import AEAdminSession
+from anaconda.enterprise.sdk.session.user import AEUserSession
+from anaconda.enterprise.server.contracts import AERecordProject
+
 from ..abstract_command import AbstractCommand
 
 

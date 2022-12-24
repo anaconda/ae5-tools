@@ -36,7 +36,7 @@ jobs:
       with:
         channels: defaults,conda-forge,joshburt
         auto-activate-base: false
-        activate-environment: anaconda.enterprise.sdk
+        activate-environment: anaconda.enterprise.server.sdk
         environment-file: environment.github.yml
     - name: Conda Info
       run: |

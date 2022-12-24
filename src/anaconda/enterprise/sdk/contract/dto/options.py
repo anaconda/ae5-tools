@@ -1,9 +1,9 @@
 from typing import Optional
 
-from ..base_model import BaseModel
+from anaconda.enterprise.server.contracts import BaseModel
 
 
-class ClusterOptions(BaseModel):
+class ClientOptions(BaseModel):
     hostname: Optional[str] = None
 
     username: Optional[str] = None
@@ -16,4 +16,3 @@ class ClusterOptions(BaseModel):
     ident_filter: tuple = ()
     filter: tuple = ()
     format: Optional[str] = None
-    k8s_endpoint: Optional[str] = None

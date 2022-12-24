@@ -1,9 +1,9 @@
 from typing import Union
 
-from ...ae.session.admin import AEAdminSession
-from ...ae.session.user import AEUserSession
-from ...contract.dto.request.projects_get import ProjectsGetRequest
-from ...contract.dto.response.projects_get import ProjectsGetResponse
+from anaconda.enterprise.sdk.session.admin import AEAdminSession
+from anaconda.enterprise.sdk.session.user import AEUserSession
+from anaconda.enterprise.server.contracts import AERecordProject, ProjectsGetRequest, ProjectsGetResponse
+
 from ..abstract_command import AbstractCommand
 
 
@@ -13,7 +13,5 @@ class ProjectsGetCommand(AbstractCommand):
         request: ProjectsGetRequest,
         session: Union[AEAdminSession, AEUserSession],
     ) -> ProjectsGetResponse:
-        records_raw: list[dict] = session._get_records(
-            "projects", filter=request.filter, collaborators=request.collaborators
-        )
-        return ProjectsGetResponse.parse_obj({"records": records_raw})
+        records: list[AERecordProject] = session.get_records(type="projects")
+        return ProjectsGetResponse(records=records)
