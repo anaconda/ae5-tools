@@ -1,9 +1,10 @@
 from typing import Optional, Union
 
-from anaconda.enterprise.sdk.contract.dto.options import ClientOptions
-from anaconda.enterprise.sdk.session.admin import AEAdminSession
-from anaconda.enterprise.sdk.session.user import AEUserSession
 from anaconda.enterprise.server.contracts import AEConfigError, BaseModel
+
+from ..contract.dto.options import ClientOptions
+from .admin import AEAdminSession
+from .user import AEUserSession
 
 
 class AESessionFactory(BaseModel):

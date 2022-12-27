@@ -1,9 +1,9 @@
 from typing import Union
 
-from anaconda.enterprise.sdk.session.admin import AEAdminSession
-from anaconda.enterprise.sdk.session.user import AEUserSession
 from anaconda.enterprise.server.contracts import AERecordProject, ProjectsGetRequest, ProjectsGetResponse
 
+from ...session.admin import AEAdminSession
+from ...session.user import AEUserSession
 from ..abstract_command import AbstractCommand
 
 

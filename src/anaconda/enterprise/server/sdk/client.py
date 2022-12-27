@@ -1,15 +1,11 @@
 from typing import Any, Optional, Union
 
-from anaconda.enterprise.sdk.session.admin import AEAdminSession
-from anaconda.enterprise.sdk.session.factory import AESessionFactory
-from anaconda.enterprise.sdk.session.user import AEUserSession
 from anaconda.enterprise.server.contracts import (
     AEError,
     AERecordProject,
     BaseModel,
     DeploymentTokenRequest,
     DeploymentTokenResponse,
-    ProjectCreateRequest,
     ProjectsGetRequest,
     ProjectsGetResponse,
     SecretDeleteRequest,
@@ -24,6 +20,9 @@ from .command.project.patch import ProjectPatchCommand
 from .command.secret.delete import SecretDeleteCommand
 from .command.secret.get import SecretNamesGetCommand
 from .command.secret.put import SecretPutCommand
+from .session.admin import AEAdminSession
+from .session.factory import AESessionFactory
+from .session.user import AEUserSession
 
 
 class AEClient(BaseModel):

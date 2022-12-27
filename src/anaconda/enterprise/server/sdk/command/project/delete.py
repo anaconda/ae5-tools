@@ -1,9 +1,8 @@
 from typing import Union
 
-from anaconda.enterprise.sdk.session.admin import AEAdminSession
-from anaconda.enterprise.sdk.session.user import AEUserSession
-
 from ...command.abstract_command import AbstractCommand
+from ...session.admin import AEAdminSession
+from ...session.user import AEUserSession
 
 
 class ProjectDeleteCommand(AbstractCommand):
