@@ -18,11 +18,14 @@ from .command.deployment.token_get import DeploymentTokenGetCommand
 from .command.project.delete import ProjectDeleteCommand
 from .command.project.get import ProjectsGetCommand
 from .command.project.patch import ProjectPatchCommand
+from .command.project.revisions_get import ProjectRevisionsGetCommand
 from .command.project.upload import ProjectUploadCommand
 from .command.secret.delete import SecretDeleteCommand
 from .command.secret.get import SecretNamesGetCommand
 from .command.secret.put import SecretPutCommand
+from .contract.dto.project_revision import ProjectRevision
 from .contract.dto.request.project_upload import ProjectUploadRequest
+from .contract.dto.response.project_revisions_get import ProjectRevisionsGetResponse
 from .contract.dto.response.project_upload import ProjectUploadResponse
 from .session.admin import AEAdminSession
 from .session.factory import AESessionFactory
@@ -45,6 +48,7 @@ class AEClient(BaseModel):
     project_patch_command: Optional[ProjectPatchCommand]
     project_delete_command: Optional[ProjectDeleteCommand]
     project_upload_command: Optional[ProjectUploadCommand]
+    project_revisions_get_command: Optional[ProjectRevisionsGetCommand]
 
     def __init__(self, **data: Any):
         super().__init__(**data)
@@ -64,6 +68,8 @@ class AEClient(BaseModel):
             self.project_delete_command = ProjectDeleteCommand()
         if not self.project_upload_command:
             self.project_upload_command = ProjectUploadCommand()
+        if not self.project_revisions_get_command:
+            self.project_revisions_get_command = ProjectRevisionsGetCommand()
 
     # Deployment Commands
 
@@ -145,3 +151,10 @@ class AEClient(BaseModel):
             project_archive_path=Path(project_archive_path), tag=tag, name=name
         )
         return self.project_upload_command.execute(request=request, session=session)
+
+    def project_revisions_get(self, project_id: str, admin: bool = False) -> list[ProjectRevision]:
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
+        revisions_response: ProjectRevisionsGetResponse = self.project_revisions_get_command.execute(
+            project_id=project_id, session=session
+        )
+        return revisions_response.revisions
