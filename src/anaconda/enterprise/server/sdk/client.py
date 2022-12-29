@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Optional, Union
 
 from anaconda.enterprise.server.contracts import (
@@ -17,9 +18,12 @@ from .command.deployment.token_get import DeploymentTokenGetCommand
 from .command.project.delete import ProjectDeleteCommand
 from .command.project.get import ProjectsGetCommand
 from .command.project.patch import ProjectPatchCommand
+from .command.project.upload import ProjectUploadCommand
 from .command.secret.delete import SecretDeleteCommand
 from .command.secret.get import SecretNamesGetCommand
 from .command.secret.put import SecretPutCommand
+from .contract.dto.request.project_upload import ProjectUploadRequest
+from .contract.dto.response.project_upload import ProjectUploadResponse
 from .session.admin import AEAdminSession
 from .session.factory import AESessionFactory
 from .session.user import AEUserSession
@@ -40,6 +44,7 @@ class AEClient(BaseModel):
     projects_get_command: Optional[ProjectsGetCommand]
     project_patch_command: Optional[ProjectPatchCommand]
     project_delete_command: Optional[ProjectDeleteCommand]
+    project_upload_command: Optional[ProjectUploadCommand]
 
     def __init__(self, **data: Any):
         super().__init__(**data)
@@ -57,6 +62,8 @@ class AEClient(BaseModel):
             self.project_patch_command = ProjectPatchCommand()
         if not self.project_delete_command:
             self.project_delete_command = ProjectDeleteCommand()
+        if not self.project_upload_command:
+            self.project_upload_command = ProjectUploadCommand()
 
     # Deployment Commands
 
@@ -129,3 +136,12 @@ class AEClient(BaseModel):
     def project_delete(self, id: str, admin: bool = False) -> None:
         session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
         self.project_delete_command.execute(id=id, session=session)
+
+    def project_upload(
+        self, project_archive_path: str, tag: str, name: str, admin: bool = False
+    ) -> ProjectUploadResponse:
+        session: Union[AEAdminSession, AEUserSession] = self.session_factory.get(admin=admin)
+        request: ProjectUploadRequest = ProjectUploadRequest(
+            project_archive_path=Path(project_archive_path), tag=tag, name=name
+        )
+        return self.project_upload_command.execute(request=request, session=session)

@@ -1,5 +1,5 @@
 {% set name = "anaconda.enterprise.server.sdk" %}
-{% set version = "0.2.0" %}
+{% set version = "0.3.0" %}
 
 package:
   name: "{{ name|lower }}"
@@ -21,8 +21,8 @@ requirements:
   run:
     - python>=3.9
     - pydantic
-    - anaconda.enterprise.server.common.sdk
-    - anaconda.enterprise.server.contracts
+    - anaconda.enterprise.server.common.sdk>=0.1
+    - anaconda.enterprise.server.contracts>=0.1
 
 about:
   home: https://github.com/shapeandshare/anaconda.enterprise.server.sdk
