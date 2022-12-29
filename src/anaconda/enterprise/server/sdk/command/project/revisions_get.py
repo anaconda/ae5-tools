@@ -1,6 +1,7 @@
 from typing import Union
 
-from ...contract.dto.response.project_revisions_get import ProjectRevisionsGetResponse
+from anaconda.enterprise.server.contracts import ProjectRevisionsGetResponse
+
 from ...session.admin import AEAdminSession
 from ...session.user import AEUserSession
 from ..abstract_command import AbstractCommand

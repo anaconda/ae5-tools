@@ -8,8 +8,14 @@ from anaconda.enterprise.server.contracts import (
     BaseModel,
     DeploymentTokenRequest,
     DeploymentTokenResponse,
+    ProjectDeployResponse,
+    ProjectDeployTargetType,
+    ProjectRevision,
+    ProjectRevisionsGetResponse,
     ProjectsGetRequest,
     ProjectsGetResponse,
+    ProjectUploadRequest,
+    ProjectUploadResponse,
     SecretDeleteRequest,
     SecretNamesGetResponse,
     SecretPutRequest,
@@ -25,12 +31,6 @@ from .command.project.upload import ProjectUploadCommand
 from .command.secret.delete import SecretDeleteCommand
 from .command.secret.get import SecretNamesGetCommand
 from .command.secret.put import SecretPutCommand
-from .contract.dto.project_revision import ProjectRevision
-from .contract.dto.request.project_upload import ProjectUploadRequest
-from .contract.dto.response.project_deploy import ProjectDeployResponse
-from .contract.dto.response.project_revisions_get import ProjectRevisionsGetResponse
-from .contract.dto.response.project_upload import ProjectUploadResponse
-from .contract.dto.types.project_deploy_target import ProjectDeployTargetType
 from .session.admin import AEAdminSession
 from .session.factory import AESessionFactory
 from .session.user import AEUserSession

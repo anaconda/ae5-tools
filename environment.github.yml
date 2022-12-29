@@ -17,5 +17,5 @@ dependencies:
   - setuptools
   - anaconda-client
   - shapeandshare.command.runner
-  - anaconda.enterprise.server.common.sdk
-  - anaconda.enterprise.server.contracts
+  - anaconda.enterprise.server.common.sdk>=0.1
+  - anaconda.enterprise.server.contracts>=0.2

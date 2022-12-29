@@ -22,7 +22,7 @@ requirements:
     - python>=3.9
     - pydantic
     - anaconda.enterprise.server.common.sdk>=0.1
-    - anaconda.enterprise.server.contracts>=0.1
+    - anaconda.enterprise.server.contracts>=0.2
 
 about:
   home: https://github.com/shapeandshare/anaconda.enterprise.server.sdk
