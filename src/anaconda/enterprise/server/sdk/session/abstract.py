@@ -3,7 +3,7 @@ import sys
 import time
 from abc import abstractmethod
 from http.cookiejar import LWPCookieJar
-from typing import Any, AnyStr, Match, Optional, Union
+from typing import Any, AnyStr, Match, Optional
 
 import requests
 from requests import Response, Session
