@@ -20,9 +20,9 @@ jobs:
       #      https://pkg.cloudflareclient.com/install
       run: |
         sudo rpm -ivh https://pkg.cloudflareclient.com/cloudflare-release-el8.rpm
-        warp-cli register
-        warp-cli connect
-        warp-cli set-mode warp+doh
+#        warp-cli register
+#        warp-cli connect
+#        warp-cli set-mode warp+doh
 
 #    - name: Build the package
 #      env:
