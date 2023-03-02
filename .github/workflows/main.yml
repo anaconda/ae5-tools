@@ -18,7 +18,7 @@ jobs:
         fetch-depth: 0
     - name: Enable WARP
       run: |
-        sudo yum install cloudflare-warp
+        sudo rpm -ivh https://pkg.cloudflareclient.com/cloudflare-release-el8.rpm
 #    - name: Build the package
 #      env:
 #        AE5_HOSTNAME: aip.anaconda.com
