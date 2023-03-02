@@ -19,7 +19,7 @@ jobs:
   # This workflow contains a single job called "build"
   build:
     # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     defaults:
       run:
         shell: bash -el {0}
@@ -33,9 +33,15 @@ jobs:
     - name: Install CloudFlare WARP Client
       #      https://pkg.cloudflareclient.com/install
       run: |
-        curl https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-        sudo apt update
+        sudo yum install cloudflare-warp
+#
+#    - name: Install CloudFlare WARP Client
+#      #      https://pkg.cloudflareclient.com/install
+#      run: |
+#        curl https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+#        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+#        sudo apt update
+#        sudo apt install cloudflare-warp
     - name: Enable CloudFlare WARP Client
       #      https://pkg.cloudflareclient.com/install
       run: |
