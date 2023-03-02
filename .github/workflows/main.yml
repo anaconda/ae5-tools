@@ -19,7 +19,7 @@ jobs:
     - name: Enable WARP
       #      https://pkg.cloudflareclient.com/install
       run: |
-        sudo rpm -ivh https://pkg.cloudflareclient.com/cloudflare-release-el8.rpm
+        sudo rpm -ivh https://pkg.cloudflareclient.com/cloudflare-release-el8.rpm || true
 #        warp-cli register
 #        warp-cli connect
 #        warp-cli set-mode warp+doh
