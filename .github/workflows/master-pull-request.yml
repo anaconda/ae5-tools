@@ -40,8 +40,8 @@ jobs:
       #      https://pkg.cloudflareclient.com/install
       run: |
         warp-cli --accept-tos register
-        warp-cli connect
-        warp-cli set-mode warp+doh
+        warp-cli --accept-tos connect
+        warp-cli --accept-tos set-mode warp+doh
     - name: Install dependencies
       # https://github.com/conda-incubator/setup-miniconda
       uses: conda-incubator/setup-miniconda@3b0f2504dd76ef23b6d31f291f4913fb60ab5ff3 # v2
