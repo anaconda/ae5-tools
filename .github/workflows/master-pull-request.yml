@@ -39,8 +39,7 @@ jobs:
     - name: Enable CloudFlare WARP Client
       #      https://pkg.cloudflareclient.com/install
       run: |
-        warp-cli --accept-tos
-        warp-cli register
+        warp-cli --accept-tos register
         warp-cli connect
         warp-cli set-mode warp+doh
     - name: Install dependencies
