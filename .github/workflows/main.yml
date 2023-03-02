@@ -16,25 +16,28 @@ jobs:
       uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3
       with:
         fetch-depth: 0
-    - name: Build the package
-      env:
-        AE5_HOSTNAME: aip.anaconda.com
-        AE5_USERNAME: tooltest
-        AE5_PASSWORD: ${{ secrets.AE5_PASSWORD }}
-        AE5_ADMIN_USERNAME: admin
-        AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
-        AE5_K8S_ENDPOINT: ssh:centos
-        AE5_K8S_PORT: 23456
+    - name: Enable WARP
       run: |
-        source $CONDA/etc/profile.d/conda.sh
-        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
-        conda install -y conda-build conda-verify anaconda-client
-        conda build conda-recipe
-    - name: Upload to anaconda.org
-      if: github.event_name == 'push'
-      env:
-        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
-      run: |
-        source $CONDA/bin/activate
-        git tag describe --exact-match --tags HEAD || export LABEL="--label dev"
-        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $LABEL $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
+        sudo apt install cloudflare-warp
+#    - name: Build the package
+#      env:
+#        AE5_HOSTNAME: aip.anaconda.com
+#        AE5_USERNAME: tooltest
+#        AE5_PASSWORD: ${{ secrets.AE5_PASSWORD }}
+#        AE5_ADMIN_USERNAME: admin
+#        AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
+#        AE5_K8S_ENDPOINT: ssh:centos
+#        AE5_K8S_PORT: 23456
+#      run: |
+#        source $CONDA/etc/profile.d/conda.sh
+#        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
+#        conda install -y conda-build conda-verify anaconda-client
+#        conda build conda-recipe
+#    - name: Upload to anaconda.org
+#      if: github.event_name == 'push'
+#      env:
+#        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+#      run: |
+#        source $CONDA/bin/activate
+#        git tag describe --exact-match --tags HEAD || export LABEL="--label dev"
+#        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $LABEL $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
