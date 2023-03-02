@@ -1,13 +1,8 @@
-name: Build and test
+name: Scan and Publish On Push To Master
 on:
   push:
-    branches:
-      - master
-    tags:
-      - '*'
-  pull_request:
-    branches:
-      - master
+    branches: [ master ]
+
 jobs:
   package:
     runs-on: self-hosted

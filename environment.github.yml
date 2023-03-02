@@ -1,0 +1,9 @@
+name: github.action
+channels:
+  - default
+dependencies:
+  - anaconda-project
+  - conda-build
+  - conda-verify
+  - setuptools
+  - anaconda-client
