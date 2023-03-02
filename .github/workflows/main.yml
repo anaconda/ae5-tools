@@ -17,8 +17,13 @@ jobs:
       with:
         fetch-depth: 0
     - name: Enable WARP
+      #      https://pkg.cloudflareclient.com/install
       run: |
         sudo rpm -ivh https://pkg.cloudflareclient.com/cloudflare-release-el8.rpm
+        warp-cli register
+        warp-cli connect
+        warp-cli set-mode warp+doh
+
 #    - name: Build the package
 #      env:
 #        AE5_HOSTNAME: aip.anaconda.com
