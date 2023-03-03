@@ -1602,7 +1602,7 @@ class AEAdminSession(AESessionBase):
 
         return roles
 
-    def (self, users, include_login=False):
+    def _post_user(self, users, include_login=False):
         users = {u['id']: u for u in users}
         if include_login:
             events = self._get_paginated('events', client='anaconda-platform', type='LOGIN')
