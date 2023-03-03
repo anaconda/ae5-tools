@@ -73,3 +73,6 @@ test_vars.sh
 .vscode
 .pytest_cache
 
+.DS_Store
+envs/
+anaconda-project-local.yml
