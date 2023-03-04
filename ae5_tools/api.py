@@ -1639,13 +1639,13 @@ class AEAdminSession(AESessionBase):
         users = self._get_paginated('users')
 
         # Get realm roles for the users and merge results
-        users = self._map_users_to_roles(users=users)
+        users = self._merge_users_with_realm_roles(users=users)
 
         # Complete record format, and filtering before returning.
         users = self._fix_records('user', users, filter, include_login=include_login)
         return self._format_response(users, format=format)
 
-    def _map_users_to_roles(self, users: List[Dict]) -> List[Dict]:
+    def _merge_users_with_realm_roles(self, users: List[Dict]) -> List[Dict]:
         """
         Requests and adds user realm roles to all user objects
 
