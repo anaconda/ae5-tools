@@ -488,3 +488,10 @@ def test_login_time(admin_session, user_session):
     ltm1 = datetime.strptime(urec['lastLogin'], "%Y-%m-%d %H:%M:%S.%f")
     assert ltm1 < now
     # No more testing here, because we want to preserve the existing sessions
+
+def test_realm_roles(admin_session):
+    _cmd('project', 'list')
+    user_list = _cmd('user', 'list')
+
+    # Validate realms roles are present on the user
+    assert "realm_roles" in user_list[0]
