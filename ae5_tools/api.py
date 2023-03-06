@@ -1,3 +1,5 @@
+from typing import List, Dict
+
 import requests
 import time
 import io
@@ -1569,6 +1571,37 @@ class AEAdminSession(AESessionBase):
         records = self._get_paginated('events', limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=[])
 
+    def _get_user_realm_roles(self, user_uuid: str, **kwargs) -> List[str]:
+        """
+        Given a KeyCloak user UUID retrieve the realm role mappings.
+        From https://www.keycloak.org/docs-api/12.0/rest-api/#userrepresentation
+        Get realm-level role mappings:
+        GET /{realm}/groups/{id}/role-mappings/realm
+
+        Parameters
+        ---------
+        user_uuid: str
+            The KeyCloak User UUID
+        kwargs: dict[str, Any]
+            * first: Optional[int] = 0
+            * limit: Optional[int] = sys.maxsize
+            * all other kwargs supported/needed by `_get_paginated`
+
+        Returns
+        -------
+        roles: List[str]
+            A list of realm role names for the specified user.
+        """
+
+        first = kwargs.pop("first", 0)
+        limit = kwargs.pop("limit", sys.maxsize)
+        records = self._get_paginated(f"users/{user_uuid}/role-mappings/realm", limit=limit, first=first, **kwargs)
+
+        #  Provides a list of role names
+        roles: List[str] = [record["name"] for record in records]
+
+        return roles
+
     def _post_user(self, users, include_login=False):
         users = {u['id']: u for u in users}
         if include_login:
@@ -1584,9 +1617,54 @@ class AEAdminSession(AESessionBase):
         return users
 
     def user_list(self, filter=None, format=None, include_login=True):
+        """
+        Provides User details.
+
+        Parameters
+        ----------
+        filter: Optional[str]=None
+            CLI filter expression.
+        format: Optional[str]=None
+            CLI output type.  If none is provided, `text` is the default.
+        include_login: bool = True
+            Used for `_post_user` post-processing of records.
+
+        Returns
+        -------
+        response:
+            Formatted response
+        """
+
+        self._get_realm_roles()
+
+        # Get user list
         users = self._get_paginated('users')
+
+        # Get realm roles for the users and merge results
+        users = self._merge_users_with_realm_roles(users=users)
+
+        # Complete record format, and filtering before returning.
         users = self._fix_records('user', users, filter, include_login=include_login)
         return self._format_response(users, format=format)
+
+    def _merge_users_with_realm_roles(self, users: List[Dict]) -> List[Dict]:
+        """
+        Requests and adds user realm roles to all user objects
+
+        Parameters
+        ----------
+        users: List[Dict]
+            A list of user objects
+
+        Returns
+        -------
+        users: List[Dict]
+            A list of user objects with realm role information included.
+        """
+
+        for user in users:
+            user["realm_roles"] = self._get_user_realm_roles(user_uuid=user["id"])
+        return users
 
     def user_info(self, ident, format=None, quiet=False, include_login=True):
         response = self._ident_record('user', ident, quiet=False, include_login=include_login)

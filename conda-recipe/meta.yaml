@@ -31,8 +31,12 @@ test:
   source_files:
     - tests
   requires:
-    - python=3.6
-    - python-dateutil=2.7
+    - python>=3.6
+    - python-dateutil
+    - click>7
+    - click-repl
+    - requests
+    - aiohttp
     - pytest
     - pytest-cov
     - pandas
