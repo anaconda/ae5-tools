@@ -29,6 +29,8 @@ requirements:
 
 test:
   source_files:
+    - anaconda-project.yml
+    - env
     - tests
   requires:
     - python=3.6
