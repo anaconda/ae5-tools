@@ -29,7 +29,6 @@ requirements:
 
 test:
   source_files:
-    - anaconda-project.yml
     - env
     - tests
   requires:
