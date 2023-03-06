@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     try:
         # Start Mocks
-        # ae5_mock = start_ae5_mock()
+        ae5_mock = start_ae5_mock()
         wait_for_ae5_mock()
 
         # Start Tests
