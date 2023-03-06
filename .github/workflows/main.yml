@@ -28,7 +28,7 @@ jobs:
       run: |
         source $CONDA/etc/profile.d/conda.sh
         rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
-        conda install -y conda-build conda-verify anaconda-client anaconda-project
+        conda install -y conda-build conda-verify anaconda-client
         conda build conda-recipe
     - name: Upload to anaconda.org
       if: github.event_name == 'push'

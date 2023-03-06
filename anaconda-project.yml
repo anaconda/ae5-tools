@@ -1,6 +1,19 @@
 name: ae5-tools
 description: Command-line manipulation of Anaconda Enterprise 5.
 
+variables:
+# Used For System Tests
+# This does NOT configure integration tests (these use a different mechanism as a requirement for mock management).
+# This does NOT configure the build-time test execution as that occurs outside the scope of an anaconda-project.
+# If running the system tests locally the below environment variables MUST be configured for the remote ae5 environment.
+  AE5_HOSTNAME=0.0.0.0
+  AE5_USERNAME=mock-user
+  AE5_PASSWORD=mock-password
+  AE5_ADMIN_USERNAME=mock-adm-user
+  AE5_ADMIN_PASSWORD=mock-adm-user-password
+  AE5_K8S_ENDPOINT=ssh:centos
+  AE5_K8S_PORT=23456
+
 commands:
   #
   # Run Time Commands
@@ -72,3 +85,4 @@ env_specs:
       - fastapi
       - uvicorn[standard]
       - starlette
+      - anaconda-project
