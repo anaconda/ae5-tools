@@ -1,3 +1,4 @@
+import os
 import sys
 import uuid
 from typing import Dict
@@ -5,6 +6,24 @@ from unittest.mock import MagicMock
 import datetime
 
 import pytest
+
+from ae5_tools.api import AEAdminSession
+
+
+@pytest.fixture(scope="function")
+def get_token_fixture():
+    return {
+        "access_token": str(uuid.uuid4()),
+        "refresh_token": str(uuid.uuid4()),
+    }
+
+
+@pytest.fixture(scope="function")
+def admin_session(get_token_fixture):
+    admin_session = AEAdminSession(hostname=os.environ["AE5_HOSTNAME"], username=os.environ["AE5_USERNAME"], password=os.environ["AE5_PASSWORD"])
+    admin_session._load = MagicMock()
+    admin_session._sdata = get_token_fixture
+    return admin_session
 
 
 @pytest.fixture(scope="function")

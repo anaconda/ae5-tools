@@ -78,7 +78,7 @@ class AE5MockClient:
 
 
 ###############################################################################
-#  Set up application Server
+#  Set up application server
 ###############################################################################
 
 mock_state: MockState = MockState()
