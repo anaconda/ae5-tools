@@ -1,9 +1,13 @@
-import uuid
+"""
+Dynamic AE5 Integration Test Mock
+
+A very basic dynamic network mock for AE5.
+"""
+
+import requests
 from typing import Any, Dict, Optional
 import logging
 from fastapi import FastAPI, status
-from pydantic.main import BaseModel
-from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
@@ -11,6 +15,8 @@ logger.setLevel(level=logging.DEBUG)
 
 
 class MockState:
+    """ Holds dynamic mock state in memory """
+
     get_token: Optional[Dict]
     get_users: Optional[Dict]
     get_events: Optional[Dict]
@@ -38,6 +44,42 @@ class MockState:
             "responses": []
         }
 
+
+class AE5MockClient:
+    """
+    Provides a client for the ae5 mock.
+    This is used by integration tests for setup and tear down.
+    """
+
+    @staticmethod
+    def reset_mock_state() -> bool:
+        response = requests.delete(url=f"https://{os.environ['AE5_HOSTNAME']}/mock/state", verify=False)
+        if response.status_code != 200:
+            message: str = f"reset_mock_state saw: {response.status_code}, text: {response.text}"
+            raise Exception(message)
+        return True
+
+    @staticmethod
+    def set_mock_state(mock_state: Dict) -> Dict:
+        response = requests.patch(url=f"https://{os.environ['AE5_HOSTNAME']}/mock/state", json=mock_state, verify=False)
+        if response.status_code != 200:
+            message: str = f"set_mock_state saw: {response.status_code}, text: {response.text}"
+            raise Exception(message)
+        return response.json()
+
+    @staticmethod
+    def get_mock_state() -> Dict:
+        response = requests.get(url=f"https://{os.environ['AE5_HOSTNAME']}/mock/state", verify=False)
+        if response.status_code != 200:
+            message: str = f"get_mock_state saw: {response.status_code}, text: {response.text}"
+            raise Exception(message)
+        return response.json()
+
+
+###############################################################################
+#  Set up application Server
+###############################################################################
+
 mock_state: MockState = MockState()
 
 # Create the FastAPI application
@@ -54,9 +96,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+###############################################################################
 # Define our handlers
-
+###############################################################################
 
 @app.get("/health/plain", status_code=status.HTTP_200_OK)
 def health_plain() -> bool:

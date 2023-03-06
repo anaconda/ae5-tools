@@ -29,7 +29,6 @@ requirements:
 
 test:
   source_files:
-    - env
     - tests
   requires:
     - python>=3.7

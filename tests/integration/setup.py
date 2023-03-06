@@ -1,5 +1,6 @@
 import shlex
 import subprocess
+from pathlib import Path
 from typing import Optional
 
 import requests
@@ -56,8 +57,8 @@ def shell_out(shell_out_cmd: str) -> tuple[str, str, int]:
 
 if __name__ == "__main__":
     # load locally defined environmental variables
-
-    load_dotenv(dotenv_path="env/env.offline", override=True)  # take environment variables from .env.
+    local_env_config: str = (Path(os.path.dirname(os.path.realpath(__file__))) / "env.offline").as_posix()
+    load_dotenv(dotenv_path=local_env_config, override=True)  # take environment variables from .env.
 
     ae5_mock: Optional[subprocess.Popen] = None
 
