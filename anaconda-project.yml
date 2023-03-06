@@ -65,14 +65,14 @@ env_specs:
   default:
     description: Default environment spec for k8s server
     packages:
-      - python>3.6
+      - python>=3.6
       - python-dateutil
       - requests
       - aiohttp
   development:
     description: Development environment spec for running commands
     packages:
-      - python>3.6
+      - python>=3.7
       - python-dateutil
       - click>7
       - click-repl
