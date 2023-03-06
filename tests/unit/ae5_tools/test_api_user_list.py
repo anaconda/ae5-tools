@@ -21,7 +21,7 @@ def get_token_fixture():
 @pytest.fixture(scope="function")
 def admin_session(get_token_fixture):
     admin_session = AEAdminSession(
-        hostname=os.environ["AE5_HOSTNAME"], username=os.environ["AE5_USERNAME"], password=os.environ["AE5_PASSWORD"]
+        hostname="MOCK-HOSTNAME", username="MOCK-AE-USERNAME", password="MOCK-AE-USER-PASSWORD"
     )
     admin_session._load = MagicMock()
     admin_session._sdata = get_token_fixture

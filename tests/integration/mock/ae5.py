@@ -86,10 +86,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 ###############################################################################
 # Define our handlers
 ###############################################################################
-
 
 @app.get("/health/plain", status_code=status.HTTP_200_OK)
 def health_plain() -> bool:
@@ -104,30 +104,6 @@ def health_plain() -> bool:
     """
 
     return True
-
-
-@app.post(path="/auth/realms/master/protocol/openid-connect/token")
-def get_token():
-    mock_state.get_token["calls"].append({})
-    return mock_state.get_token["responses"].pop(0)
-
-
-@app.get(path="/auth/admin/realms/AnacondaPlatform/users")
-def get_users():
-    mock_state.get_users["calls"].append({})
-    return mock_state.get_users["responses"].pop(0)
-
-
-@app.get(path="/auth/admin/realms/AnacondaPlatform/events")
-def get_events():
-    mock_state.get_events["calls"].append({})
-    return mock_state.get_events["responses"].pop(0)
-
-
-@app.get(path="/auth/admin/realms/AnacondaPlatform/users/{user_uuid}/role-mappings/realm")
-def get_realm_roles(user_uuid: str):
-    mock_state.get_realm_roles["calls"].append({"user_uuid": user_uuid})
-    return mock_state.get_realm_roles["responses"].pop(0)
 
 
 @app.delete(path="/mock/state", status_code=status.HTTP_200_OK)
@@ -160,3 +136,35 @@ def patch_state(new_partial_state: Dict) -> Dict:
         else:
             raise NotImplementedError()
     return get_state()
+
+
+
+###############################################################################
+# Define our mocked endpoints
+###############################################################################
+
+
+@app.post(path="/auth/realms/master/protocol/openid-connect/token")
+def get_token():
+    mock_state.get_token["calls"].append({})
+    return mock_state.get_token["responses"].pop(0)
+
+
+@app.get(path="/auth/admin/realms/AnacondaPlatform/users")
+def get_users():
+    mock_state.get_users["calls"].append({})
+    return mock_state.get_users["responses"].pop(0)
+
+
+@app.get(path="/auth/admin/realms/AnacondaPlatform/events")
+def get_events():
+    mock_state.get_events["calls"].append({})
+    return mock_state.get_events["responses"].pop(0)
+
+
+@app.get(path="/auth/admin/realms/AnacondaPlatform/users/{user_uuid}/role-mappings/realm")
+def get_realm_roles(user_uuid: str):
+    mock_state.get_realm_roles["calls"].append({"user_uuid": user_uuid})
+    return mock_state.get_realm_roles["responses"].pop(0)
+
+
