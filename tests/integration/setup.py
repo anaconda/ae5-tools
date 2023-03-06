@@ -11,8 +11,12 @@ from dotenv import load_dotenv
 
 
 def start_ae5_mock() -> subprocess.Popen:
-    cmd: str = f"uvicorn tests.integration.mock.ae5:app --host {os.environ['AE5_HOSTNAME']} --port 443 --ssl-keyfile tests/integration/mock/certs/nginx.key --ssl-certfile tests/integration/mock/certs/nginx.crt"
-    args = shlex.split(cmd)
+    ae5_mock_launch_cmd: str = (f"uvicorn tests.integration.mock.ae5:app --host {os.environ['AE5_HOSTNAME']} "
+                                "--port 443 "
+                                "--ssl-keyfile tests/integration/mock/certs/nginx.key "
+                                "--ssl-certfile tests/integration/mock/certs/nginx.crt")
+
+    args = shlex.split(ae5_mock_launch_cmd)
     return subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 

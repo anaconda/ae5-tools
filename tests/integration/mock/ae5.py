@@ -4,6 +4,7 @@ Dynamic AE5 Integration Test Mock
 A very basic dynamic network mock for AE5.
 """
 
+import os
 import requests
 from typing import Any, Dict, Optional
 import logging
