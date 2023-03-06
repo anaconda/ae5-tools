@@ -1,9 +1,9 @@
+import datetime
 import os
 import sys
 import uuid
 from typing import Dict
 from unittest.mock import MagicMock
-import datetime
 
 import pytest
 
@@ -20,7 +20,9 @@ def get_token_fixture():
 
 @pytest.fixture(scope="function")
 def admin_session(get_token_fixture):
-    admin_session = AEAdminSession(hostname=os.environ["AE5_HOSTNAME"], username=os.environ["AE5_USERNAME"], password=os.environ["AE5_PASSWORD"])
+    admin_session = AEAdminSession(
+        hostname=os.environ["AE5_HOSTNAME"], username=os.environ["AE5_USERNAME"], password=os.environ["AE5_PASSWORD"]
+    )
     admin_session._load = MagicMock()
     admin_session._sdata = get_token_fixture
     return admin_session
@@ -34,7 +36,7 @@ def generate_raw_user_fixture() -> Dict:
         "name": "MOCK-USERNAME",
         "details": {},
         "userId": mock_user_id,
-        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 
@@ -42,21 +44,20 @@ def generate_raw_user_fixture() -> Dict:
 # Test Cases For _get_user_realm_roles
 #####################################################
 
+
 def test_get_user_realm_roles(admin_session):
     test_cases = [
         # Test Case 1 - We get expected results
         {
             "user_uuid": str(uuid.uuid4()),
-            "realm_roles": [{"name": "ae-admin", "id": str(uuid.uuid4())},
-                            {"name": "ae-reader", "id": str(uuid.uuid4())}],
-            "expected_results": ["ae-admin", "ae-reader"]
+            "realm_roles": [
+                {"name": "ae-admin", "id": str(uuid.uuid4())},
+                {"name": "ae-reader", "id": str(uuid.uuid4())},
+            ],
+            "expected_results": ["ae-admin", "ae-reader"],
         },
         # Test Case 2 - No roles
-        {
-            "user_uuid": str(uuid.uuid4()),
-            "realm_roles": [],
-            "expected_results": []
-        }
+        {"user_uuid": str(uuid.uuid4()), "realm_roles": [], "expected_results": []},
     ]
 
     for test_case in test_cases:
@@ -77,6 +78,7 @@ def test_get_user_realm_roles(admin_session):
 # Test Cases For _merge_users_with_realm_roles
 #####################################################
 
+
 def test_merge_users_with_realm_roles(admin_session, generate_raw_user_fixture):
     test_cases = [
         # Test Case 1 - Empty Roles
@@ -91,10 +93,7 @@ def test_merge_users_with_realm_roles(admin_session, generate_raw_user_fixture):
 
     for test_case in test_cases:
         test_case["users"] = [generate_raw_user_fixture]
-        test_case["expected_results"] = [{
-            **test_case["users"][0],
-            "realm_roles": test_case["realm_roles"]
-        }]
+        test_case["expected_results"] = [{**test_case["users"][0], "realm_roles": test_case["realm_roles"]}]
 
         # Set up test
         admin_session._get_user_realm_roles = MagicMock(return_value=test_case["realm_roles"])
@@ -113,14 +112,11 @@ def test_merge_users_with_realm_roles(admin_session, generate_raw_user_fixture):
 # Test Cases For user_list
 #####################################################
 
+
 def test_user_list_with_no_users(admin_session):
     test_cases = [
         # Test Case 1 - No Users
-        {
-            "users": [],
-            "mapped_users": [],
-            "expected_results": []
-        },
+        {"users": [], "mapped_users": [], "expected_results": []},
     ]
 
     for test_case in test_cases:
@@ -138,27 +134,24 @@ def test_user_list_with_no_users(admin_session):
 def test_user_list(admin_session, generate_raw_user_fixture):
     test_cases = [
         # Test Case 1 - User does not have any roles
-        {
-            "realm_roles": []
-        },
+        {"realm_roles": []},
         # Test 2 - User belongs to a role
         {
             "realm_roles": ["ae-admin"],
-        }
+        },
     ]
 
     for test_case in test_cases:
         test_case["users"] = [generate_raw_user_fixture]
-        test_case["mapped_users"] = [{
-            **test_case["users"][0],
-            "realm_roles": test_case["realm_roles"]
-        }]
-        test_case["expected_results"] = [{
-            **test_case["users"][0],
-            "realm_roles": test_case["realm_roles"],
-            "_record_type": "user",
-            "lastLogin": test_case["users"][0]["time"]
-        }]
+        test_case["mapped_users"] = [{**test_case["users"][0], "realm_roles": test_case["realm_roles"]}]
+        test_case["expected_results"] = [
+            {
+                **test_case["users"][0],
+                "realm_roles": test_case["realm_roles"],
+                "_record_type": "user",
+                "lastLogin": test_case["users"][0]["time"],
+            }
+        ]
 
         # Set up test
         admin_session._get_paginated = MagicMock(return_value=test_case["users"])

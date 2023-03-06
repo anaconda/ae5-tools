@@ -1,9 +1,9 @@
-from typing import List, Dict
-
+from typing import Dict, List
 
 #####################################################
 # Test Cases For user_list
 #####################################################
+
 
 def test_user_list_has_realm_roles(admin_session):
     # Test Case - User list contains realm roles
@@ -30,7 +30,7 @@ def test_user_list_has_realm_roles(admin_session):
         "uma_authorization",
         "ae-uploader",
         "ae-admin",
-        "ae-creator"
+        "ae-creator",
     ]
     for role in expected_roles:
         assert role in account["realm_roles"]

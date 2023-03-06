@@ -1593,8 +1593,8 @@ class AEAdminSession(AESessionBase):
             A list of realm role names for the specified user.
         """
 
-        first = kwargs.pop('first', 0)
-        limit = kwargs.pop('limit', sys.maxsize)
+        first = kwargs.pop("first", 0)
+        limit = kwargs.pop("limit", sys.maxsize)
         records = self._get_paginated(f"users/{user_uuid}/role-mappings/realm", limit=limit, first=first, **kwargs)
 
         #  Provides a list of role names

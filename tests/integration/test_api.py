@@ -1,10 +1,10 @@
 import json
-import subprocess
 import shlex
-from typing import Dict, List
+import subprocess
 import uuid
-import pytest
+from typing import Dict, List
 
+import pytest
 from tests.integration.mock.ae5 import AE5MockClient
 
 
@@ -44,20 +44,15 @@ def get_user_fixture():
         "disableableCredentialTypes": [],
         "requiredActions": [],
         "notBefore": 0,
-        "access": {
-            "manageGroupMembership": True,
-            "view": True,
-            "mapRoles": True,
-            "impersonate": True,
-            "manage": True
-        },
-        "_record_type": "user"
+        "access": {"manageGroupMembership": True, "view": True, "mapRoles": True, "impersonate": True, "manage": True},
+        "_record_type": "user",
     }
 
 
 #####################################################
 # Test Cases For `user list` with roles
 #####################################################
+
 
 def test_user_list_roles(get_token_fixture, get_user_fixture):
     # Define the test scenarios
@@ -69,21 +64,12 @@ def test_user_list_roles(get_token_fixture, get_user_fixture):
                     "calls": [],
                     "responses": [get_token_fixture],
                 },
-                "get_users": {
-                    "calls": [],
-                    "responses": [[get_user_fixture]]
-                },
-                "get_events": {
-                    "calls": [],
-                    "responses": [[]]
-                },
-                "get_realm_roles": {
-                    "calls": [],
-                    "responses": [[]]
-                }
+                "get_users": {"calls": [], "responses": [[get_user_fixture]]},
+                "get_events": {"calls": [], "responses": [[]]},
+                "get_realm_roles": {"calls": [], "responses": [[]]},
             },
             "command": "python -m ae5_tools.cli.main user list --format json",
-            "expected_results": [[]]
+            "expected_results": [[]],
         },
         # Scenario 2 - User has two roles assigned
         {
@@ -92,29 +78,21 @@ def test_user_list_roles(get_token_fixture, get_user_fixture):
                     "calls": [],
                     "responses": [get_token_fixture],
                 },
-                "get_users": {
-                    "calls": [],
-                    "responses": [[get_user_fixture]]
-                },
-                "get_events": {
-                    "calls": [],
-                    "responses": [[]]
-                },
+                "get_users": {"calls": [], "responses": [[get_user_fixture]]},
+                "get_events": {"calls": [], "responses": [[]]},
                 "get_realm_roles": {
                     "calls": [],
-                    "responses": [[
-                        {
-                            "name": "ae-admin"
-                        },
-                        {
-                            "name": "ae-reader"
-                        },
-                    ]]
-                }
+                    "responses": [
+                        [
+                            {"name": "ae-admin"},
+                            {"name": "ae-reader"},
+                        ]
+                    ],
+                },
             },
             "command": "python -m ae5_tools.cli.main user list --format json",
-            "expected_results": [["ae-admin", "ae-reader"]]
-        }
+            "expected_results": [["ae-admin", "ae-reader"]],
+        },
     ]
 
     for test_case in test_cases:

@@ -4,10 +4,11 @@ Dynamic AE5 Integration Test Mock
 A very basic dynamic network mock for AE5.
 """
 
-import os
-import requests
-from typing import Any, Dict, Optional
 import logging
+import os
+from typing import Any, Dict, Optional
+
+import requests
 from fastapi import FastAPI, status
 from starlette.middleware.cors import CORSMiddleware
 
@@ -16,7 +17,7 @@ logger.setLevel(level=logging.DEBUG)
 
 
 class MockState:
-    """ Holds dynamic mock state in memory """
+    """Holds dynamic mock state in memory"""
 
     get_token: Optional[Dict]
     get_users: Optional[Dict]
@@ -28,22 +29,10 @@ class MockState:
         self.reset()
 
     def reset(self):
-        self.get_token = {
-            "calls": [],
-            "responses": []
-        }
-        self.get_users = {
-            "calls": [],
-            "responses": []
-        }
-        self.get_events = {
-            "calls": [],
-            "responses": []
-        }
-        self.get_realm_roles = {
-            "calls": [],
-            "responses": []
-        }
+        self.get_token = {"calls": [], "responses": []}
+        self.get_users = {"calls": [], "responses": []}
+        self.get_events = {"calls": [], "responses": []}
+        self.get_realm_roles = {"calls": [], "responses": []}
 
 
 class AE5MockClient:
@@ -101,6 +90,7 @@ app.add_middleware(
 # Define our handlers
 ###############################################################################
 
+
 @app.get("/health/plain", status_code=status.HTTP_200_OK)
 def health_plain() -> bool:
     """
@@ -152,7 +142,7 @@ def get_state():
         "get_token": mock_state.get_token,
         "get_users": mock_state.get_users,
         "get_events": mock_state.get_events,
-        "get_realm_roles": mock_state.get_realm_roles
+        "get_realm_roles": mock_state.get_realm_roles,
     }
 
 
@@ -160,25 +150,13 @@ def get_state():
 def patch_state(new_partial_state: Dict) -> Dict:
     for key, value in new_partial_state.items():
         if key == "get_token":
-            mock_state.get_token = {
-                **mock_state.get_token,
-                **value
-            }
+            mock_state.get_token = {**mock_state.get_token, **value}
         elif key == "get_users":
-            mock_state.get_users = {
-                **mock_state.get_users,
-                **value
-            }
+            mock_state.get_users = {**mock_state.get_users, **value}
         elif key == "get_events":
-            mock_state.get_events = {
-                **mock_state.get_events,
-                **value
-            }
+            mock_state.get_events = {**mock_state.get_events, **value}
         elif key == "get_realm_roles":
-            mock_state.get_realm_roles = {
-                **mock_state.get_realm_roles,
-                **value
-            }
+            mock_state.get_realm_roles = {**mock_state.get_realm_roles, **value}
         else:
             raise NotImplementedError()
     return get_state()
