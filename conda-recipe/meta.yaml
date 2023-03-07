@@ -31,7 +31,7 @@ test:
   source_files:
     - tests
   requires:
-    - python>=3.6
+    - python>=3.7
     - python-dateutil
     - click>7
     - click-repl
@@ -40,8 +40,13 @@ test:
     - pytest
     - pytest-cov
     - pandas
+    - python-dotenv
+    - fastapi
+    - uvicorn
+    - starlette
   commands:
-    - py.test --cov=ae5_tools -v tests
+    - py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml
+    - python -m tests.integration.setup
 
 about:
   home: https://github.com/Anaconda-Platform/ae5-tools

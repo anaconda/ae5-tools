@@ -14,13 +14,25 @@ commands:
   # Development Time Commands
   #
 
+  clean:
+    env_spec: development
+    unix: rm -rf .coverage coverage.xml .pytest_cache tests/integration/.pytest_cache
+
+  bash:
+    env_spec: development
+    unix: bash
+
   test:
     env_spec: development
-    unix: anaconda-project run clean && anaconda-project run test:unit && anaconda-project run test:system
+    unix: anaconda-project run clean && anaconda-project run test:unit && anaconda-project run test:integration && anaconda-project run test:system
 
   test:unit:
     env_spec: development
     unix: py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml
+
+  test:integration:
+    env_spec: development
+    unix: python -m tests.integration.setup
 
   test:system:
     env_spec: development
@@ -47,7 +59,7 @@ env_specs:
   development:
     description: Development environment spec for running commands
     packages:
-      - python>=3.6
+      - python>=3.7
       - python-dateutil
       - click>7
       - click-repl
@@ -56,3 +68,8 @@ env_specs:
       - pytest
       - pytest-cov
       - pandas
+      - python-dotenv
+      - fastapi
+      - uvicorn[standard]
+      - starlette
+      - anaconda-project
