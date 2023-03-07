@@ -46,6 +46,7 @@ test:
     - starlette
   commands:
     - py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml
+    - py.test --cov=ae5_tools -v tests/system  --cov-append --cov-report=xml
     - python -m tests.integration.setup
 
 about:

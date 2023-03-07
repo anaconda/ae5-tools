@@ -13,7 +13,7 @@ def start_ae5_mock() -> subprocess.Popen:
     ae5_mock_launch_cmd: str = (
         "python -m uvicorn tests.integration.mock.ae5:app "
         f"--host {os.environ['AE5_HOSTNAME']} "
-        "--port 443 "
+        f"--port {os.environ['AE5_PORT']} "
         "--ssl-keyfile tests/integration/mock/certs/nginx.key "
         "--ssl-certfile tests/integration/mock/certs/nginx.crt"
     )
