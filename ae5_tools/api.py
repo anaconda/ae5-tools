@@ -1685,7 +1685,7 @@ class AEAdminSession(AESessionBase):
         limit = kwargs.pop("limit", sys.maxsize)
         return self._get_paginated(path="roles", first=first, max=limit, **kwargs)
 
-    def get_user_realm_roles_from_map(self, user: Dict, role_maps: Dict[str, List]) -> List[str]:
+    def _get_user_realm_roles(self, user: Dict, role_maps: Dict[str, List]) -> List[str]:
         """
         Given a user object and a mapping of roles to users, returns the list of realm roles the user has mapped.
 
@@ -1727,7 +1727,7 @@ class AEAdminSession(AESessionBase):
         """
 
         for user in users:
-            user["realm_roles"] = self.get_user_realm_roles_from_map(user=user, role_maps=role_maps)
+            user["realm_roles"] = self._get_user_realm_roles(user=user, role_maps=role_maps)
         return users
 
     def user_info(self, ident, format=None, quiet=False, include_login=True):

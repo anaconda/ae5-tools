@@ -79,7 +79,7 @@ def test_get_realm_roles(admin_session):
 
 
 #####################################################
-# Test Cases For get_user_realm_roles_from_map
+# Test Cases For _get_user_realm_roles
 #####################################################
 def test_get_user_realm_roles_from_map(admin_session, generate_raw_user_fixture):
     test_cases: List[Dict] = [
@@ -97,7 +97,7 @@ def test_get_user_realm_roles_from_map(admin_session, generate_raw_user_fixture)
 
     for test_case in test_cases:
         # Execute the test
-        user_realm_roles: List[str] = admin_session.get_user_realm_roles_from_map(
+        user_realm_roles: List[str] = admin_session._get_user_realm_roles(
             user=test_case["user"], role_maps=test_case["role_maps"]
         )
 
@@ -186,7 +186,7 @@ def test_merge_users_with_realm_roles(admin_session, generate_raw_user_fixture):
         test_case["expected_results"] = [{**test_case["users"][0], "realm_roles": test_case["realm_roles"]}]
 
         # Set up test
-        admin_session.get_user_realm_roles_from_map = MagicMock(return_value=test_case["realm_roles"])
+        admin_session._get_user_realm_roles = MagicMock(return_value=test_case["realm_roles"])
 
         # Execute the test
         result = admin_session._merge_users_with_realm_roles(users=test_case["users"], role_maps=test_case["role_maps"])
@@ -194,7 +194,7 @@ def test_merge_users_with_realm_roles(admin_session, generate_raw_user_fixture):
         # Review results
         assert result == test_case["expected_results"]
 
-        mock = admin_session.get_user_realm_roles_from_map
+        mock = admin_session._get_user_realm_roles
         mock.assert_called_once_with(user=test_case["users"][0], role_maps=test_case["role_maps"])
 
 
