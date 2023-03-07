@@ -44,24 +44,24 @@ class AE5MockClient:
 
     @staticmethod
     def reset_mock_state() -> bool:
-        response = requests.delete(url=f"https://{os.environ['AE5_HOSTNAME']}/mock/state", verify=False)
-        if response.status_code != 200:
+        response = requests.delete(url=f"https://{os.environ['AE5_HOSTNAME']}:{os.environ['AE5_PORT']}/mock/state", verify=False)
+        if response.status_code != status.HTTP_200_OK:
             message: str = f"reset_mock_state saw: {response.status_code}, text: {response.text}"
             raise Exception(message)
         return True
 
     @staticmethod
     def set_mock_state(mock_state: Dict) -> Dict:
-        response = requests.patch(url=f"https://{os.environ['AE5_HOSTNAME']}/mock/state", json=mock_state, verify=False)
-        if response.status_code != 200:
+        response = requests.patch(url=f"https://{os.environ['AE5_HOSTNAME']}:{os.environ['AE5_PORT']}/mock/state", json=mock_state, verify=False)
+        if response.status_code != status.HTTP_202_ACCEPTED:
             message: str = f"set_mock_state saw: {response.status_code}, text: {response.text}"
             raise Exception(message)
         return response.json()
 
     @staticmethod
     def get_mock_state() -> Dict:
-        response = requests.get(url=f"https://{os.environ['AE5_HOSTNAME']}/mock/state", verify=False)
-        if response.status_code != 200:
+        response = requests.get(url=f"https://{os.environ['AE5_HOSTNAME']}:{os.environ['AE5_PORT']}/mock/state", verify=False)
+        if response.status_code != status.HTTP_200_OK:
             message: str = f"get_mock_state saw: {response.status_code}, text: {response.text}"
             raise Exception(message)
         return response.json()
@@ -113,7 +113,7 @@ def reset():
     return get_state()
 
 
-@app.get(path="/mock/state")
+@app.get(path="/mock/state", status_code=status.HTTP_200_OK)
 def get_state():
     return {
         "get_token": mock_state.get_token,
@@ -123,7 +123,7 @@ def get_state():
     }
 
 
-@app.patch(path="/mock/state")
+@app.patch(path="/mock/state", status_code=status.HTTP_202_ACCEPTED)
 def patch_state(new_partial_state: Dict) -> Dict:
     for key, value in new_partial_state.items():
         if key == "get_token":
@@ -145,7 +145,7 @@ def patch_state(new_partial_state: Dict) -> Dict:
 ###############################################################################
 
 
-@app.post(path="/auth/realms/master/protocol/openid-connect/token")
+@app.post(path="/auth/realms/master/protocol/openid-connect/token", status_code=status.HTTP_200_OK)
 def get_token():
     mock_state.get_token["calls"].append({})
     try:
@@ -154,7 +154,7 @@ def get_token():
         raise HTTPException(status_code=500, detail={"message": "Missing mock call definition"}) from error
 
 
-@app.get(path="/auth/admin/realms/AnacondaPlatform/users")
+@app.get(path="/auth/admin/realms/AnacondaPlatform/users", status_code=status.HTTP_200_OK)
 def get_users():
     mock_state.get_users["calls"].append({})
     try:
@@ -162,7 +162,7 @@ def get_users():
     except Exception as error:
         raise HTTPException(status_code=500, detail={"message": "Missing mock call definition"}) from error
 
-@app.get(path="/auth/admin/realms/AnacondaPlatform/events")
+@app.get(path="/auth/admin/realms/AnacondaPlatform/events", status_code=status.HTTP_200_OK)
 def get_events():
     mock_state.get_events["calls"].append({})
     try:
@@ -170,7 +170,7 @@ def get_events():
     except Exception as error:
         raise HTTPException(status_code=500, detail={"message": "Missing mock call definition"}) from error
 
-@app.get(path="/auth/admin/realms/AnacondaPlatform/users/{user_uuid}/role-mappings/realm")
+@app.get(path="/auth/admin/realms/AnacondaPlatform/users/{user_uuid}/role-mappings/realm", status_code=status.HTTP_200_OK)
 def get_realm_roles(user_uuid: str):
     mock_state.get_realm_roles["calls"].append({"user_uuid": user_uuid})
     try:

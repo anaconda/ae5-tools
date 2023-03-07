@@ -4,6 +4,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Optional
+from fastapi import status
 
 import requests
 from dotenv import load_dotenv
@@ -32,9 +33,9 @@ def wait_for_ae5_mock() -> None:
         count += 1
 
         try:
-            response = requests.get(url=f"https://{os.environ['AE5_HOSTNAME']}:443/health/plain", verify=False)
+            response = requests.get(url=f"https://{os.environ['AE5_HOSTNAME']}:{os.environ['AE5_PORT']}/health/plain", verify=False)
 
-            if response.status_code != 200:
+            if response.status_code != status.HTTP_200_OK:
                 print(f"Received status code: {response.status_code}, sleeping ..")
                 time.sleep(time_out)
             else:
