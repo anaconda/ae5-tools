@@ -1635,8 +1635,6 @@ class AEAdminSession(AESessionBase):
             Formatted response
         """
 
-        self._get_realm_roles()
-
         # Get user list
         users = self._get_paginated('users')
 
