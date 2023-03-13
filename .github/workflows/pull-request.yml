@@ -1,10 +1,5 @@
-name: Build and test
+name: Pull Request and Dev Publish
 on:
-  push:
-    branches:
-      - master
-    tags:
-      - '*'
   pull_request:
     branches:
       - master
@@ -30,11 +25,9 @@ jobs:
         rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
         conda install -y conda-build conda-verify anaconda-client
         conda build conda-recipe
-    - name: Upload to anaconda.org
-      if: github.event_name == 'push'
+    - name: Upload to anaconda.org (Dev Build)
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
       run: |
         source $CONDA/bin/activate
-        git tag describe --exact-match --tags HEAD || export LABEL="--label dev"
-        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $LABEL $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
+        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label dev $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
