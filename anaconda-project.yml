@@ -1,12 +1,58 @@
 name: ae5-tools
+description: Command-line manipulation of Anaconda Enterprise 5.
+
 commands:
+  #
+  # Run Time Commands
+  #
+
   default:
+    env_spec: default
     unix: python -m ae5_tools.k8s.server
+
+  #
+  # Development Time Commands
+  #
+
+  test:
+    env_spec: development
+    unix: anaconda-project run clean && anaconda-project run test:unit && anaconda-project run test:system
+
+  test:unit:
+    env_spec: development
+    unix: py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml
+
+  test:system:
+    env_spec: development
+    unix: py.test --cov=ae5_tools -v tests/system  --cov-append --cov-report=xml
+
 channels:
   - defaults
-packages:
-  - requests
-  - python-dateutil
-  - aiohttp
+  - conda-forge
+
+platforms:
+  - linux-64
+  - osx-64
+  - osx-arm64
+  - win-64
+
 env_specs:
-  default: {}
+  default:
+    description: Default environment spec for k8s server
+    packages:
+      - python>=3.6
+      - python-dateutil
+      - requests
+      - aiohttp
+  development:
+    description: Development environment spec for running commands
+    packages:
+      - python>=3.6
+      - python-dateutil
+      - click>7
+      - click-repl
+      - requests
+      - aiohttp
+      - pytest
+      - pytest-cov
+      - pandas

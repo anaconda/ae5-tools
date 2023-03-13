@@ -1,3 +1,5 @@
+from typing import List, Dict
+
 import requests
 import time
 import io
@@ -1584,9 +1586,149 @@ class AEAdminSession(AESessionBase):
         return users
 
     def user_list(self, filter=None, format=None, include_login=True):
+        """
+        Provides User details.
+
+        Parameters
+        ----------
+        filter: Optional[str]=None
+            CLI filter expression.
+        format: Optional[str]=None
+            CLI output type.  If none is provided, `text` is the default.
+        include_login: bool = True
+            Used for `_post_user` post-processing of records.
+
+        Returns
+        -------
+        response:
+            Formatted response
+        """
+
+        # Get user list
         users = self._get_paginated('users')
+
+        # Get realm roles user map
+        role_maps: Dict[str, List] = self._build_realm_role_user_map()
+
+        # Get realm roles for the users and merge results
+        users = self._merge_users_with_realm_roles(users=users, role_maps=role_maps)
+
+        # Complete record format, and filtering before returning.
         users = self._fix_records('user', users, filter, include_login=include_login)
         return self._format_response(users, format=format)
+
+    def _get_role_users(self, role_name: str, **kwargs) -> List[Dict]:
+        """
+        Given a KeyCloak user realm role name retrieves a list of user objects who are mapped to the role.
+
+
+        From https://www.keycloak.org/docs-api/12.0/rest-api/#_rolerepresentation
+        Returns a stream of users that have the specified role name:
+        GET /{realm}/roles/{role-name}/users
+
+        Parameters
+        ---------
+        role_name: str
+            The realm role name (not ID)
+        kwargs: dict[str, Any]
+            * first: Optional[int] = 0
+            * limit: Optional[int] = sys.maxsize
+            * all other kwargs supported/needed by `_get_paginated`
+
+        Returns
+        -------
+        users: List[Dict]
+            A list of user objects which are mapped to the role.
+        """
+
+        first = kwargs.pop("first", 0)
+        limit = kwargs.pop("limit", sys.maxsize)
+        return self._get_paginated(path=f"roles/{role_name}/users", first=first, max=limit, **kwargs)
+
+    def _build_realm_role_user_map(self) -> Dict[str, List]:
+        """
+        Builds a dictionary of role names to mapped users.
+
+        Returns
+        role_maps: Dict[str, List]
+            A dictionary, where the keys are role names and the values are lists of user dictionaries mapped to the role.
+        """
+
+        realm_roles: List[Dict] = self._get_realm_roles()
+        role_maps: Dict[str, List] = {}
+        for role in realm_roles:
+            role_maps[role["name"]] = self._get_role_users(role_name=role["name"])
+        return role_maps
+
+    def _get_realm_roles(self, **kwargs) -> List[Dict]:
+        """
+        Returns the list of realm roles.
+
+        From https://www.keycloak.org/docs-api/12.0/rest-api/#_rolerepresentation
+        Get all roles for the realm or client:
+        GET /{realm}/roles
+
+        Parameters
+        ---------
+        kwargs: dict[str, Any]
+            * first: Optional[int] = 0
+            * limit: Optional[int] = sys.maxsize
+            * all other kwargs supported/needed by `_get_paginated`
+
+        Returns
+        -------
+        roles: List[Dict]
+            A list of roles objects.
+        """
+
+        first = kwargs.pop("first", 0)
+        limit = kwargs.pop("limit", sys.maxsize)
+        return self._get_paginated(path="roles", first=first, max=limit, **kwargs)
+
+    def _get_user_realm_roles(self, user: Dict, role_maps: Dict[str, List]) -> List[str]:
+        """
+        Given a user object and a mapping of roles to users, returns the list of realm roles the user has mapped.
+
+        Parameters
+        ----------
+        user: Dict
+            A user object (as a dictionary)
+        role_maps: Dict[str, List]
+            A diction of roles to mapped users.
+
+        Returns
+        -------
+        user_realm_roles: List[str]
+            A list of realm roles the user is mapped to.
+        """
+
+        user_realm_roles: List[str] = []
+        for role_name, role_users in role_maps.items():
+            for role_user in role_users:
+                if user["id"] == role_user["id"]:
+                    user_realm_roles.append(role_name)
+        return user_realm_roles
+
+    def _merge_users_with_realm_roles(self, users: List[Dict], role_maps: Dict[str, List]) -> List[Dict]:
+        """
+        Given a list of user objects, and the role-to-user maps merge the realm_roles into the user objects.
+
+        Parameters
+        ----------
+        users: List[Dict]
+            A list of user objects
+        role_maps: Dict[str, List]
+            A dictionary of realm rol name to list of users mapped to each role.
+
+        Returns
+        -------
+        users: List[Dict]
+            A list of user objects with realm role information included.
+        """
+
+        for user in users:
+            user["realm_roles"] = self._get_user_realm_roles(user=user, role_maps=role_maps)
+        return users
 
     def user_info(self, ident, format=None, quiet=False, include_login=True):
         response = self._ident_record('user', ident, quiet=False, include_login=include_login)
