@@ -36,5 +36,5 @@ jobs:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
       run: |
         source $CONDA/bin/activate
-        git tag describe --exact-match --tags HEAD || export LABEL="--label dev"
+        git describe --tags --exact-match --tags HEAD || export LABEL="--label dev"
         anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $LABEL $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
