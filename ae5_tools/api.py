@@ -1311,6 +1311,30 @@ class AEUserSession(AESessionBase):
         response = self._ident_record('job', ident, quiet=quiet)
         return self._format_response(response, format=format)
 
+    def job_run(self, ident, format=None, quiet=False):
+        """
+        Executes an instance of a job.
+
+        Parameters
+        ----------
+        ident: str
+            The job identifier
+        format: Optional[str]
+            CLI output type.  If none is provided, `text` is the default.
+        quiet: bool
+            Default is `False`.
+
+        Returns
+        -------
+        response:
+            Formatted response
+        """
+
+        get_job_response = self._ident_record('job', ident, quiet=quiet)
+        job_id: str = get_job_response["id"]
+        start_run_response = self._post(f'jobs/{job_id}/runs', format='json')
+        return self._format_response(start_run_response, format=format)
+
     def job_runs(self, ident, format=None):
         id = self._ident_record('job', ident)['id']
         response = self._get_records(f'jobs/{id}/runs')

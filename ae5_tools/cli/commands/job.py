@@ -160,15 +160,12 @@ def create(**kwargs):
 @ident_filter('job', required=True)
 @global_options
 def run(**kwargs):
-    '''Executes an existing job.
+    """
+        Executes an existing job.
 
        The JOB identifier need not be fully specified, and may even include
        wildcards. But it must match exactly one job.
-
-       NOTE: this has an effect only if the job has never been run. It
-       cannot be used to re-run an previous run-once job, or to trigger
-       a manual execution of a scheduled job.
-    '''
+    """
     cluster_call('job_run', **kwargs)
 
 
