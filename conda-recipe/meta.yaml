@@ -31,14 +31,17 @@ test:
   source_files:
     - tests
   requires:
-    - python=3.6
-    - python-dateutil=2.7
+    - python>=3.6
+    - python-dateutil
+    - click>7
+    - click-repl
+    - requests
+    - aiohttp
     - pytest
     - pytest-cov
     - pandas
   commands:
     - py.test --cov=ae5_tools -v tests
-    - codecov -t $CODECOV_TOKEN
 
 about:
   home: https://github.com/Anaconda-Platform/ae5-tools

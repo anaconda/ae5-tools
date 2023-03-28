@@ -1,13 +1,14 @@
-import os
+import asyncio
+import datetime
+import dateutil.parser
 import io
+import json
 import re
 import sys
-import ast
-import json
-import aiohttp
-import asyncio
+
 from urllib.parse import urlencode
-import dateutil.parser
+
+import aiohttp
 
 
 def _or_raise(exc, return_exceptions):
@@ -161,28 +162,52 @@ def _pod_merge_metrics(pRec, mRec):
         dst[key] = _to_text(value)
 
 
+_period_regex = re.compile(r'((?P<weeks>\d+?)w)?((?P<days>\d+?)d)?((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?')
+
+
+def parse_timedelta(time_str):
+    parts = _period_regex.match(time_str)
+    if not parts:
+        return
+    parts = parts.groupdict()
+    time_params = {}
+    for (name, param) in parts.items():
+        if param:
+            time_params[name] = int(param)
+    return datetime.timedelta(**time_params)
+
+
 class FileStream(object):
+
     def __init__(self, stream):
         self.stream = sys.stdout if stream is None else stream
+
     async def prepare(self, request):
         pass
+
     def closing(self):
         return False
+
     async def write(self, data):
         return self.stream.write(data.decode())
+
     async def finish(self):
         pass
 
 
-class AE5K8STransformer(object):
+class AE5BaseTransformer(object):
     def __init__(self, url=None, token=None):
         headers = {'accept': 'application/json'}
         if token:
             headers['authorization'] = f'Bearer {token}'
         self._headers = headers
-        self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False))
+        self._session = None
         self._url = url.rstrip('/')
         self._has_metrics = None
+
+    async def connect(self):
+        if self._session is None:
+            self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False))
 
     async def close(self):
         if self._session is not None:
@@ -194,26 +219,30 @@ class AE5K8STransformer(object):
             loop = asyncio.get_event_loop()
             return loop.run_until_complete(self.close())
 
+    async def get(self, path, type='json', ok404=False):
+        await self.connect()
+        if not path.startswith('/'):
+            path = '/api/v1/' + path
+        url = self._url + path
+        async with self._session.get(url, headers=self._headers) as resp:
+            if resp.status == 404 and ok404:
+                return
+            resp.raise_for_status()
+            if type == 'json':
+                return await resp.json()
+            elif type == 'text':
+                return await resp.text()
+            else:
+                return resp
+
+
+class AE5K8STransformer(AE5BaseTransformer):
+
     async def has_metrics(self):
         if self._has_metrics is None:
             result = await self.get('/apis/metrics.k8s.io/v1beta1', ok404=True)
             self._has_metrics = result is not None
         return self._has_metrics
-
-    async def get(self, path, type='json', ok404=False):
-        if not path.startswith('/'):
-            path = '/api/v1/' + path
-        url = self._url + path
-        resp = await self._session.get(url, headers=self._headers)
-        if resp.status == 404 and ok404:
-            return
-        resp.raise_for_status()
-        if type == 'json':
-            return await resp.json()
-        elif type == 'text':
-            return await resp.text()
-        else:
-            return resp
 
     async def _pod_info(self, id, return_exceptions=False):
         if not re.match(r'[a-f0-9]{2}-[a-f0-9]{32}', id) or not id.startswith(('a1', 'a2')):
@@ -232,8 +261,9 @@ class AE5K8STransformer(object):
                 return _k8s_pod_to_record(resp1['items'][0])
         else:
             return _or_raise(KeyError(f'Pod not found: {id}'), return_exceptions)
-    
+
     async def _exec_pod(self, pod, namespace, container, command):
+        await self.connect()
         path = f'/api/v1/namespaces/{namespace}/pods/{pod}/exec'
         params = {'command': command, 'container': container,
                   'stdout': True, 'stderr': True,
@@ -272,7 +302,7 @@ class AE5K8STransformer(object):
         result = {'modified': [], 'deleted': [], 'added': [], 'mtime': None}
         try:
             output = await self._exec_pod(data['name'], 'default', data['containers']['sync']['name'], cmd)
-        except RuntimeError as exc:
+        except RuntimeError:
             return result
         found = False
         gitkeys = {' D': 'deleted', '??': 'added'}
@@ -287,7 +317,7 @@ class AE5K8STransformer(object):
             else:
                 result['mtime'] = max(result.get('mtime') or '', line.split()[0])
         return result
-    
+
     async def pod_info(self, id, return_exceptions=False):
         if isinstance(id, list):
             return await asyncio.gather(*(self.pod_info(t) for t in id), return_exceptions=return_exceptions)
@@ -349,26 +379,28 @@ class AE5K8STransformer(object):
         subsets = ('total', 'sessions', 'deployments', 'middleware', 'system')
         whiches = ('requests', 'limits', 'usage')
         for rec in resp1:
-            nodeRec = {'name': rec['metadata']['name'],
-                       'role': rec['metadata']['labels']['role'],
-                       'capacity': {
-                            'pods': rec['status']['allocatable']['pods'],
-                            'mem': _to_text2(rec['status']['allocatable']['memory']),
-                            'cpu': rec['status']['allocatable']['cpu'],
-                            'gpu': rec['status']['allocatable'].get('nvidia.com/gpu', "0"),
-                       },
-                       'ready': any(c['type'] == 'Ready' and c['status'] == "True" for c in rec['status']['conditions']),
-                       'conditions': [c['type'] for c in rec['status']['conditions']
-                                      if c['type'] != 'Ready' and c['status'] == "True"],
-                       'timestamp': None,
-                       'window': None}
+            nodeRec = {
+                'name': rec['metadata']['name'],
+                'role': rec['metadata']['labels']['role'],
+                'capacity': {
+                    'pods': rec['status']['allocatable']['pods'],
+                    'mem': _to_text2(rec['status']['allocatable']['memory']),
+                    'cpu': rec['status']['allocatable']['cpu'],
+                    'gpu': rec['status']['allocatable'].get('nvidia.com/gpu', "0"),
+                },
+                'ready': any(c['type'] == 'Ready' and c['status'] == "True" for c in rec['status']['conditions']),
+                'conditions': [c['type'] for c in rec['status']['conditions']
+                               if c['type'] != 'Ready' and c['status'] == "True"],
+                'timestamp': None,
+                'window': None
+            }
             for subset in subsets:
                 srec = nodeRec[subset] = {'pods': 0, 'pending': 0}
                 for which in whiches:
                     srec[which] = {'mem': 0, 'cpu': 0, 'gpu': 0}
             nodeMap[nodeRec['name']] = nodeRec
             nodeList.append(nodeRec)
-    
+
         podMap = {}
         for pod in resp2:
             nodeName = pod['spec']['nodeName']
@@ -399,7 +431,7 @@ class AE5K8STransformer(object):
                             default = 'inf' if which == 'limits' and key != 'gpu' else '0'
                             dst[key] = value + _to_float(src.get(skey, src.get(key, default)))
                 subRec['usage']['gpu'] = subRec['requests']['gpu']
-                
+
         for pod in resp3:
             podName = pod['metadata']['name']
             if podName in podMap:
@@ -425,3 +457,25 @@ class AE5K8STransformer(object):
                         dst[key] = _to_text(value)
 
         return nodeList
+
+
+class AE5PromQLTransformer(AE5BaseTransformer):
+
+    async def query_range(self, pod_id=None, query=None, metric=None, start=None,
+                          end=None, step=None, period=None, samples=None):
+        if period is None:
+            timedelta = datetime.timedelta(weeks=4)
+        else:
+            timedelta = parse_timedelta(period)
+        end = end or datetime.datetime.utcnow()
+        start = start or (end - timedelta)
+        end_timestamp = end.isoformat("T") + "Z"
+        start_timestamp = start.isoformat("T") + "Z"
+        if step is None:
+            samples = int(samples or 200)
+            step = int(((end - start) / samples).total_seconds())
+        if query is None:
+            regex = f'anaconda-app-{pod_id}-.*'
+            query = f"{metric}{{container_name='app',pod_name=~'{regex}'}}"
+        url = f'query_range?query={query}&start={start_timestamp}&end={end_timestamp}&step={step}'
+        return await self.get(url)
