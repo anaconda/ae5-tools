@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import requests
 import time
@@ -561,21 +561,50 @@ class AEUserSession(AESessionBase):
             self._join_collaborators('projects', records)
         return records
 
-    def secret_add(self, key, value, format=None):
+    def secret_add(self, key: str, value: str, **kwargs) -> None:
+        """
+        Adds User Secret
+
+        Parameters
+        ----------
+        key: str
+            The name of the secret to create or update.
+        value: str
+            The value to store in the secret.
+        """
         self._post('credentials/user', json={'key': key, 'value': value})
 
-    def secret_delete(self, key, format=None):
-        secrets = self.secret_list()
-        if key not in secrets:
-            raise AEException(f'User secret {key!r} was not found and cannot be deleted.')
-        self._delete(f'credentials/user/{key}')
+    def secret_delete(self, key: str, **kwargs) -> None:
+        """
+        Deletes a user secret.
 
-    def secret_list(self, filter=None, format=None):
-        records = self._get('credentials/user')
-        if 'data' in records:
-            return records['data']
+        Parameters
+        ----------
+        key: str
+            The secret key (name) to delete.
+        """
+
+        secrets: List[str] = self.secret_list()
+        if key not in secrets:
+            raise AEException(f"User secret {key!r} was not found and cannot be deleted.")
+        self._delete(f"credentials/user/{key}")
+
+    def secret_list(self, format: Optional[str] = None, **kwargs) -> List[str]:
+        """
+        Returns user secret key names.
+
+        Returns
+        -------
+        secrets: List[str]
+            A list of user secret key names.
+        """
+
+        raw_secret_names: List[str] = self._get('credentials/user')
+        if 'data' in raw_secret_names:
+            secrets: List[Dict] = [{"secrets": raw_secret_names["data"]}]
+            return self._format_response(secrets, format=format)
         else:
-            raise AEException('Secrets endpoint did not return data.')
+            raise AEException("Failed to retrieve user secrets.")
 
     def project_list(self, filter=None, collaborators=False, format=None):
         records = self._get_records('projects', filter, collaborators=collaborators)
