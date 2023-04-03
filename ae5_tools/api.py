@@ -584,7 +584,7 @@ class AEUserSession(AESessionBase):
             The secret key (name) to delete.
         """
 
-        secrets: List[str] = self.secret_list()
+        secrets: List[str] = self.secret_list()[0]["secrets"]
         if key not in secrets:
             raise AEException(f"User secret {key!r} was not found and cannot be deleted.")
         self._delete(f"credentials/user/{key}")

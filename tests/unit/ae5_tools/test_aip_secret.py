@@ -49,7 +49,7 @@ def test_secret_delete(user_session, monkeypatch):
     # Set up test
     mock_key: str = "MOCK-KEY"
     mock_delete: MagicMock = MagicMock()
-    secret_list_mock: MagicMock = MagicMock(return_value=[mock_key])
+    secret_list_mock: MagicMock = MagicMock(return_value=[{"secrets": [mock_key]}])
     monkeypatch.setattr(AEUserSession, "secret_list", secret_list_mock)
     monkeypatch.setattr(AEUserSession, "_delete", mock_delete)
 
@@ -64,7 +64,7 @@ def test_secret_delete_with_missing_secret(user_session, monkeypatch):
     # Set up test
     mock_key: str = "MOCK-KEY"
     mock_delete: MagicMock = MagicMock()
-    secret_list_mock: MagicMock = MagicMock(return_value=[])
+    secret_list_mock: MagicMock = MagicMock(return_value=[{"secrets": []}])
     monkeypatch.setattr(AEUserSession, "secret_list", secret_list_mock)
 
     # Execute the test

@@ -22,6 +22,7 @@ def list(**kwargs):
 @secret.command()
 @click.argument("key")
 @yes_option
+@global_options
 def delete(key, **kwargs):
     """Delete a secret.
        The secret key must match exactly.
@@ -36,6 +37,7 @@ def delete(key, **kwargs):
 @click.argument("key", type=str)
 @click.argument("value")
 @yes_option
+@global_options
 def add(key, value, **kwargs):
     """Upsert (add or update) a secret.
        Must provide key and value as arguments.
