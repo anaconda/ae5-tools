@@ -1,0 +1,70 @@
+name: secret_project
+description: Used for system testing the secrets functionality of ae5 tools.
+
+commands:
+  #############################################################################
+  # Run Time Commands
+  #############################################################################
+
+  API:
+    env_spec: default
+    unix: python -m src.api.handler
+    supports_http_options: true
+
+  #############################################################################
+  # Development Time Commands
+  #############################################################################
+
+  bash:
+    env_spec: development
+    unix: |
+      bash
+
+  clean:
+    env_spec: development
+    unix: |
+      rm -rf .coverage htmlcov docs/build
+
+  lint:
+    env_spec: development
+    unix: |
+      pylint src
+      isort --check --diff .
+      black --line-length=120 --target-version=py310 --check --diff .
+
+  lint:fix:
+    env_spec: development
+    unix: |
+      isort .
+      black --line-length=120 --target-version=py310 .
+
+platforms:
+  - linux-64
+  - osx-64
+  - osx-arm64
+  - win-64
+
+env_specs:
+  default:
+    description: Default Environment
+    channels:
+      - https://conda.anaconda.org/conda-forge
+    packages:
+      - python=3.10
+      - fastapi
+      - uvicorn[standard]
+      - pydantic
+
+  development:
+      description: Development Environment
+      channels:
+        - https://conda.anaconda.org/conda-forge
+        - https://conda.anaconda.org/ae5-admin
+      packages:
+        - python=3.10
+        - ae5-tools
+        - isort
+        - black
+        - pylint
+        - fastapi
+        - uvicorn[standard]
