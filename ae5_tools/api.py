@@ -563,7 +563,7 @@ class AEUserSession(AESessionBase):
 
     def secret_add(self, key: str, value: str, **kwargs) -> None:
         """
-        Adds User Secret
+        Upserts [Adds or Updates] User Secret
 
         Parameters
         ----------
@@ -599,9 +599,9 @@ class AEUserSession(AESessionBase):
             A list of user secret key names.
         """
 
-        raw_secret_names: List[str] = self._get('credentials/user')
-        if 'data' in raw_secret_names:
-            secrets: List[Dict] = [{"secrets": raw_secret_names["data"]}]
+        secret_names: List[str] = self._get('credentials/user')
+        if 'data' in secret_names:
+            secrets: List[Dict] = [{"secrets": secret_names["data"]}]
             return self._format_response(secrets, format=format)
         else:
             raise AEException("Failed to retrieve user secrets.")
