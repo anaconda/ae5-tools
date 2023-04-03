@@ -56,6 +56,7 @@ The package has the following particular dependencies:
       - `collaborator`: `add`, `info`, `list`, `remove`
       - `revision`: `list`, `info`, `download`
     - `sample`: `info`, `list`
+    - `secret`: `list`, `add`, `delete`
     - `run`: `delete`, `info`, `list`, `log`, `stop`
     - `session`: `branches`, `changes`, `info`, `list`, `open`, `start`, `stop`
     - `user`: `info`, `list`
