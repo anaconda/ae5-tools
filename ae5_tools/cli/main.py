@@ -33,7 +33,7 @@ from .commands.deployment import deployment
 from .commands.resource_profile import resource_profile
 from .commands.job import job
 from .commands.run import run
-from .commands.secrets import secret
+from .commands.secret import secret
 from .commands.user import user
 from .commands.node import node
 from .commands.pod import pod

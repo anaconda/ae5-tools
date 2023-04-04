@@ -15,7 +15,7 @@ def secret():
 @secret.command()
 @global_options
 def list(**kwargs):
-    """List all user secrets."""
+    """List the user's secrets."""
     cluster_call("secret_list", **kwargs)
 
 
@@ -26,6 +26,7 @@ def list(**kwargs):
 def delete(key, **kwargs):
     """Delete a secret.
        The secret key must match exactly.
+       Key names can only contain alphanumeric characters and underscores `_`.
     """
     cluster_call("secret_delete", key=key, **kwargs,
                  confirm=f"Delete secret {key}",
@@ -41,6 +42,7 @@ def delete(key, **kwargs):
 def add(key, value, **kwargs):
     """Upsert (add or update) a secret.
        Must provide key and value as arguments.
+       Key names can only contain alphanumeric characters and underscores `_`.
        If performing an update it may take several minutes before the change is active.
     """
     cluster_call("secret_add", key=key, value=value, **kwargs,
