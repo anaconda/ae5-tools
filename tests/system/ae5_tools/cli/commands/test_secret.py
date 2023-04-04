@@ -28,8 +28,8 @@ def test_secret_create_and_list_and_delete(user_session, secret_name):
     secret_add_result: str = _cmd("secret", "add", secret_name, secret_value)
     assert secret_add_result == ''
 
-    user_secrets: List[str] = user_session.secret_list()[0]["secrets"]
-    assert secret_name in user_secrets
+    user_secrets: List[str] = user_session.secret_list()
+    assert secret_name in [secret["secret_name"] for secret in user_secrets]
 
     secret_delete_result: str = _cmd("secret", "delete", secret_name)
     assert secret_delete_result == ''
@@ -39,4 +39,4 @@ def test_secret_delete_gracefully_fails(user_session):
     secret_key: str = str(uuid.uuid4()).replace("-", "_")
     with pytest.raises(CMDException) as context:
          _cmd("secret", "delete", secret_key)
-    assert f"User secret '{secret_key}' was not found and cannot be deleted." in str(context.value)
+    assert f"User secret {secret_key} was not found and cannot be deleted." in str(context.value)
