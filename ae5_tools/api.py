@@ -563,6 +563,21 @@ class AEUserSession(AESessionBase):
 
     @staticmethod
     def _is_valid_secret_name(key: str) -> bool:
+        """
+        Ensures a given string is acceptable as a secret name.
+        Secret names can only contain alphanumeric characters and underscores `_`.
+
+        Parameters
+        ----------
+        key: str
+            The name of the key.
+
+        Returns
+        -------
+        valid: bool
+            Returns True if the string can be used as a secret name, False otherwise.
+        """
+
         if re.match("^[a-zA-Z0-9_]+$", key) is None:
             return False
         return True
