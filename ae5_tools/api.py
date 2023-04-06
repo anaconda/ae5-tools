@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import requests
 import time
@@ -560,6 +560,82 @@ class AEUserSession(AESessionBase):
         if collaborators:
             self._join_collaborators('projects', records)
         return records
+
+    @staticmethod
+    def _is_valid_secret_name(key: str) -> bool:
+        """
+        Ensures a given string is acceptable as a secret name.
+        Secret names can only contain alphanumeric characters and underscores `_`.
+
+        Parameters
+        ----------
+        key: str
+            The name of the key.
+
+        Returns
+        -------
+        valid: bool
+            Returns True if the string can be used as a secret name, False otherwise.
+        """
+
+        if re.match("^[a-zA-Z0-9_]+$", key) is None:
+            return False
+        return True
+
+    def secret_add(self, key: str, value: str, **kwargs) -> None:
+        """
+        Upserts [Adds or Updates] User Secret
+
+        Parameters
+        ----------
+        key: str
+            The name of the secret to create or update.
+        value: str
+            The value to store in the secret.
+        """
+
+        if not AEUserSession._is_valid_secret_name(key=key):
+            raise AEException(f"User secret {key} can not be created. Key contains non-alphanumeric characters.")
+        else:
+            self._post("credentials/user", json={"key": key, "value": value})
+
+    def secret_delete(self, key: str, **kwargs) -> None:
+        """
+        Deletes a user secret.
+
+        Parameters
+        ----------
+        key: str
+            The secret key (name) to delete.
+        """
+
+        # If a secret name was created and contains a `-` it will be present in the secret list, however
+        # it can not be deleted.  The API will return a 404 if this is attempted.
+        if not AEUserSession._is_valid_secret_name(key=key):
+            raise AEException(f"User secret {key} can not be deleted. Key contains non-alphanumeric characters.")
+
+        secrets: List[str] = self.secret_list()
+        if key not in [name["secret_name"] for name in secrets]:
+            raise AEException(f"User secret {key} was not found and cannot be deleted.")
+
+        self._delete(f"credentials/user/{key}")
+
+    def secret_list(self, format: Optional[str] = None, **kwargs) -> List[str]:
+        """
+        Returns user secret key names.
+
+        Returns
+        -------
+        secrets: List[str]
+            A list of user secret key names.
+        """
+
+        secret_names: List[str] = self._get("credentials/user")
+        if "data" in secret_names:
+            secrets: List[Dict] = [{"secret_name": secret_name } for secret_name in secret_names["data"]]
+            return self._format_response(secrets, format=format)
+        else:
+            raise AEException("Failed to retrieve user secrets.")
 
     def project_list(self, filter=None, collaborators=False, format=None):
         records = self._get_records('projects', filter, collaborators=collaborators)
