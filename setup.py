@@ -14,7 +14,7 @@ setuptools.setup(
     zip_safe=False,
     entry_points={
         "console_scripts": [
-            'ae5=ae5_tools.cli.main:main',
+            "ae5=ae5_tools.cli.main:main",
         ]
-    }
+    },
 )

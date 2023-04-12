@@ -1,5 +1,6 @@
 import os
 import sys
+
 import requests
 
 from .ssh import launch_background, tunneled_k8s_url
@@ -10,25 +11,25 @@ class AE5K8SClient(object):
         return self._error
 
     def status(self):
-        return self._api('get', '').text
+        return self._api("get", "").text
 
     def node_info(self):
-        return self._api('get', 'nodes').json()
+        return self._api("get", "nodes").json()
 
     def pod_info(self, ids):
-        result = self._api('post', 'pods', json=ids).json()
+        result = self._api("post", "pods", json=ids).json()
         result = [result.get(x) for x in ids]
         return result
 
     def pod_log(self, id, container=None, follow=False):
         follow_s = str(bool(follow)).lower()
-        path = f'pod/{id}/log?follow={follow_s}'
+        path = f"pod/{id}/log?follow={follow_s}"
         if container is not None:
-            path = f'{path}&container={container}'
-        response = self._api('get', path, stream=True)
+            path = f"{path}&container={container}"
+        response = self._api("get", path, stream=True)
         for chunk in response.iter_content():
             if chunk:
-                stream.write(chunk.decode('utf-8', errors='replace'))
+                stream.write(chunk.decode("utf-8", errors="replace"))
 
 
 class AE5K8SLocalClient(AE5K8SClient):
@@ -39,9 +40,9 @@ class AE5K8SLocalClient(AE5K8SClient):
         except RuntimeError as exc:
             self._error = str(exc)
             return
-        cmd = ['python', '-u', '-m', 'ae5_tools.k8s.server', ssh_url]
+        cmd = ["python", "-u", "-m", "ae5_tools.k8s.server", ssh_url]
         try:
-            self._server = launch_background(cmd, '======== Running on', 'start server')
+            self._server = launch_background(cmd, "======== Running on", "start server")
             self._error = None
         except RuntimeError as exc:
             self._error = str(exc)
@@ -62,7 +63,8 @@ class AE5K8SLocalClient(AE5K8SClient):
 
     def _api(self, method, path, **kwargs):
         from .server import K8S_ENDPOINT_PORT
-        return requests.request(method, f'http://localhost:{K8S_ENDPOINT_PORT}/{path}', **kwargs)
+
+        return requests.request(method, f"http://localhost:{K8S_ENDPOINT_PORT}/{path}", **kwargs)
 
 
 class AE5K8SRemoteClient(AE5K8SClient):
@@ -70,19 +72,18 @@ class AE5K8SRemoteClient(AE5K8SClient):
         self._session = session
         self._subdomain = subdomain
         try:
-            session._get('projects/actions', params={'q': 'create_action'})
+            session._get("projects/actions", params={"q": "create_action"})
         except Exception as exc:
-            self._error = f'Issue establishing session: {exc}'
+            self._error = f"Issue establishing session: {exc}"
             return
         try:
-            response = session._get('', subdomain=subdomain, format='text')
-            if response == 'Alive and kicking':
+            response = session._get("", subdomain=subdomain, format="text")
+            if response == "Alive and kicking":
                 self._error = None
             else:
-                self._error = f'Unexpected response at endpoint {subdomain}'
+                self._error = f"Unexpected response at endpoint {subdomain}"
         except RuntimeError:
-            self._error = f'No deployment found at endpoint {subdomain}'
+            self._error = f"No deployment found at endpoint {subdomain}"
 
     def _api(self, method, path, **kwargs):
-        return self._session._api(method, path, subdomain=self._subdomain,
-                                  format='response', **kwargs)
+        return self._session._api(method, path, subdomain=self._subdomain, format="response", **kwargs)

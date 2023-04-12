@@ -1,12 +1,11 @@
+import importlib
 import os
 import sys
-import importlib
-
 
 import pytest
 
-
 from ae5_tools import exceptions
+
 
 @pytest.fixture
 def random_home_dir(tmpdir, monkeypatch):
@@ -28,9 +27,10 @@ def clear_config_import():
     """
     Need to force reload config module after setting $HOME to test ~/.ae5 directory creation
     """
+
     def clear_import():
         try:
-            del sys.modules['config']
+            del sys.modules["config"]
             print("Cleared config import")
         except KeyError:
             pass
@@ -44,8 +44,9 @@ def clear_config_import():
 
 def test_ae5_dir_creation(random_home_dir, clear_config_import):
     """Assume ~/.ae5 already was created, make a fake homedir and test dir creation"""
-    print(f'home directory: {random_home_dir}')
+    print(f"home directory: {random_home_dir}")
     from ae5_tools import config
+
     # I'm not sure why i need to force-reload this after clearing it
     importlib.reload(config)
 
@@ -56,10 +57,10 @@ def test_ae5_dir_creation(random_home_dir, clear_config_import):
     assert config_dir == os.path.join(config.config._path)
 
 
-@pytest.mark.skipif(sys.platform.startswith('win'), reason="relies on Unix permissions")
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="relies on Unix permissions")
 def test_ae5_dir_bad_perms(bad_home_dir, clear_config_import):
     """Bad permissions on home directory"""
-    print(f'bad home directory: {bad_home_dir}')
+    print(f"bad home directory: {bad_home_dir}")
     os.chmod(bad_home_dir, 0o000)
     with pytest.raises(exceptions.AE5ConfigError):
         from ae5_tools import config
@@ -70,15 +71,16 @@ def test_ae5_dir_bad_perms(bad_home_dir, clear_config_import):
 
 def test_ae5_dir_file_exists(random_home_dir, clear_config_import):
     """A file named ~/.ae5 is blocking directory creation"""
-    print(f'home directory: {random_home_dir}')
+    print(f"home directory: {random_home_dir}")
 
     # hard coded here because config is not loaded yet
     config_dir = os.path.join(random_home_dir, ".ae5")
-    with open(config_dir, 'w'):
+    with open(config_dir, "w"):
         pass
 
     with pytest.raises(exceptions.AE5ConfigError):
         from ae5_tools import config
+
         importlib.reload(config)
 
 
@@ -87,6 +89,7 @@ def test_ae5_dir_env_variable(clear_config_import, tmpdir, monkeypatch):
     monkeypatch.setenv("AE5_TOOLS_CONFIG_DIR", str(tmpdir))
 
     from ae5_tools import config
+
     importlib.reload(config)
 
     config_dir = tmpdir

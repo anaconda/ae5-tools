@@ -1,15 +1,15 @@
-from typing import Dict, List
 import uuid
+from typing import Dict, List
 
 import pytest
 
-from ae5_tools.api import AEUserSession, AEException
+from ae5_tools.api import AEException, AEUserSession
 from tests.utils import _get_vars
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def user_session():
-    hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
+    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
     s = AEUserSession(hostname, username, password)
     yield s
     s.disconnect()
@@ -23,6 +23,7 @@ def secret_name():
 #####################################################
 # Test Cases For secret_add, secret_list, and secret_delete
 #####################################################
+
 
 def test_secret_add_and_list(user_session, secret_name):
     user_session.secret_add(key=secret_name, value=str(uuid.uuid4()))
