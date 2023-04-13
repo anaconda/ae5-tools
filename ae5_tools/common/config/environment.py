@@ -44,40 +44,6 @@ def get_env_var(name: str) -> Optional[str]:
     return os.environ[name]
 
 
-def demand_env_var_as_int(name: str) -> int:
-    """
-    Returns an environment variable as an int, or throws an exception.
-
-    Parameters
-    ----------
-    name: str
-        The name of the environment variable.
-
-    Returns
-    -------
-        The environment variables value as an int.
-    """
-
-    return int(demand_env_var(name=name))
-
-
-def demand_env_var_as_float(name: str) -> float:
-    """
-    Returns an environment variable as a float, or throws an exception.
-
-    Parameters
-    ----------
-    name: str
-        The name of the environment variable.
-
-    Returns
-    -------
-        The environment variables value as a float.
-    """
-
-    return float(demand_env_var(name=name))
-
-
 def demand_env_var_as_bool(name: str) -> bool:
     """
     Returns an environment variable as a bool, or throws an exception.
