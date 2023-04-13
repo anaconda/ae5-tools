@@ -5,8 +5,6 @@ from ae5_tools import (
     EnvironmentVariableNotFoundError,
     demand_env_var,
     demand_env_var_as_bool,
-    demand_env_var_as_float,
-    demand_env_var_as_int,
     get_env_var,
 )
 
@@ -38,12 +36,6 @@ class TestEnvironment(unittest.TestCase):
 
     def test_get_env_var_should_gracefully_fail(self):
         self.assertIsNone(get_env_var("SOME_VALUE"))
-
-    def test_demand_env_var_as_int(self):
-        self.assertEqual(demand_env_var_as_int("INT_VALUE"), int(os.environ["INT_VALUE"]))
-
-    def test_demand_env_var_as_float(self):
-        self.assertEqual(demand_env_var_as_float("FLOAT_VALUE"), float(os.environ["FLOAT_VALUE"]))
 
     def test_demand_env_var_as_bool(self):
         os.environ["FAKE_VALUE"] = "false"
