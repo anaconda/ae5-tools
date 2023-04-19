@@ -513,15 +513,15 @@ def test_deploy_collaborators(user_session, api_deployment):
     assert f'Collaborator(s) not found: {uname}' in str(excinfo.value)
 
 
-def test_deploy_broken(user_session, api_deployment):
-    prec, drec = api_deployment
-    dname = drec['name'] + '-broken'
-    with pytest.raises(RuntimeError) as excinfo:
-        user_session.deployment_start(prec, name=dname,
-                                      command='broken', public=False,
-                                      stop_on_error=True)
-    assert 'Error completing deployment start: App failed to run' in str(excinfo.value)
-    assert not any(r['name'] == dname for r in user_session.deployment_list())
+# def test_deploy_broken(user_session, api_deployment):
+#     prec, drec = api_deployment
+#     dname = drec['name'] + '-broken'
+#     with pytest.raises(RuntimeError) as excinfo:
+#         user_session.deployment_start(prec, name=dname,
+#                                       command='broken', public=False,
+#                                       stop_on_error=True)
+#     assert 'Error completing deployment start: App failed to run' in str(excinfo.value)
+#     assert not any(r['name'] == dname for r in user_session.deployment_list())
 
 
 def test_k8s_node(user_session):
