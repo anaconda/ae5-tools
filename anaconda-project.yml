@@ -14,11 +14,6 @@ commands:
   # Development Time Commands
   #
 
-  clean:
-    env_spec: development
-    unix: |
-      rm -rf .coverage coverage.xml
-
   lint:
     env_spec: development
     unix: |
