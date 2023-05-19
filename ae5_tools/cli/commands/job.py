@@ -131,7 +131,7 @@ def _create(**kwargs):
 
 
 @job.command()
-@ident_filter("project", required=True)
+@ident_filter(name="project", handle_revision=True, required=True)
 @click.option(
     "--name",
     type=str,
