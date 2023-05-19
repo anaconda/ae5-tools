@@ -14,6 +14,19 @@ commands:
   # Development Time Commands
   #
 
+  lint:
+    env_spec: development
+    unix: |
+      pylint ae5_tools
+      isort --check --diff .
+      black --check --diff .
+
+  lint:fix:
+    env_spec: development
+    unix: |
+      isort .
+      black .
+
   test:
     env_spec: development
     unix: anaconda-project run clean && anaconda-project run test:unit && anaconda-project run test:system
@@ -56,3 +69,6 @@ env_specs:
       - pytest
       - pytest-cov
       - pandas
+      - isort
+      - black
+      - pylint

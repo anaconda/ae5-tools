@@ -2,6 +2,7 @@ import uuid
 from unittest.mock import MagicMock
 
 import pytest
+
 from ae5_tools.api import AEUserSession
 
 
@@ -30,6 +31,6 @@ def test_job_run(user_session):
     job_id: str = str(uuid.uuid4())
     user_session.connected = True
     user_session._ident_record = MagicMock(return_value={"id": job_id})
-    user_session._post = MagicMock(return_value={"id": job_id })
+    user_session._post = MagicMock(return_value={"id": job_id})
     response = user_session.job_run(ident="mock-id")
     assert response["id"] == job_id

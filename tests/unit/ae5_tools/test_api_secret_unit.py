@@ -1,9 +1,10 @@
+import uuid
 from typing import List
 from unittest.mock import MagicMock
 
-from ae5_tools.api import AEUserSession, AEException
-import uuid
 import pytest
+
+from ae5_tools.api import AEException, AEUserSession
 
 
 @pytest.fixture(scope="function")
@@ -21,9 +22,11 @@ def user_session(get_token_fixture):
     )
     return user_session
 
+
 #####################################################
 # Test Cases For secret_add
 #####################################################
+
 
 def test_secret_add(user_session, monkeypatch):
     # Set up test
@@ -52,6 +55,7 @@ def test_secret_add_with_invalid_name(user_session, monkeypatch):
 
     # Review the results
     assert str(context.value) == f"User secret {mock_key} can not be created. Key contains non-alphanumeric characters."
+
 
 #####################################################
 # Test Cases For secret_delete
@@ -103,6 +107,7 @@ def test_secret_delete_with_missing_secret(user_session, monkeypatch):
 # Test Cases For secret_list
 #####################################################
 
+
 def test_secret_list(user_session, monkeypatch):
     # Set up the test
     mock_key: str = "MOCK_KEY"
@@ -128,4 +133,3 @@ def test_secret_list_gracefully_fails(user_session, monkeypatch):
 
     # Review the result
     assert str(context.value) == "Failed to retrieve user secrets."
-

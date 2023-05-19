@@ -1,12 +1,7 @@
 import os
 import unittest
 
-from ae5_tools import (
-    EnvironmentVariableNotFoundError,
-    demand_env_var,
-    demand_env_var_as_bool,
-    get_env_var,
-)
+from ae5_tools import EnvironmentVariableNotFoundError, demand_env_var, demand_env_var_as_bool, get_env_var
 
 
 class TestEnvironment(unittest.TestCase):

@@ -1,4 +1,3 @@
-
 class AE5FatalError(Exception):
     pass
 

@@ -1,27 +1,29 @@
-from typing import Dict, List
 import json
 import time
-from ae5_tools.api import AEUserSession
-from tests.utils import _cmd, _get_vars
+from typing import Dict, List
+
 import pytest
 
+from ae5_tools.api import AEUserSession
+from tests.utils import _cmd, _get_vars
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def user_session():
-    hostname, username, password = _get_vars('AE5_HOSTNAME', 'AE5_USERNAME', 'AE5_PASSWORD')
+    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
     s = AEUserSession(hostname, username, password)
     yield s
     s.disconnect()
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def project_list(user_session):
-    return _cmd('project', 'list', '--collaborators')
+    return _cmd("project", "list", "--collaborators")
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def cli_project(project_list):
-    return next(rec for rec in project_list if rec['name'] == 'testproj3')
+    return next(rec for rec in project_list if rec["name"] == "testproj3")
 
 
 def test_job_run(cli_project):
@@ -29,11 +31,12 @@ def test_job_run(cli_project):
 
     # Create a pre-existing job, (run it and wait for completion)
     prec = cli_project
-    create_job_result: Dict = _cmd('job', 'create', prec["id"], '--name', 'testjob1', '--command', 'run', '--run',
-                                   '--wait')
+    create_job_result: Dict = _cmd(
+        "job", "create", prec["id"], "--name", "testjob1", "--command", "run", "--run", "--wait"
+    )
 
     # Execute the test (Run a previously created job)
-    run_job_result: Dict = _cmd('job', 'run', 'testjob1')
+    run_job_result: Dict = _cmd("job", "run", "testjob1")
 
     # Review Test Results
     assert run_job_result["name"] == "testjob1"

@@ -6,6 +6,7 @@ from typing import Dict, List
 from unittest.mock import MagicMock
 
 import pytest
+
 from ae5_tools.api import AEAdminSession
 
 
