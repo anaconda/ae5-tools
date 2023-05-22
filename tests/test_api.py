@@ -595,8 +595,19 @@ def test_job_run2(user_session, api_project):
     user_session.job_create(
         prec, name="testjob2", command="run_with_env_vars", variables=variables, run=True, wait=True, cleanup=True
     )
-    # The job record should have already been deleted
+    # The job, and run records should have already been deleted
     assert not user_session.job_list()
+    assert not user_session.run_list()
+
+
+def test_job_run3(user_session, api_project):
+    prec = api_project
+    # Test cleanup mode and variables in jobs
+    variables = {"INTEGRATION_TEST_KEY_1": "value1", "INTEGRATION_TEST_KEY_2": "value2"}
+    job_create_response = user_session.job_create(
+        prec, name="testjob2", command="run_with_env_vars", variables=variables, run=True, wait=True, cleanup=False
+    )
+
     rrecs = user_session.run_list()
     assert len(rrecs) == 0, rrecs
     ldata2 = user_session.run_log(rrecs[0]["id"], format="text")
@@ -610,6 +621,8 @@ def test_job_run2(user_session, api_project):
     user_session.run_delete(rrecs[0]["id"])
     assert not user_session.run_list()
 
+    user_session.job_delete(job_create_response["id"])
+    assert not user_session.job_list()
 
 def test_login_time(admin_session, user_session):
     # The current session should already be authenticated
