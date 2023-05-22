@@ -609,7 +609,7 @@ def test_job_run3(user_session, api_project):
     )
 
     rrecs = user_session.run_list()
-    assert len(rrecs) == 0, rrecs
+    assert len(rrecs) == 1, rrecs
     ldata2 = user_session.run_log(rrecs[0]["id"], format="text")
     # Confirm that the environment variables were passed through
     outvars = dict(
