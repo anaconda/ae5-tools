@@ -507,7 +507,6 @@ def test_job_run2(cli_project):
     assert len(rrecs) == 0, rrecs
 
 
-
 def test_login_time(admin_session, user_session):
     # The current login time should be before the present
     now = datetime.now()

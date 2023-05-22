@@ -624,6 +624,7 @@ def test_job_run3(user_session, api_project):
     user_session.job_delete(job_create_response["id"])
     assert not user_session.job_list()
 
+
 def test_login_time(admin_session, user_session):
     # The current session should already be authenticated
     now = datetime.now()
