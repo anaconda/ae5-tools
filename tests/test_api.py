@@ -76,13 +76,13 @@ class AttrDict(dict):
 #     assert "No k8s connection available" in str(excinfo.value)
 #     c._k8s_endpoint = true_endpoint
 #     assert c._k8s("status") == "Alive and kicking"
-#
-#
-# @pytest.fixture(scope="module")
-# def project_list(user_session):
-#     return user_session.project_list(collaborators=True)
-#
-#
+
+
+@pytest.fixture(scope="module")
+def project_list(user_session):
+    return user_session.project_list(collaborators=True)
+
+
 # def test_project_list_df(user_session, project_list):
 #     with pytest.raises(ImportError) as excinfo:
 #         df = user_session.project_list(collaborators=True, format="_dataframe")
@@ -183,13 +183,13 @@ class AttrDict(dict):
 #     user_session.project_delete(rrec1)
 #     user_session.project_delete(rrec2)
 #     user_session.project_delete(rrec3)
-#
-#
-# @pytest.fixture(scope="module")
-# def api_project(user_session, project_list):
-#     return next(rec for rec in project_list if rec["name"] == "testproj3")
-#
-#
+
+
+@pytest.fixture(scope="module")
+def api_project(user_session, project_list):
+    return next(rec for rec in project_list if rec["name"] == "testproj3")
+
+
 # @pytest.fixture(scope="module")
 # def api_revisions(user_session, api_project):
 #     prec = api_project
