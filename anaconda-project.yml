@@ -14,6 +14,11 @@ commands:
   # Development Time Commands
   #
 
+  bash:
+    env_spec: development
+    unix: |
+      bash
+
   lint:
     env_spec: development
     unix: |
@@ -72,3 +77,4 @@ env_specs:
       - isort
       - black
       - pylint
+      - anaconda-project
