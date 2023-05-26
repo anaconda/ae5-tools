@@ -326,6 +326,7 @@ def cli_deployment(cli_project):
         "--command",
         "default",
         "--private",
+        "--wait"
     )
 
     # TODO: JCB 05/22/23
