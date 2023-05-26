@@ -326,7 +326,7 @@ def cli_deployment(cli_project):
         "--command",
         "default",
         "--private",
-        "--wait"
+        "--wait",
     )
 
     # TODO: JCB 05/22/23
@@ -397,6 +397,7 @@ def test_deploy_logs(cli_deployment):
     assert "The project is ready to run commands." in app_logs
     assert app_prefix in event_logs, event_logs
     assert "App Proxy is fully operational!" in proxy_logs, proxy_logs
+
 
 # TODO: 5.6.1 appears to allow duplicate endpoints.  Disabling this test until resolved.
 @pytest.mark.xfail
