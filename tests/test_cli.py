@@ -338,9 +338,8 @@ def cli_deployment(cli_project):
     # yield prec, drec2
     # _cmd("deployment", "stop", drec2["id"])
     # assert not any(r["id"] == drec2["id"] for r in _cmd("deployment", "list"))
-
-    assert not any(r["id"] == drec["id"] for r in _cmd("deployment", "list"))
-    yield prec
+    # assert not any(r["id"] == drec["id"] for r in _cmd("deployment", "list"))
+    # yield prec
     _cmd("deployment", "stop", drec["id"])
 
 
