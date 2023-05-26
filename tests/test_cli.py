@@ -310,6 +310,8 @@ def test_session_before_changes(cli_session):
     assert changes2 == [], changes2
 
 
+# TODO: 5.6.1 is generating cookie too large errors.
+@pytest.mark.xfail
 @pytest.fixture(scope="module")
 def cli_deployment(cli_project):
     prec = cli_project
@@ -326,22 +328,12 @@ def cli_deployment(cli_project):
         "--command",
         "default",
         "--private",
-        "--wait",
     )
-
-    # TODO: JCB 05/22/23
-    # AE5 5.6.1 currently has an issue with large request bodies/cookies.  This is breaking system
-    # tests for the AE5 tools.  This will be addressed server-side. The below logic should be
-    # uncommented (and the reduced version below it removed) once the bug has been resolved.
-    # drec2 = _cmd("deployment", "restart", drec["id"], "--wait")
-    # assert not any(r["id"] == drec["id"] for r in _cmd("deployment", "list"))
-    # yield prec, drec2
-    # _cmd("deployment", "stop", drec2["id"])
-    # assert not any(r["id"] == drec2["id"] for r in _cmd("deployment", "list"))
-
-    yield prec, drec
-    _cmd("deployment", "stop", drec["id"])
-
+    drec2 = _cmd("deployment", "restart", drec["id"], "--wait")
+    assert not any(r["id"] == drec["id"] for r in _cmd("deployment", "list"))
+    yield prec, drec2
+    _cmd("deployment", "stop", drec2["id"])
+    assert not any(r["id"] == drec2["id"] for r in _cmd("deployment", "list"))
 
 # TODO: 5.6.1 is generating cookie too large 400 failures.
 @pytest.mark.xfail
