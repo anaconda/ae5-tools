@@ -335,6 +335,7 @@ def cli_deployment(cli_project):
     _cmd("deployment", "stop", drec2["id"])
     assert not any(r["id"] == drec2["id"] for r in _cmd("deployment", "list"))
 
+
 # TODO: 5.6.1 is generating cookie too large 400 failures.
 @pytest.mark.xfail
 def test_deploy(cli_deployment):
