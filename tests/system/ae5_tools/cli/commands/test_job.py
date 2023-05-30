@@ -261,6 +261,9 @@ def test_job_run_by_owner_and_name_explicit_revision_first(cli_project):
     # Execute the test (Run a previously created job)
     run_job_result: Dict = _cmd("job", "run", "testjob1")
 
+    # assert run_job_result["id"]
+    raise Exception(run_job_result)
+
     # Review Test Results
     assert run_job_result["name"] == "testjob1"
     assert run_job_result["project_name"] == "testproj3"
