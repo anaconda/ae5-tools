@@ -1,6 +1,3 @@
-import time
-from typing import Dict, List
-
 import pytest
 
 from ae5_tools.api import AEUserSession
@@ -13,6 +10,7 @@ def user_session():
     s = AEUserSession(hostname, username, password)
     yield s
     s.disconnect()
+
 
 @pytest.fixture(scope="module")
 def project_list(user_session):
@@ -46,7 +44,6 @@ def test_deploy_by_owner_and_name_project_latest_implicit(cli_project):
         "--private",
         "--wait"
     )
-    print(drec)
     _cmd("deployment", "stop", drec["id"])
 
     revision: str = drec["revision"]
@@ -70,7 +67,6 @@ def test_deploy_by_owner_and_name_project_latest_explicit(cli_project):
         "--private",
         "--wait"
     )
-    print(drec)
     _cmd("deployment", "stop", drec["id"])
 
     revision: str = drec["revision"]
@@ -94,7 +90,6 @@ def test_deploy_by_owner_and_name_project_first_explicit(cli_project):
         "--private",
         "--wait"
     )
-    print(drec)
     _cmd("deployment", "stop", drec["id"])
 
     revision: str = drec["revision"]
@@ -122,11 +117,11 @@ def test_deploy_by_id_and_revision_project_latest_implicit(cli_project):
         "--private",
         "--wait"
     )
-    print(drec)
     _cmd("deployment", "stop", drec["id"])
 
     revision: str = drec["revision"]
     assert revision == "latest"
+
 
 def test_deploy_by_id_and_revision_project_latest_explicit(cli_project):
     prec = cli_project
@@ -145,11 +140,11 @@ def test_deploy_by_id_and_revision_project_latest_explicit(cli_project):
         "--private",
         "--wait"
     )
-    print(drec)
     _cmd("deployment", "stop", drec["id"])
 
     revision: str = drec["revision"]
     assert revision == "latest"
+
 
 def test_deploy_by_id_and_revision_project_first_explicit(cli_project):
     prec = cli_project
@@ -168,7 +163,6 @@ def test_deploy_by_id_and_revision_project_first_explicit(cli_project):
         "--private",
         "--wait"
     )
-    print(drec)
     _cmd("deployment", "stop", drec["id"])
 
     revision: str = drec["revision"]
