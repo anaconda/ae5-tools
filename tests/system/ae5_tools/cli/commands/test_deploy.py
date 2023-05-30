@@ -20,7 +20,7 @@
 # @pytest.fixture(scope="module")
 # def cli_project(project_list):
 #     return next(rec for rec in project_list if rec["name"] == "testproj3")
-# 
+#
 #
 # ###############################################################################
 # # <owner>/<name>:<revision> tests
