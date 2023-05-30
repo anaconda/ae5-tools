@@ -24,8 +24,12 @@ def cli_project(project_list):
     return next(rec for rec in project_list if rec["name"] == "testproj3")
 
 
-@pytest.fixture(scope="module")
-def test_deploy_project(cli_project):
+###############################################################################
+# owner/name:revision tests
+###############################################################################
+
+
+def test_deploy_project_latest_implicit(cli_project):
     prec = cli_project
     dname = "testdeploy"
     ename = "testendpoint"
@@ -40,8 +44,7 @@ def test_deploy_project(cli_project):
         "--command",
         "default",
         "--private",
+        "--wait"
     )
     print(drec)
     _cmd("deployment", "stop", drec["id"])
-
-
