@@ -107,7 +107,7 @@ def _start(**kwargs):
 
 
 @deployment.command()
-@ident_filter("project", required=True)
+@ident_filter(name="project", handle_revision=True, required=True)
 @click.option(
     "--name",
     type=str,

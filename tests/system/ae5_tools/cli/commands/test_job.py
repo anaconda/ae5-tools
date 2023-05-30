@@ -1,4 +1,3 @@
-import json
 import time
 from typing import Dict, List
 
@@ -57,6 +56,182 @@ def test_job_run(cli_project):
             if counter > max_loop:
                 wait = False
     assert counter < max_loop
+
+    # Cleanup after the test
+
+    # Remove runs
+    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    for run in job_runs:
+        _cmd("run", "delete", run["id"])
+
+    # Remove job
+    _cmd("job", "delete", create_job_result["id"])
+
+
+###############################################################################
+# <id>:<revision> tests
+###############################################################################
+
+
+def test_job_run_implicit_revision_latest(cli_project):
+    # Set up the test
+
+    # Create a pre-existing job, (run it and wait for completion)
+    prec = cli_project
+    create_job_result: Dict = _cmd(
+        "job", "create", prec["id"], "--name", "testjob1", "--command", "run", "--run", "--wait"
+    )
+
+    # Review Test Results
+    assert create_job_result["name"] == "testjob1"
+    assert create_job_result["project_name"] == "testproj3"
+    assert create_job_result["revision"] == "latest"
+
+    # Cleanup after the test
+
+    # Remove runs
+    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    for run in job_runs:
+        _cmd("run", "delete", run["id"])
+
+    # Remove job
+    _cmd("job", "delete", create_job_result["id"])
+
+
+def test_job_run_explicit_revision_latest(cli_project):
+    # Set up the test
+
+    # Create a pre-existing job, (run it and wait for completion)
+    prec = cli_project
+    create_job_result: Dict = _cmd(
+        "job", "create", f"{prec['id']}:latest", "--name", "testjob1", "--command", "run", "--run", "--wait"
+    )
+
+    # Review Test Results
+    assert create_job_result["name"] == "testjob1"
+    assert create_job_result["project_name"] == "testproj3"
+    assert create_job_result["revision"] == "latest"
+
+    # Cleanup after the test
+
+    # Remove runs
+    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    for run in job_runs:
+        _cmd("run", "delete", run["id"])
+
+    # Remove job
+    _cmd("job", "delete", create_job_result["id"])
+
+
+def test_job_run_explicit_revision_first(cli_project):
+    # Set up the test
+
+    # Create a pre-existing job, (run it and wait for completion)
+    prec = cli_project
+    create_job_result: Dict = _cmd(
+        "job", "create", f"{prec['id']}:0.1.0", "--name", "testjob1", "--command", "run", "--run", "--wait"
+    )
+
+    # Review Test Results
+    assert create_job_result["name"] == "testjob1"
+    assert create_job_result["project_name"] == "testproj3"
+    assert create_job_result["revision"] == "0.1.0"
+
+    # Cleanup after the test
+
+    # Remove runs
+    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    for run in job_runs:
+        _cmd("run", "delete", run["id"])
+
+    # Remove job
+    _cmd("job", "delete", create_job_result["id"])
+
+
+###############################################################################
+# <owner>/<name>:<revision> tests
+###############################################################################
+
+
+def test_job_run_by_owner_and_name_implicit_revision_latest(cli_project):
+    # Set up the test
+
+    # Create a pre-existing job, (run it and wait for completion)
+    prec = cli_project
+    create_job_result: Dict = _cmd(
+        "job", "create", f"{prec['owner']}/{prec['name']}", "--name", "testjob1", "--command", "run", "--run", "--wait"
+    )
+
+    # Review Test Results
+    assert create_job_result["name"] == "testjob1"
+    assert create_job_result["project_name"] == "testproj3"
+    assert create_job_result["revision"] == "latest"
+
+    # Cleanup after the test
+
+    # Remove runs
+    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    for run in job_runs:
+        _cmd("run", "delete", run["id"])
+
+    # Remove job
+    _cmd("job", "delete", create_job_result["id"])
+
+
+def test_job_run_by_owner_and_name_explicit_revision_latest(cli_project):
+    # Set up the test
+
+    # Create a pre-existing job, (run it and wait for completion)
+    prec = cli_project
+    create_job_result: Dict = _cmd(
+        "job",
+        "create",
+        f"{prec['owner']}/{prec['name']}:latest",
+        "--name",
+        "testjob1",
+        "--command",
+        "run",
+        "--run",
+        "--wait",
+    )
+
+    # Review Test Results
+    assert create_job_result["name"] == "testjob1"
+    assert create_job_result["project_name"] == "testproj3"
+    assert create_job_result["revision"] == "latest"
+
+    # Cleanup after the test
+
+    # Remove runs
+    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    for run in job_runs:
+        _cmd("run", "delete", run["id"])
+
+    # Remove job
+    _cmd("job", "delete", create_job_result["id"])
+
+
+def test_job_run_by_owner_and_name_explicit_revision_first(cli_project):
+    # Set up the test
+
+    # Create a pre-existing job, (run it and wait for completion)
+    prec = cli_project
+    create_job_result: Dict = _cmd(
+        "job",
+        "create",
+        f"{prec['owner']}/{prec['name']}:0.1.0",
+        "--name",
+        "testjob1",
+        "--command",
+        "run",
+        "--run",
+        "--wait",
+    )
+
+    # Review Test Results
+    assert create_job_result["name"] == "testjob1"
+    assert create_job_result["project_name"] == "testproj3"
+    assert create_job_result["revision"] == "0.1.0"
 
     # Cleanup after the test
 
