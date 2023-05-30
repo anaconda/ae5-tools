@@ -42,7 +42,7 @@ def test_deploy_by_owner_and_name_project_latest_implicit(cli_project):
         "--command",
         "default",
         "--private",
-        "--wait"
+        "--wait",
     )
     _cmd("deployment", "stop", drec["id"])
 
@@ -65,7 +65,7 @@ def test_deploy_by_owner_and_name_project_latest_explicit(cli_project):
         "--command",
         "default",
         "--private",
-        "--wait"
+        "--wait",
     )
     _cmd("deployment", "stop", drec["id"])
 
@@ -88,7 +88,7 @@ def test_deploy_by_owner_and_name_project_first_explicit(cli_project):
         "--command",
         "default",
         "--private",
-        "--wait"
+        "--wait",
     )
     _cmd("deployment", "stop", drec["id"])
 
@@ -99,6 +99,7 @@ def test_deploy_by_owner_and_name_project_first_explicit(cli_project):
 ###############################################################################
 # <id>:<revision> tests
 ###############################################################################
+
 
 def test_deploy_by_id_and_revision_project_latest_implicit(cli_project):
     prec = cli_project
@@ -115,7 +116,7 @@ def test_deploy_by_id_and_revision_project_latest_implicit(cli_project):
         "--command",
         "default",
         "--private",
-        "--wait"
+        "--wait",
     )
     _cmd("deployment", "stop", drec["id"])
 
@@ -138,7 +139,7 @@ def test_deploy_by_id_and_revision_project_latest_explicit(cli_project):
         "--command",
         "default",
         "--private",
-        "--wait"
+        "--wait",
     )
     _cmd("deployment", "stop", drec["id"])
 
@@ -161,7 +162,7 @@ def test_deploy_by_id_and_revision_project_first_explicit(cli_project):
         "--command",
         "default",
         "--private",
-        "--wait"
+        "--wait",
     )
     _cmd("deployment", "stop", drec["id"])
 
