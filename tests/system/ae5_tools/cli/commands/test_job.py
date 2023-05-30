@@ -61,6 +61,8 @@ def test_job_run_implicit_revision_latest(cli_project):
                 wait = False
     assert counter < max_loop
 
+    assert create_job_result["revision"] == "latest"
+
     # Cleanup after the test
 
     # Remove runs
@@ -104,6 +106,8 @@ def test_job_run_explicit_revision_latest(cli_project):
                 wait = False
     assert counter < max_loop
 
+    assert create_job_result["revision"] == "latest"
+
     # Cleanup after the test
 
     # Remove runs
@@ -146,6 +150,8 @@ def test_job_run_explicit_revision_first(cli_project):
             if counter > max_loop:
                 wait = False
     assert counter < max_loop
+
+    assert create_job_result["revision"] == "latest"
 
     # Cleanup after the test
 
@@ -195,6 +201,8 @@ def test_job_run_by_owner_and_name_implicit_revision_latest(cli_project):
                 wait = False
     assert counter < max_loop
 
+    assert create_job_result["revision"] == "latest"
+
     # Cleanup after the test
 
     # Remove runs
@@ -238,6 +246,8 @@ def test_job_run_by_owner_and_name_explicit_revision_latest(cli_project):
                 wait = False
     assert counter < max_loop
 
+    assert create_job_result["revision"] == "latest"
+
     # Cleanup after the test
 
     # Remove runs
@@ -261,9 +271,6 @@ def test_job_run_by_owner_and_name_explicit_revision_first(cli_project):
     # Execute the test (Run a previously created job)
     run_job_result: Dict = _cmd("job", "run", "testjob1")
 
-    # assert run_job_result["id"]
-    raise Exception(run_job_result)
-
     # Review Test Results
     assert run_job_result["name"] == "testjob1"
     assert run_job_result["project_name"] == "testproj3"
@@ -283,6 +290,8 @@ def test_job_run_by_owner_and_name_explicit_revision_first(cli_project):
             if counter > max_loop:
                 wait = False
     assert counter < max_loop
+
+    assert create_job_result["revision"] == "0.1.0""
 
     # Cleanup after the test
 
