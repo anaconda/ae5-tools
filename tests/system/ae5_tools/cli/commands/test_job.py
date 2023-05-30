@@ -291,7 +291,7 @@ def test_job_run_by_owner_and_name_explicit_revision_first(cli_project):
                 wait = False
     assert counter < max_loop
 
-    assert create_job_result["revision"] == "0.1.0""
+    assert create_job_result["revision"] == "0.1.0"
 
     # Cleanup after the test
 
