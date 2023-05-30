@@ -25,11 +25,11 @@ def cli_project(project_list):
 
 
 ###############################################################################
-# owner/name:revision tests
+# <owner>/<name>:<revision> tests
 ###############################################################################
 
 
-def test_deploy_project_latest_implicit(cli_project):
+def test_deploy_by_owner_and_name_project_latest_implicit(cli_project):
     prec = cli_project
     dname = "testdeploy"
     ename = "testendpoint"
@@ -48,3 +48,128 @@ def test_deploy_project_latest_implicit(cli_project):
     )
     print(drec)
     _cmd("deployment", "stop", drec["id"])
+
+    revision: str = drec["revision"]
+    assert revision == "latest"
+
+
+def test_deploy_by_owner_and_name_project_latest_explicit(cli_project):
+    prec = cli_project
+    dname = "testdeploy"
+    ename = "testendpoint"
+    drec = _cmd(
+        "project",
+        "deploy",
+        f'{prec["owner"]}/{prec["name"]}:latest',
+        "--name",
+        dname,
+        "--endpoint",
+        ename,
+        "--command",
+        "default",
+        "--private",
+        "--wait"
+    )
+    print(drec)
+    _cmd("deployment", "stop", drec["id"])
+
+    revision: str = drec["revision"]
+    assert revision == "latest"
+
+
+def test_deploy_by_owner_and_name_project_first_explicit(cli_project):
+    prec = cli_project
+    dname = "testdeploy"
+    ename = "testendpoint"
+    drec = _cmd(
+        "project",
+        "deploy",
+        f'{prec["owner"]}/{prec["name"]}:0.1.0',
+        "--name",
+        dname,
+        "--endpoint",
+        ename,
+        "--command",
+        "default",
+        "--private",
+        "--wait"
+    )
+    print(drec)
+    _cmd("deployment", "stop", drec["id"])
+
+    revision: str = drec["revision"]
+    assert revision == "0.1.0"
+
+
+###############################################################################
+# <id>:<revision> tests
+###############################################################################
+
+def test_deploy_by_id_and_revision_project_latest_implicit(cli_project):
+    prec = cli_project
+    dname = "testdeploy"
+    ename = "testendpoint"
+    drec = _cmd(
+        "project",
+        "deploy",
+        f'{prec["id"]}',
+        "--name",
+        dname,
+        "--endpoint",
+        ename,
+        "--command",
+        "default",
+        "--private",
+        "--wait"
+    )
+    print(drec)
+    _cmd("deployment", "stop", drec["id"])
+
+    revision: str = drec["revision"]
+    assert revision == "latest"
+
+def test_deploy_by_id_and_revision_project_latest_explicit(cli_project):
+    prec = cli_project
+    dname = "testdeploy"
+    ename = "testendpoint"
+    drec = _cmd(
+        "project",
+        "deploy",
+        f'{prec["id"]}:latest',
+        "--name",
+        dname,
+        "--endpoint",
+        ename,
+        "--command",
+        "default",
+        "--private",
+        "--wait"
+    )
+    print(drec)
+    _cmd("deployment", "stop", drec["id"])
+
+    revision: str = drec["revision"]
+    assert revision == "latest"
+
+def test_deploy_by_id_and_revision_project_first_explicit(cli_project):
+    prec = cli_project
+    dname = "testdeploy"
+    ename = "testendpoint"
+    drec = _cmd(
+        "project",
+        "deploy",
+        f'{prec["id"]}:0.1.0',
+        "--name",
+        dname,
+        "--endpoint",
+        ename,
+        "--command",
+        "default",
+        "--private",
+        "--wait"
+    )
+    print(drec)
+    _cmd("deployment", "stop", drec["id"])
+
+    revision: str = drec["revision"]
+    assert revision == "0.1.0"
