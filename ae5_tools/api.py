@@ -1817,6 +1817,33 @@ class AEAdminSession(AESessionBase):
         records = self._get_paginated("events", limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=[])
 
+    def user_create(self, **kwargs):
+        # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
+        # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_userrepresentation
+        # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_credentialrepresentation
+        data = {
+            "username": "created-user",
+            "email": "created-user@localhost.local",
+            "firstName": "created",
+            "lastName": "user",
+            "enabled": False,
+            "emailVerified": False,
+            "groups": ["everyone"],  # default (not any required)
+            # "realmRoles": ["default-roles-anacondaplatform"], # default (not any required) doesn't work..
+            "credentials": [{
+                "type": "password",
+                "temporary": False,
+                "value": "my-password"
+            }]
+        }
+        self._post(endpoint="users", json=data)
+
+    def user_delete(self, **kwargs):
+        # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
+        user_ident: str = "created-user"
+        user_info = self.user_info(ident=user_ident, format=None, quiet=False, include_login=True)
+        self._delete(endpoint=f"users/{user_info['id']}")
+
     def _post_user(self, users, include_login=False):
         users = {u["id"]: u for u in users}
         if include_login:

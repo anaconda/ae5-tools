@@ -47,3 +47,14 @@ def events(param, limit, first):
     param = [z.split("=", 1) for z in param]
     param = dict((x.rstrip(), y.lstrip()) for x, y in param)
     cluster_call("user_events", limit=limit, first=first, **param, admin=True)
+
+
+@user.command()
+@global_options
+def create():
+    cluster_call("user_create", admin=True)
+
+@user.command()
+@global_options
+def delete():
+    cluster_call("user_delete", admin=True)
