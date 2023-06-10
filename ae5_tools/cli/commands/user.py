@@ -55,6 +55,8 @@ def create():
     cluster_call("user_create", admin=True)
 
 @user.command()
+@click.option("--username", type=click.STRING, help="The username of the account to delete")
+# @ident_filter("username", "username={value}|id={value}", required=True)
 @global_options
-def delete():
-    cluster_call("user_delete", admin=True)
+def delete(username):
+    cluster_call("user_delete", username=username, admin=True)

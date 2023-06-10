@@ -1838,10 +1838,9 @@ class AEAdminSession(AESessionBase):
         }
         self._post(endpoint="users", json=data)
 
-    def user_delete(self, **kwargs):
+    def user_delete(self, username, format=None):
         # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
-        user_ident: str = "created-user"
-        user_info = self.user_info(ident=user_ident, format=None, quiet=False, include_login=True)
+        user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
         self._delete(endpoint=f"users/{user_info['id']}")
 
     def _post_user(self, users, include_login=False):
