@@ -1445,9 +1445,6 @@ class AEUserSession(AESessionBase):
         else:
             endpoint = None
 
-        # Get deployment Id
-        id = self._ident_record("deployment", ident)["id"]
-
         # Begin the restart.
         self.deployment_stop(drec)
 
@@ -1456,7 +1453,7 @@ class AEUserSession(AESessionBase):
         time.sleep(2)
         while stopping:
             try:
-                self.deployment_info(ident=id)
+                self.deployment_info(ident=drec["id"])
             except Exception as error:
                 if str(error).startswith("No deployments found matching"):
                     stopping = False
