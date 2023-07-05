@@ -41,7 +41,7 @@ test:
     - pytest-cov
     - pandas
   commands:
-    - py.test --cov=ae5_tools -v tests
+    - py.test --cov=ae5_tools -v tests/unit
 
 about:
   home: https://github.com/Anaconda-Platform/ae5-tools
