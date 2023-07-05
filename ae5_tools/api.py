@@ -1448,17 +1448,17 @@ class AEUserSession(AESessionBase):
         # Begin the restart.
         self.deployment_stop(drec)
 
-        # # Ensure the deployment has been stopped.
-        # stopping: bool = True
-        # time.sleep(2)
-        # while stopping:
-        #     try:
-        #         self.deployment_info(ident=drec["id"])
-        #     except Exception as error:
-        #         if str(error).startswith("No deployments found matching"):
-        #             stopping = False
-        #         else:
-        #             time.sleep(2)
+        # Ensure the deployment has been stopped.
+        stopping: bool = True
+        time.sleep(2)
+        while stopping:
+            try:
+                self.deployment_info(ident=drec["id"])
+            except Exception as error:
+                if str(error).startswith("No deployments found matching"):
+                    stopping = False
+                else:
+                    time.sleep(2)
 
         # Complete the restart
         return self.deployment_start(
