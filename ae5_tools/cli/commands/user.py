@@ -50,13 +50,47 @@ def events(param, limit, first):
 
 
 @user.command()
+@click.option("--username", type=click.STRING, help="The username of the new account.", required=True)
+@click.option("--email", type=click.STRING, help="The email address of the new account.", required=True)
+@click.option("--firstname", type=click.STRING, help="The first name of the new account.", required=True)
+@click.option("--lastname", type=click.STRING, help="The last name of the new account.", required=True)
+@click.option("--enabled", type=click.BOOL, help="Whether to enable the account on creation.", required=True)
+@click.option("--email-verified", type=click.BOOL, help="Whether the email address was verified.", required=True)
+@click.option("--password", type=click.STRING, help="The password of the new account.", required=True)
+@click.option(
+    "--password-temporary", type=click.BOOL, help="Whether the provided password is temporary.", required=True
+)
 @global_options
-def create():
-    cluster_call("user_create", admin=True)
+def create(
+    username: str,
+    email: str,
+    firstname: str,
+    lastname: str,
+    enabled: bool,
+    email_verified: bool,
+    password: str,
+    password_temporary: bool,
+):
+    """Create a new user account."""
+
+    cluster_call(
+        "user_create",
+        username=username,
+        email=email,
+        firstname=firstname,
+        lastname=lastname,
+        enabled=enabled,
+        email_verified=email_verified,
+        password=password,
+        password_temporary=password_temporary,
+        admin=True,
+    )
+
 
 @user.command()
-@click.option("--username", type=click.STRING, help="The username of the account to delete")
-# @ident_filter("username", "username={value}|id={value}", required=True)
+@click.option("--username", type=click.STRING, help="The username of the account to delete.", required=True)
 @global_options
-def delete(username):
+def delete(username: str):
+    """Delete a new user account."""
+
     cluster_call("user_delete", username=username, admin=True)

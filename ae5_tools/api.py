@@ -1833,29 +1833,72 @@ class AEAdminSession(AESessionBase):
         records = self._get_paginated("events", limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=[])
 
-    def user_create(self, **kwargs):
+    def user_create(
+        self,
+        username: str,
+        email: str,
+        firstname: str,
+        lastname: str,
+        enabled: bool,
+        email_verified: bool,
+        password: str,
+        password_temporary: bool,
+        **kwargs,
+    ):
+        """
+        Creates an AE5 user account.
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_userrepresentation
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_credentialrepresentation
+
+        Parameters
+        ----------
+        username: str
+            The username of the new account
+        email: str
+            The email address of the new account
+        firstname: str
+            The first name of the new account
+        lastname: str
+            The last name of the new account
+        enabled: bool
+            Whether to enable the account on creation
+        email_verified: bool
+            Whether the email address was verified.
+        password: str
+            The password of the new account
+        password_temporary: bool
+            Whether the provided password is temporary
+        """
+
         # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
         # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_userrepresentation
         # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_credentialrepresentation
-        data = {
-            "username": "created-user",
-            "email": "created-user@localhost.local",
-            "firstName": "created",
-            "lastName": "user",
-            "enabled": False,
-            "emailVerified": False,
+
+        data: dict = {
+            "username": username,
+            "email": email,
+            "firstName": firstname,
+            "lastName": lastname,
+            "enabled": enabled,
+            "emailVerified": email_verified,
             "groups": ["everyone"],  # default (not any required)
-            # "realmRoles": ["default-roles-anacondaplatform"], # default (not any required) doesn't work..
-            "credentials": [{
-                "type": "password",
-                "temporary": False,
-                "value": "my-password"
-            }]
+            "credentials": [{"type": "password", "temporary": password_temporary, "value": password}],
         }
         self._post(endpoint="users", json=data)
+        print("User account created.")
 
-    def user_delete(self, username, format=None):
-        # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
+    def user_delete(self, username: str, format=None):
+        """
+        Delete an AE5 user account.
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
+
+        Parameters
+        ----------
+        username: str
+            The username of the account to remove.
+        """
+
         user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
         self._delete(endpoint=f"users/{user_info['id']}")
 
