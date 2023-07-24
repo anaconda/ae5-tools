@@ -94,3 +94,13 @@ def delete(username: str):
     """Delete a new user account."""
 
     cluster_call("user_delete", username=username, admin=True)
+
+
+@user.command()
+@click.option("--username", type=click.STRING, help="The username of the account to operate against.", required=True)
+@click.option("--role", type=click.STRING, help="The role to add the account to.", required=True)
+@global_options
+def role_add(username: str, role: str):
+    """Add role to user account."""
+
+    cluster_call("user_role_add", username=username, role=role, admin=True)

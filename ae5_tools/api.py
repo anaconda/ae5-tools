@@ -1882,11 +1882,47 @@ class AEAdminSession(AESessionBase):
             "lastName": lastname,
             "enabled": enabled,
             "emailVerified": email_verified,
-            "groups": ["everyone"],  # default (not any required)
+            "groups": ["everyone"],  # default
             "credentials": [{"type": "password", "temporary": password_temporary, "value": password}],
         }
         self._post(endpoint="users", json=data)
+
+        # Add the default role
+        self.user_role_add(username=username, role="default-roles-anacondaplatform")
+
         print("User account created.")
+
+    def user_role_add(self, username: str, role: str, **kwargs):
+        """
+        Add a client-level role to a user role mapping.
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_client_role_mappings_resource
+
+        Parameters
+        ----------
+        username: str
+            The user to operate against.
+        role: str
+            The role to add to the user.
+        """
+
+        # Get user id
+        user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
+
+        # Get role id
+        role_id: Optional[str] = None
+        realm_roles = self._get(endpoint=f"roles")
+        for role_details in realm_roles:
+            if role_details["name"] == role:
+                role_id = role_details["id"]
+        if role_id is None:
+            raise AEException("Unable to find the specified realm role.")
+
+        # Create list of role to add
+        data: list = [{"id": role_id, "name": role}]
+
+        # Add the role
+        self._post(endpoint=f"users/{user_info['id']}/role-mappings/realm", json=data)
+        print("User account role added.")
 
     def user_delete(self, username: str, format=None):
         """
@@ -1901,6 +1937,7 @@ class AEAdminSession(AESessionBase):
 
         user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
         self._delete(endpoint=f"users/{user_info['id']}")
+        print("User account deleted.")
 
     def _post_user(self, users, include_login=False):
         users = {u["id"]: u for u in users}
