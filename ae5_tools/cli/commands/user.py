@@ -6,7 +6,9 @@ from ..login import cluster_call
 from ..utils import global_options, ident_filter
 
 
-@click.group(short_help="info, list", epilog='Type "ae5 user <command> --help" for help on a specific command.')
+@click.group(
+    short_help="info, list, create, delete", epilog='Type "ae5 user <command> --help" for help on a specific command.'
+)
 @global_options
 def user():
     """Commands related to user accounts.
@@ -94,13 +96,3 @@ def delete(username: str):
     """Delete a new user account."""
 
     cluster_call("user_delete", username=username, admin=True)
-
-
-@user.command()
-@click.option("--username", type=click.STRING, help="The username of the account to operate against.", required=True)
-@click.option("--role", type=click.STRING, help="The role to add the account to.", required=True, multiple=True)
-@global_options
-def role_add(username: str, role: list):
-    """Add role to user account."""
-
-    cluster_call("user_roles_add", username=username, names=role, admin=True)
