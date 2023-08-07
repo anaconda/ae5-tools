@@ -1888,11 +1888,22 @@ class AEAdminSession(AESessionBase):
         self._post(endpoint="users", json=data)
 
         # Add the default role
-        self.user_role_add(username=username, role="default-roles-anacondaplatform")
+        self.user_roles_add(username=username, roles=["default-roles-anacondaplatform"])
 
         print("User account created.")
 
-    def user_role_add(self, username: str, role: str, **kwargs):
+    def _get_user_role_id(self, name: str) -> Optional[str]:
+        # Get role id
+        role_id: Optional[str] = None
+        realm_roles = self._get(endpoint=f"roles")
+        for role_details in realm_roles:
+            if role_details["name"] == name:
+                role_id = role_details["id"]
+        if role_id is None:
+            raise AEException("Unable to find the specified realm role.")
+        return role_id
+
+    def user_roles_add(self, username: str, names: list[str], **kwargs) -> None:
         """
         Add a client-level role to a user role mapping.
         https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_client_role_mappings_resource
@@ -1901,28 +1912,25 @@ class AEAdminSession(AESessionBase):
         ----------
         username: str
             The user to operate against.
-        role: str
-            The role to add to the user.
+        names: list[str]
+            The list of role names to add to the user.
         """
 
         # Get user id
         user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
 
-        # Get role id
-        role_id: Optional[str] = None
-        realm_roles = self._get(endpoint=f"roles")
-        for role_details in realm_roles:
-            if role_details["name"] == role:
-                role_id = role_details["id"]
-        if role_id is None:
-            raise AEException("Unable to find the specified realm role.")
-
         # Create list of role to add
-        data: list = [{"id": role_id, "name": role}]
+        data: list[dict] = []
 
-        # Add the role
+        for name in names:
+            # Get role id
+            role_id: Optional[str] = self._get_user_role_id(name=name)
+
+            # Create list of role to add
+            data.append({"id": role_id, "name": name})
+
+        # Add the roles
         self._post(endpoint=f"users/{user_info['id']}/role-mappings/realm", json=data)
-        print("User account role added.")
 
     def user_delete(self, username: str, format=None):
         """
