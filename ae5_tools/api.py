@@ -1888,19 +1888,32 @@ class AEAdminSession(AESessionBase):
         self._post(endpoint="users", json=data)
 
         # Add the default role
-        self.user_roles_add(username=username, roles=["default-roles-anacondaplatform"])
-
-        print("User account created.")
+        self.user_roles_add(username=username, names=["default-roles-anacondaplatform"])
 
     def _get_user_role_id(self, name: str) -> Optional[str]:
-        # Get role id
+        """
+        Looks up and returns the role id of the named role if it is found.
+
+        Parameters
+        ----------
+        name: str
+            The role name to query.
+
+        Returns
+        -------
+        role_id: Optional[str]
+            The role id for the role, `None` otherwise.
+        """
+
         role_id: Optional[str] = None
+
         realm_roles = self._get(endpoint=f"roles")
         for role_details in realm_roles:
             if role_details["name"] == name:
                 role_id = role_details["id"]
         if role_id is None:
-            raise AEException("Unable to find the specified realm role.")
+            raise AEException("Unable to find the specified realm role")
+
         return role_id
 
     def user_roles_add(self, username: str, names: list[str], **kwargs) -> None:
@@ -1945,7 +1958,6 @@ class AEAdminSession(AESessionBase):
 
         user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
         self._delete(endpoint=f"users/{user_info['id']}")
-        print("User account deleted.")
 
     def _post_user(self, users, include_login=False):
         users = {u["id"]: u for u in users}
