@@ -1918,7 +1918,7 @@ class AEAdminSession(AESessionBase):
 
     def user_roles_add(self, username: str, names: list[str], **kwargs) -> None:
         """
-        Add a client-level role to a user role mapping.
+        Add a client-level (realm) role to a user role mapping.
         https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_client_role_mappings_resource
 
         Parameters
@@ -1944,6 +1944,35 @@ class AEAdminSession(AESessionBase):
 
         # Add the roles
         self._post(endpoint=f"users/{user_info['id']}/role-mappings/realm", json=data)
+
+    def user_roles_remove(self, username: str, names: list[str], **kwargs) -> None:
+        """
+        Remove client-level (realm) role from a user role mapping.
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_client_role_mappings_resource
+
+        Parameters
+        ----------
+        username: str
+            The user to operate against.
+        names: list[str]
+            The list of role names to remove from the user.
+        """
+
+        # Get user id
+        user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
+
+        # Create list of role to add
+        data: list[dict] = []
+
+        for name in names:
+            # Get role id
+            role_id: Optional[str] = self._get_user_role_id(name=name)
+
+            # Create list of role to add
+            data.append({"id": role_id, "name": name})
+
+        # Add the roles
+        self._delete(endpoint=f"users/{user_info['id']}/role-mappings/realm", json=data)
 
     def user_delete(self, username: str, format=None):
         """
