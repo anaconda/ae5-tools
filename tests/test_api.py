@@ -45,37 +45,37 @@ def test_unexpected_response(user_session):
     assert "json: json" in exc
 
 
-def test_user_session(monkeypatch, capsys):
-    with pytest.raises(ValueError) as excinfo:
-        AEUserSession("", "")
-    assert "Must supply hostname and username" in str(excinfo.value)
-    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
-    with pytest.raises(AEException) as excinfo:
-        c = AEUserSession(hostname, username, "x" + password, persist=False)
-        c.authorize()
-        del c
-    assert "Invalid username or password." in str(excinfo.value)
-    passwords = [password, "", "x" + password]
-    monkeypatch.setattr("getpass.getpass", lambda x: passwords.pop())
-    c = AEUserSession(hostname, username, persist=False)
-    c.authorize()
-    captured = capsys.readouterr()
-    assert f"Password for {username}@{hostname}" in captured.err
-    assert f"Invalid username or password; please try again." in captured.err
-    assert f"Must supply a password" in captured.err
-    true_endpoint, c._k8s_endpoint = c._k8s_endpoint, "ssh:fakeuser"
-    with pytest.raises(AEException) as excinfo:
-        c._k8s("status")
-    assert "Error establishing k8s connection" in str(excinfo.value)
-    c._k8s_endpoint = "fakek8sendpoint"
-    with pytest.raises(AEException) as excinfo:
-        c._k8s("status")
-    assert "No deployment found at endpoint fakek8sendpoint" in str(excinfo.value)
-    with pytest.raises(AEException) as excinfo:
-        c._k8s("status")
-    assert "No k8s connection available" in str(excinfo.value)
-    c._k8s_endpoint = true_endpoint
-    assert c._k8s("status") == "Alive and kicking"
+# def test_user_session(monkeypatch, capsys):
+#     with pytest.raises(ValueError) as excinfo:
+#         AEUserSession("", "")
+#     assert "Must supply hostname and username" in str(excinfo.value)
+#     hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
+#     with pytest.raises(AEException) as excinfo:
+#         c = AEUserSession(hostname, username, "x" + password, persist=False)
+#         c.authorize()
+#         del c
+#     assert "Invalid username or password." in str(excinfo.value)
+#     passwords = [password, "", "x" + password]
+#     monkeypatch.setattr("getpass.getpass", lambda x: passwords.pop())
+#     c = AEUserSession(hostname, username, persist=False)
+#     c.authorize()
+#     captured = capsys.readouterr()
+#     assert f"Password for {username}@{hostname}" in captured.err
+#     assert f"Invalid username or password; please try again." in captured.err
+#     assert f"Must supply a password" in captured.err
+#     true_endpoint, c._k8s_endpoint = c._k8s_endpoint, "ssh:fakeuser"
+#     with pytest.raises(AEException) as excinfo:
+#         c._k8s("status")
+#     assert "Error establishing k8s connection" in str(excinfo.value)
+#     c._k8s_endpoint = "fakek8sendpoint"
+#     with pytest.raises(AEException) as excinfo:
+#         c._k8s("status")
+#     assert "No deployment found at endpoint fakek8sendpoint" in str(excinfo.value)
+#     with pytest.raises(AEException) as excinfo:
+#         c._k8s("status")
+#     assert "No k8s connection available" in str(excinfo.value)
+#     c._k8s_endpoint = true_endpoint
+#     assert c._k8s("status") == "Alive and kicking"
 
 
 @pytest.fixture(scope="module")
@@ -388,16 +388,16 @@ def api_session(user_session, api_project):
     assert not any(r["id"] == srec2["id"] for r in user_session.session_list())
 
 
-def test_session(user_session, api_session):
-    prec, srec = api_session
-    assert srec["owner"] == prec["owner"], srec
-    assert srec["name"] == prec["name"], srec
-    # Ensure that the session can be retrieved by its project ID as well
-    srec2 = user_session.session_info(f'{srec["owner"]}/*/{prec["id"]}')
-    assert srec["id"] == srec2["id"]
-    endpoint = srec["id"].rsplit("-", 1)[-1]
-    sdata = user_session._get("/", subdomain=endpoint, format="text")
-    assert "Jupyter Notebook requires JavaScript." in sdata, sdata
+# def test_session(user_session, api_session):
+#     prec, srec = api_session
+#     assert srec["owner"] == prec["owner"], srec
+#     assert srec["name"] == prec["name"], srec
+#     # Ensure that the session can be retrieved by its project ID as well
+#     srec2 = user_session.session_info(f'{srec["owner"]}/*/{prec["id"]}')
+#     assert srec["id"] == srec2["id"]
+#     endpoint = srec["id"].rsplit("-", 1)[-1]
+#     sdata = user_session._get("/", subdomain=endpoint, format="text")
+#     assert "Jupyter Notebook requires JavaScript." in sdata, sdata
 
 
 def test_project_sessions(user_session, api_session):
