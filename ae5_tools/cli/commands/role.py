@@ -25,6 +25,7 @@ def add(username: str, role: list):
 
     cluster_call("user_roles_add", username=username, names=role, admin=True)
 
+
 @role.command()
 @click.option("--username", type=click.STRING, help="The username of the account to operate against.", required=True)
 @click.option("--role", type=click.STRING, help="The role to remove from the account.", required=True, multiple=True)
