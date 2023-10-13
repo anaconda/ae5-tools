@@ -45,7 +45,7 @@ def test_unexpected_response(user_session):
     assert "json: json" in exc
 
 
-@pytest.skip
+@pytest.skip(reason="failing against ci")
 def test_user_session(monkeypatch, capsys):
     with pytest.raises(ValueError) as excinfo:
         AEUserSession("", "")
@@ -389,7 +389,7 @@ def api_session(user_session, api_project):
     assert not any(r["id"] == srec2["id"] for r in user_session.session_list())
 
 
-@pytest.skip
+@pytest.skip(reason="failing against ci")
 def test_session(user_session, api_session):
     prec, srec = api_session
     assert srec["owner"] == prec["owner"], srec
@@ -402,14 +402,14 @@ def test_session(user_session, api_session):
     assert "Jupyter Notebook requires JavaScript." in sdata, sdata
 
 
-@pytest.skip
+@pytest.skip(reason="failing against ci")
 def test_project_sessions(user_session, api_session):
     prec, srec = api_session
     slist = user_session.project_sessions(prec)
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-@pytest.skip
+@pytest.skip(reason="failing against ci")
 def test_session_branches(user_session, api_session):
     prec, srec = api_session
     branches = user_session.session_branches(srec, format="json")
@@ -418,7 +418,7 @@ def test_session_branches(user_session, api_session):
     assert bdict["local"] == bdict["master"], branches
 
 
-@pytest.skip
+@pytest.skip(reason="failing against ci")
 def test_session_before_changes(user_session, api_session):
     prec, srec = api_session
     changes1 = user_session.session_changes(srec, format="json")
