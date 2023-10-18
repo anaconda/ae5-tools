@@ -424,7 +424,6 @@ def test_session(user_session, api_session):
     assert "Jupyter Notebook requires JavaScript." in sdata, sdata
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
 def test_session_name(user_session, api_session):
     prec, srec = api_session
     assert srec["name"] == prec["name"], srec
