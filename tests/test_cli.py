@@ -150,8 +150,8 @@ def test_project_upload(downloaded_project):
     assert rev == "1.2.3"
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
 def test_project_upload_as_directory(downloaded_project):
+    """ Behavior changes in 5.6.2"""
     fname, dname = downloaded_project
     _cmd("project", "upload", dname, "--name", "test_upload2", "--tag", "1.3.4")
     rrec = _cmd("project", "revision", "list", "test_upload2")
@@ -160,9 +160,7 @@ def test_project_upload_as_directory(downloaded_project):
     fname2 = _cmd("project", "download", f"test_upload2:{rev}", table=False).strip()
     assert fname2 == f"test_upload2-{rev}.tar.gz"
     assert os.path.exists(fname2)
-    if rev == "0.0.1":
-        pytest.xfail("5.4.1 revision issue")
-    assert rev == "1.2.3"
+    assert rev == "1.3.4"
 
 
 def test_project_revisions(cli_revisions):
