@@ -151,7 +151,7 @@ def test_project_upload(downloaded_project):
 
 
 def test_project_upload_as_directory(downloaded_project):
-    """ Behavior changes in 5.6.2"""
+    """Behavior changes in 5.6.2"""
     fname, dname = downloaded_project
     _cmd("project", "upload", dname, "--name", "test_upload2", "--tag", "1.3.4")
     rrec = _cmd("project", "revision", "list", "test_upload2")
@@ -174,7 +174,6 @@ def test_project_revisions(cli_revisions):
         assert rev == revN
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
 def test_project_revision_errors(cli_revisions):
     prec, revs = cli_revisions
     with pytest.raises(CMDException) as excinfo:
@@ -184,11 +183,16 @@ def test_project_revision_errors(cli_revisions):
         _cmd("project", "revision", "info", "testproj4")
     assert "No projects" in str(excinfo.value)
     with pytest.raises(CMDException) as excinfo:
-        _cmd("project", "revision", "info", prec["id"] + ":0.*")
-    assert "Multiple revisions" in str(excinfo.value)
-    with pytest.raises(CMDException) as excinfo:
         _cmd("project", "revision", "info", prec["id"] + ":a.b.c")
     assert "No revisions" in str(excinfo.value)
+
+
+@pytest.mark.skip(reason="Failing against 5.6.2")
+def test_project_revision_errors_multiple_revisions(cli_revisions):
+    prec, revs = cli_revisions
+    with pytest.raises(CMDException) as excinfo:
+        _cmd("project", "revision", "info", prec["id"] + ":0.*")
+    assert "Multiple revisions" in str(excinfo.value)
 
 
 def test_project_patch(cli_project, editors, resource_profiles):
@@ -290,12 +294,12 @@ def test_project_sessions(cli_session):
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
 def test_session_branches(cli_session):
+    """Behavior updated in 5.6.2"""
     prec, srec = cli_session
     branches = _cmd("session", "branches", prec["id"])
     bdict = {r["branch"]: r["sha1"] for r in branches}
-    assert set(bdict) == {"local", "origin/local", "master"}, branches
+    assert set(bdict) == {"local", "master"}, branches
     assert bdict["local"] == bdict["master"], branches
 
 

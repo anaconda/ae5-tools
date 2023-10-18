@@ -435,12 +435,12 @@ def test_project_sessions(user_session, api_session):
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
 def test_session_branches(user_session, api_session):
+    """Behavior changed in 5.6.2"""
     prec, srec = api_session
     branches = user_session.session_branches(srec, format="json")
     bdict = {r["branch"]: r["sha1"] for r in branches}
-    assert set(bdict) == {"local", "origin/local", "master"}, branches
+    assert set(bdict) == {"local", "master"}, branches
     assert bdict["local"] == bdict["master"], branches
 
 
