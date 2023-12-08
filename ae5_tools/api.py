@@ -2039,9 +2039,9 @@ class AEAdminSession(AESessionBase):
         Given a KeyCloak user realm role name retrieves a list of user objects who are mapped to the role.
 
 
-        From https://www.keycloak.org/docs-api/12.0/rest-api/#_rolerepresentation
+        From https://www.keycloak.org/docs-api/22.0.4/rest-api/index.html
         Returns a stream of users that have the specified role name:
-        GET /{realm}/roles/{role-name}/users
+        GET /admin/realms/{realm}/roles/{role-name}/users
 
         Parameters
         ---------
@@ -2060,7 +2060,11 @@ class AEAdminSession(AESessionBase):
 
         first = kwargs.pop("first", 0)
         limit = kwargs.pop("limit", sys.maxsize)
-        return self._get_paginated(path=f"roles/{role_name}/users", first=first, max=limit, **kwargs)
+
+        mapped_users: List[Dict] = self._get_paginated(
+            path=f"roles/{role_name}/users", first=first, max=limit, **kwargs
+        )
+        return mapped_users
 
     def _build_realm_role_user_map(self) -> Dict[str, List]:
         """
@@ -2081,9 +2085,9 @@ class AEAdminSession(AESessionBase):
         """
         Returns the list of realm roles.
 
-        From https://www.keycloak.org/docs-api/12.0/rest-api/#_rolerepresentation
+        From https://www.keycloak.org/docs-api/22.0.4/rest-api/index.html
         Get all roles for the realm or client:
-        GET /{realm}/roles
+        GET /admin/realms/{realm}/roles
 
         Parameters
         ---------

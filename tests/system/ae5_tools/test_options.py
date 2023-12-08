@@ -1,6 +1,6 @@
 import pytest
 
-from .utils import _cmd
+from tests.utils import _cmd
 
 
 @pytest.fixture(scope="module")

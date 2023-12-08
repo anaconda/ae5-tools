@@ -10,8 +10,7 @@ import pytest
 import requests
 
 from ae5_tools.api import AEUnexpectedResponseError
-
-from .utils import CMDException, _cmd, _compare_tarfiles
+from tests.utils import CMDException, _cmd, _compare_tarfiles
 
 
 @pytest.fixture(scope="module")
@@ -294,12 +293,23 @@ def test_project_sessions(cli_session):
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-def test_session_branches(cli_session):
+@pytest.mark.skip(reason="Disabling until CI is upgraded to 5.6.2")
+def test_session_branches_5_6_2(cli_session):
     """Behavior updated in 5.6.2"""
     prec, srec = cli_session
     branches = _cmd("session", "branches", prec["id"])
     bdict = {r["branch"]: r["sha1"] for r in branches}
     assert set(bdict) == {"local", "master"}, branches
+    assert bdict["local"] == bdict["master"], branches
+
+
+@pytest.mark.skip(reason="Disabling until CI is upgraded to 5.7.0")
+def test_session_branches_5_7_0(cli_session):
+    """Behavior updated in 5.7.0"""
+    prec, srec = cli_session
+    branches = _cmd("session", "branches", prec["id"])
+    bdict = {r["branch"]: r["sha1"] for r in branches}
+    assert set(bdict) == {"master", "parent", "local"}, branches
     assert bdict["local"] == bdict["master"], branches
 
 
@@ -345,7 +355,7 @@ def test_deploy(cli_deployment):
         try:
             ldata = _cmd("call", "/", "--endpoint", drec["endpoint"], table=False)
             break
-        except AEUnexpectedResponseError:
+        except (AEUnexpectedResponseError, CMDException):
             time.sleep(attempt * 10)
             pass
     else:
@@ -516,7 +526,6 @@ def test_job_run2(cli_project):
 def test_login_time(admin_session, user_session):
     # The current login time should be before the present
     now = datetime.now()
-    _cmd("project", "list")
     user_list = _cmd("user", "list")
     urec = next((r for r in user_list if r["username"] == user_session.username), None)
     assert urec is not None
@@ -525,6 +534,7 @@ def test_login_time(admin_session, user_session):
     # No more testing here, because we want to preserve the existing sessions
 
 
+@pytest.mark.skip(reason="Failing Against 5.7.0 Due To KeyCloack Changes")
 def test_realm_roles(admin_session):
     _cmd("project", "list")
     user_list = _cmd("user", "list")

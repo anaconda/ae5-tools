@@ -1,8 +1,7 @@
 import pytest
 
 from ae5_tools.api import AEAdminSession, AEUserSession
-
-from .utils import _cmd, _get_vars
+from tests.utils import _get_vars
 
 
 # Expectations: the user AE5_USERNAME should have at least three projects:

@@ -39,6 +39,7 @@ def _cmd(*cmd, table=True):
     cmd = ("coverage", "run", "--source=ae5_tools", "-m", "ae5_tools.cli.main") + cmd + ("--yes",)
     if table:
         cmd += "--format", "csv"
+    print(f"Executing: {cmd}")
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=open(os.devnull))
     stdoutb, stderrb = p.communicate()
     if p.returncode != 0:
