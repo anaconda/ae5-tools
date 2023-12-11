@@ -435,17 +435,6 @@ def test_project_sessions(user_session, api_session):
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-@pytest.mark.skip(reason="Disabling until CI is upgraded to 5.6.2")
-def test_session_branches_5_6_2(user_session, api_session):
-    """Behavior changed in 5.6.2"""
-    prec, srec = api_session
-    branches = user_session.session_branches(srec, format="json")
-    bdict = {r["branch"]: r["sha1"] for r in branches}
-    assert set(bdict) == {"local", "master"}, branches
-    assert bdict["local"] == bdict["master"], branches
-
-
-@pytest.mark.skip(reason="Disabling until CI is upgraded to 5.7.0")
 def test_session_branches_5_7_0(user_session, api_session):
     """Behavior changed in 5.7.0"""
     prec, srec = api_session

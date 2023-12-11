@@ -292,18 +292,6 @@ def test_project_sessions(cli_session):
     slist = _cmd("project", "sessions", prec["id"])
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
-
-@pytest.mark.skip(reason="Disabling until CI is upgraded to 5.6.2")
-def test_session_branches_5_6_2(cli_session):
-    """Behavior updated in 5.6.2"""
-    prec, srec = cli_session
-    branches = _cmd("session", "branches", prec["id"])
-    bdict = {r["branch"]: r["sha1"] for r in branches}
-    assert set(bdict) == {"local", "master"}, branches
-    assert bdict["local"] == bdict["master"], branches
-
-
-@pytest.mark.skip(reason="Disabling until CI is upgraded to 5.7.0")
 def test_session_branches_5_7_0(cli_session):
     """Behavior updated in 5.7.0"""
     prec, srec = cli_session
@@ -351,7 +339,7 @@ def test_deploy(cli_deployment):
     prec, drec = cli_deployment
     assert drec["owner"] == prec["owner"], drec
     assert drec["project_name"] == prec["name"], drec
-    for attempt in range(3):
+    for attempt in range(10):
         try:
             ldata = _cmd("call", "/", "--endpoint", drec["endpoint"], table=False)
             break
