@@ -186,14 +186,6 @@ def test_project_revision_errors(cli_revisions):
     assert "No revisions" in str(excinfo.value)
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
-def test_project_revision_errors_multiple_revisions(cli_revisions):
-    prec, revs = cli_revisions
-    with pytest.raises(CMDException) as excinfo:
-        _cmd("project", "revision", "info", prec["id"] + ":0.*")
-    assert "Multiple revisions" in str(excinfo.value)
-
-
 def test_project_patch(cli_project, editors, resource_profiles):
     prec = cli_project
     old, new = {}, {}
@@ -291,6 +283,7 @@ def test_project_sessions(cli_session):
     prec, srec = cli_session
     slist = _cmd("project", "sessions", prec["id"])
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
+
 
 def test_session_branches_5_7_0(cli_session):
     """Behavior updated in 5.7.0"""

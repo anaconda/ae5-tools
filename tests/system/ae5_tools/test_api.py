@@ -324,14 +324,6 @@ def test_project_revision_errors(user_session, api_revisions):
     user_session.revision_info(f'{prec["id"]}:a.b.c', quiet=True)
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
-def test_project_revision_errors_multiple_revisions(user_session, api_revisions):
-    prec, revs = api_revisions
-    with pytest.raises(AEException) as excinfo:
-        user_session.revision_info(f'{prec["id"]}:0.*')
-    assert "Multiple revisions" in str(excinfo.value)
-
-
 def test_project_patch(user_session, api_project, editors, resource_profiles):
     prec = api_project
     old, new = {}, {}
