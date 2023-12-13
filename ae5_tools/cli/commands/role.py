@@ -30,7 +30,7 @@ def add(username: str, role: list):
 @click.option("--username", type=click.STRING, help="The username of the account to operate against.", required=True)
 @click.option("--role", type=click.STRING, help="The role to remove from the account.", required=True, multiple=True)
 @global_options
-def add(username: str, role: list):
+def remove(username: str, role: list):
     """Remove role from user account."""
 
     cluster_call("user_roles_remove", username=username, names=role, admin=True)
