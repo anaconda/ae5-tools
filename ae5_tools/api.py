@@ -2025,10 +2025,16 @@ class AEAdminSession(AESessionBase):
         users = self._get_paginated("users")
 
         # Get realm roles user map
-        role_maps: Dict[str, List] = self._build_realm_role_user_map()
+        role_maps: dict[str, list] = self._build_realm_role_user_map()
+
+        # Get realm groups user map
+        group_maps: dict[str, list] = self._build_realm_group_user_map()
 
         # Get realm roles for the users and merge results
         users = self._merge_users_with_realm_roles(users=users, role_maps=role_maps)
+
+        # Get realm groups for the users and merge results
+        users = self._merge_users_with_realm_groups(users=users, group_maps=group_maps)
 
         # Complete record format, and filtering before returning.
         users = self._fix_records("user", users, filter, include_login=include_login)
@@ -2066,6 +2072,53 @@ class AEAdminSession(AESessionBase):
         )
         return mapped_users
 
+    def _get_group_members(self, group_id: str, **kwargs) -> list[dict]:
+        """
+        Given a KeyCloak realm group name retrieves a list of user objects who are mapped to it.
+
+        From https://www.keycloak.org/docs-api/22.0.4/rest-api/index.html
+        Returns a stream of users that have the specified role name:
+        GET /admin/realms/{realm}/groups/{group-name}/users
+
+        Parameters
+        ---------
+        group_id: str
+            The realm group ID (not name)
+        kwargs: dict[str, Any]
+            * first: Optional[int] = 0
+            * limit: Optional[int] = sys.maxsize
+            * all other kwargs supported/needed by `_get_paginated`
+
+        Returns
+        -------
+        mapped_members: list[dict]
+            A list of user objects which are mapped to the group.
+        """
+
+        first = kwargs.pop("first", 0)
+        limit = kwargs.pop("limit", sys.maxsize)
+
+        mapped_members: list[dict] = self._get_paginated(
+            path=f"groups/{group_id}/members", first=first, max=limit, **kwargs
+        )
+        return mapped_members
+
+    def _build_realm_group_user_map(self) -> dict[str, list]:
+        """
+        Builds a dictionary of group names to mapped users.
+
+        Returns
+        group_maps: dict[str, list]
+            A dictionary, where the keys are group names and the values are lists of user dictionaries mapped to the role.
+        """
+
+        realm_groups: List[Dict] = self._get_realm_groups()
+        group_maps: dict[str, list] = {}
+        for group in realm_groups:
+            maps = self._get_group_members(group_id=group["id"])
+            group_maps[group["name"]] = maps
+        return group_maps
+
     def _build_realm_role_user_map(self) -> Dict[str, List]:
         """
         Builds a dictionary of role names to mapped users.
@@ -2099,12 +2152,37 @@ class AEAdminSession(AESessionBase):
         Returns
         -------
         roles: List[Dict]
-            A list of roles objects.
+            A list of role objects.
         """
 
         first = kwargs.pop("first", 0)
         limit = kwargs.pop("limit", sys.maxsize)
         return self._get_paginated(path="roles", first=first, max=limit, **kwargs)
+
+    def _get_realm_groups(self, **kwargs) -> list[dict]:
+        """
+        Returns the list of realm groups.
+
+        From https://www.keycloak.org/docs-api/22.0.4/rest-api/index.html
+        Get all roles for the realm or client:
+        GET /admin/realms/{realm}/groups
+
+        Parameters
+        ---------
+        kwargs: dict[str, Any]
+            * first: Optional[int] = 0
+            * limit: Optional[int] = sys.maxsize
+            * all other kwargs supported/needed by `_get_paginated`
+
+        Returns
+        -------
+        groups: list[dict]
+            A list of group objects.
+        """
+
+        first = kwargs.pop("first", 0)
+        limit = kwargs.pop("limit", sys.maxsize)
+        return self._get_paginated(path="groups", first=first, max=limit, **kwargs)
 
     def _get_user_realm_roles(self, user: Dict, role_maps: Dict[str, List]) -> List[str]:
         """
@@ -2130,6 +2208,30 @@ class AEAdminSession(AESessionBase):
                     user_realm_roles.append(role_name)
         return user_realm_roles
 
+    def _get_user_realm_groups(self, user: dict, group_maps: dict[str, list]) -> list[str]:
+        """
+        Given a user object and a mapping of groups to users, returns the list of realm groups the user has mapped.
+
+        Parameters
+        ----------
+        user: Dict
+            A user object (as a dictionary)
+        group_maps: dict[str, list]
+            A diction of groups to mapped users.
+
+        Returns
+        -------
+        user_realm_groups: List[str]
+            A list of realm groups the user is mapped to.
+        """
+
+        user_realm_groups: list[str] = []
+        for group_name, group_users in group_maps.items():
+            for group_user in group_users:
+                if user["id"] == group_user["id"]:
+                    user_realm_groups.append(group_name)
+        return user_realm_groups
+
     def _merge_users_with_realm_roles(self, users: List[Dict], role_maps: Dict[str, List]) -> List[Dict]:
         """
         Given a list of user objects, and the role-to-user maps merge the realm_roles into the user objects.
@@ -2139,7 +2241,7 @@ class AEAdminSession(AESessionBase):
         users: List[Dict]
             A list of user objects
         role_maps: Dict[str, List]
-            A dictionary of realm rol name to list of users mapped to each role.
+            A dictionary of realm role name to list of users mapped to each role.
 
         Returns
         -------
@@ -2149,6 +2251,27 @@ class AEAdminSession(AESessionBase):
 
         for user in users:
             user["realm_roles"] = self._get_user_realm_roles(user=user, role_maps=role_maps)
+        return users
+
+    def _merge_users_with_realm_groups(self, users: list[dict], group_maps: dict[str, list]) -> list[dict]:
+        """
+        Given a list of user objects, and the group-to-user maps merge the realm_groups into the user objects.
+
+        Parameters
+        ----------
+        users: list[dict]
+            A list of user objects
+        group_maps: dict[str, list]
+            A dictionary of realm groups name to list of users mapped to each group.
+
+        Returns
+        -------
+        users: list[dict]
+            A list of user objects with realm group information included.
+        """
+
+        for user in users:
+            user["realm_groups"] = self._get_user_realm_groups(user=user, group_maps=group_maps)
         return users
 
     def user_info(self, ident, format=None, quiet=False, include_login=True):

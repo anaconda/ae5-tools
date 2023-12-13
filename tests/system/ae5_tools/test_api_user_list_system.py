@@ -7,7 +7,7 @@ import pytest
 #####################################################
 
 
-@pytest.mark.skip(reason="Failing Against 5.7.0 Due To KeyCloack Changes")
+# @pytest.mark.skip(reason="Failing Against 5.7.0 Due To KeyCloack Changes")
 def test_user_list_has_realm_roles(admin_session):
     # Test Case - User list contains realm roles
 
@@ -27,13 +27,17 @@ def test_user_list_has_realm_roles(admin_session):
     assert len(account["realm_roles"]) > 0
 
     # Ensure the account has the expected roles assigned.
+
+    # Roles
     expected_roles: List[str] = [
         "offline_access",
-        "ae-deployer",
         "uma_authorization",
-        "ae-uploader",
-        "ae-admin",
-        "ae-creator",
     ]
+
+    # Groups
+    expected_groups: list[str] = ["admins", "developers", "everyone"]
+
     for role in expected_roles:
         assert role in account["realm_roles"]
+    for group in expected_groups:
+        assert group in account["realm_groups"]

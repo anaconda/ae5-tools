@@ -34,11 +34,15 @@ commands:
 
   test:
     env_spec: development
-    unix: anaconda-project run clean && anaconda-project run test:unit && anaconda-project run test:system
+    unix: anaconda-project run clean && anaconda-project run test:unit && anaconda-project run test:integration && anaconda-project run test:system
 
   test:unit:
     env_spec: development
     unix: py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml
+
+  test:integration:
+    env_spec: development
+    unix: py.test --cov=ae5_tools -v tests/integration  --cov-append --cov-report=xml
 
   test:system:
     env_spec: development
