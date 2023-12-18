@@ -10,6 +10,8 @@ import logging
 import time
 from copy import deepcopy
 
+from dotenv import load_dotenv
+
 from ae5_tools import AEAdminSession, AEException, AEUnexpectedResponseError, AEUserSession, demand_env_var
 
 logging.basicConfig(level=logging.INFO)
@@ -228,6 +230,9 @@ class FixtureManager:
 
 
 if __name__ == "__main__":
+    # Load env vars, - do NOT override previously defined ones
+    load_dotenv(override=False)
+
     force: bool = False
 
     config: dict = {
