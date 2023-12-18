@@ -39,7 +39,7 @@ commands:
   clean:
     env_spec: default
     unix: |
-      rm -rf .coverage htmlcov coverage.xml build docs/build .pytest_cache test_upload1-1.2.3.tar.gz test_upload2-1.3.4.tar.gz testproj3.tar.gz
+      rm -rf .coverage htmlcov coverage.xml build docs/build .pytest_cache tests/system/.pytest_cache test_upload1-1.2.3.tar.gz test_upload2-1.3.4.tar.gz testproj3.tar.gz
 
   lint:
     env_spec: default
