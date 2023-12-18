@@ -14,7 +14,19 @@ jobs:
     - name: Linting
       run: |
         anaconda-project run lint
+    - name: Run Unit Tests
+      run: |
+        anaconda-project run test:unit
     - name: Build the package
+      run: |
+        source $CONDA/etc/profile.d/conda.sh
+        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
+        conda install -y conda-build conda-verify anaconda-client
+        conda build conda-recipe
+    - name: Run Integration Tests
+      run: |
+        anaconda-project run test:integration:slipstream
+    - name: Run System Tests
       env:
         AE5_HOSTNAME: aip.anaconda.com
         AE5_USERNAME: tooltest
@@ -24,10 +36,7 @@ jobs:
         AE5_K8S_ENDPOINT: ssh:centos
         AE5_K8S_PORT: 23456
       run: |
-        source $CONDA/etc/profile.d/conda.sh
-        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
-        conda install -y conda-build conda-verify anaconda-client
-        conda build conda-recipe
+        anaconda-project run test:system
     - name: Upload to anaconda.org (Dev Build)
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
