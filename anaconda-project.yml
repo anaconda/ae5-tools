@@ -65,13 +65,13 @@ commands:
 
   test:integration:
     env_spec: default
-    unix: py.test --cov=ae5_tools -v tests/integration  --cov-append --cov-report=xml
+    unix: py.test --cov=ae5_tools -v tests/integration  --cov-append --cov-report=xml -vv
 
   test:system:
     env_spec: default
     unix: |
       python -m tests.system.setup
-      py.test --cov=ae5_tools -v tests/system  --cov-append --cov-report=xml
+      py.test --cov=ae5_tools -v tests/system  --cov-append --cov-report=xml -vv
 
   # Documentation Commands
 
