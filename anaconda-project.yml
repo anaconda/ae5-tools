@@ -61,7 +61,7 @@ commands:
 
   test:unit:
     env_spec: default
-    unix: py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml
+    unix: py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml -vv
 
   test:integration:
     env_spec: default
