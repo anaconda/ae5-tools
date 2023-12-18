@@ -515,7 +515,6 @@ def test_login_time(admin_session, user_session):
     # No more testing here, because we want to preserve the existing sessions
 
 
-@pytest.mark.skip(reason="Failing Against 5.7.0 Due To KeyCloack Changes")
 def test_realm_roles(admin_session):
     _cmd("project", "list")
     user_list = _cmd("user", "list")
