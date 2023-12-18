@@ -6,66 +6,54 @@
 # 5. cleanup
 from __future__ import annotations
 
-import json
 import logging
-import os
 import time
 from copy import deepcopy
-from pathlib import Path
 
-from ae5_tools import demand_env_var
-from ae5_tools.api import AEAdminSession, AEException, AEUnexpectedResponseError, AEUserSession
+from ae5_tools import AEAdminSession, AEException, AEUnexpectedResponseError, AEUserSession, demand_env_var
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class FixtureFactory:
+class FixtureManager:
+    def __init__(self, ae_admin_session: AEAdminSession | None = None) -> None:
+        self.ae_admin_session: AEAdminSession = (
+            ae_admin_session if ae_admin_session else FixtureManager.build_session(admin=True)
+        )
+        self.accounts: list[dict] = []
+        self.projects: list[dict] = []
+
     @staticmethod
-    def resolve_conn_params(
-        hostname: str | None = None, username: str | None = None, password: str | None = None
+    def _resolve_conn_params(
+        hostname: str | None = None, username: str | None = None, password: str | None = None, admin: bool = False
     ) -> tuple[str, str, str]:
-        hostname: str = hostname if hostname else demand_env_var(name="AE5_HOSTNAME")
-        username: str = username if username else demand_env_var(name="AE5_ADMIN_USERNAME")
-        password: str = password if password else demand_env_var(name="AE5_ADMIN_PASSWORD")
+        hostname = hostname if hostname else demand_env_var(name="AE5_HOSTNAME")
+
+        if not username:
+            if admin:
+                username = demand_env_var(name="AE5_ADMIN_USERNAME")
+            else:
+                username = demand_env_var(name="AE5_USERNAME")
+
+        if not password:
+            if admin:
+                password = demand_env_var(name="AE5_ADMIN_PASSWORD")
+            else:
+                password = demand_env_var(name="AE5_PASSWORD")
 
         return hostname, username, password
 
     @staticmethod
-    def get_realm_admin_session(
-        hostname: str | None = None, username: str | None = None, password: str | None = None
-    ) -> AEAdminSession:
-        hostname, username, password = FixtureFactory.resolve_conn_params(
-            hostname=hostname, username=username, password=password
+    def build_session(
+        hostname: str | None = None, username: str | None = None, password: str | None = None, admin: bool = False
+    ) -> AEUserSession | AEAdminSession:
+        params: tuple = FixtureManager._resolve_conn_params(
+            hostname=hostname, username=username, password=password, admin=admin
         )
-
-        # Create the session directly and provide the AE5 config and credentials:
-        ae_admin_session: AEAdminSession = AEAdminSession(
-            *FixtureFactory.resolve_conn_params(hostname=hostname, username=username, password=password)
-        )
-
-        return ae_admin_session
-
-    @staticmethod
-    def get_user_session(
-        hostname: str | None = None, username: str | None = None, password: str | None = None
-    ) -> AEUserSession:
-        hostname, username, password = FixtureFactory.resolve_conn_params(
-            hostname=hostname, username=username, password=password
-        )
-
-        # Create the session directly and provide the AE5 config and credentials:
-        ae_user_session: AEUserSession = AEUserSession(
-            *FixtureFactory.resolve_conn_params(hostname=hostname, username=username, password=password)
-        )
-        return ae_user_session
-
-
-class FixtureManager:
-    def __init__(self, ae_admin_session: AEAdminSession) -> None:
-        self.ae_admin_session: AEAdminSession = ae_admin_session
-        self.accounts: list[dict] = []
-        self.projects: list[dict] = []
+        if admin:
+            return AEAdminSession(*params)
+        return AEUserSession(*params)
 
     def create_fixture_accounts(self, accounts: list, force: bool = False) -> None:
         local_accounts: list = deepcopy(accounts)
@@ -112,8 +100,11 @@ class FixtureManager:
             logger.warning(f"User account {username} already has an active connection, skipping ...")
         else:
             logger.info(f"Creating connection for user {account['username']}")
-            account["conn"] = FixtureFactory.get_user_session(
-                hostname=self.ae_admin_session.hostname, username=account["username"], password=account["password"]
+            account["conn"] = FixtureManager.build_session(
+                hostname=self.ae_admin_session.hostname,
+                username=account["username"],
+                password=account["password"],
+                admin=False,
             )
 
     def destroy_fixture_accounts(self) -> None:
@@ -144,7 +135,7 @@ class FixtureManager:
                 else:
                     raise error from error
 
-    def _upload_fixture_project(self, proj_params: dict, owner: str, force: bool = False):
+    def upload_fixture_project(self, proj_params: dict, owner: str, force: bool = False):
         logger.info(f"Uploading project {proj_params['name']} for account {owner}")
         conn: AEUserSession = self._get_account_conn(
             username=owner
@@ -242,11 +233,11 @@ if __name__ == "__main__":
     config: dict = {
         "service_accounts": [
             {
-                "username": "tooltest1",
-                "email": "tooltest1@localhost.local",
+                "username": "tooltest",
+                "email": "tooltest@localhost.local",
                 "firstname": "tooltest",
                 "lastname": "1",
-                "password": "tooltest1",
+                "password": "tooltest",
                 "conn": None,
             },
             {
@@ -273,8 +264,7 @@ if __name__ == "__main__":
         ],
     }
 
-    factory: FixtureFactory = FixtureFactory()
-    manager: FixtureManager = FixtureManager(ae_admin_session=FixtureFactory.get_realm_admin_session())
+    manager: FixtureManager = FixtureManager()
 
     # Create service accounts (and connections)
     manager.create_fixture_accounts(accounts=config["service_accounts"], force=force)
@@ -283,19 +273,48 @@ if __name__ == "__main__":
     # 1. Each user gets all three projects.
     for account in config["service_accounts"]:
         for proj in config["projects"]:
-            manager._upload_fixture_project(proj_params=proj, owner=account["username"], force=force)
+            manager.upload_fixture_project(proj_params=proj, owner=account["username"], force=force)
 
     # 2. Build our relationships.
     logger.info("Building project / account relationships")
 
-    # User 3 shares all projects with User 1
+    # User 3 shares projects 1 & 2 with User 1
     source_user_conn: AEUserSession = manager._get_account_conn(username=config["service_accounts"][2]["username"])
     target_user_name: str = config["service_accounts"][0]["username"]
 
     for project in manager.projects:
-        if project["record"]["owner"] == config["service_accounts"][2]["username"]:
+        if project["record"]["owner"] == config["service_accounts"][2]["username"] and project["record"]["name"] in [
+            "testproj1",
+            "testproj2",
+        ]:
             project_id: str = project["record"]["id"]
             response = source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
+
+    # User 1 shares projects to different numbers of users
+    source_user_conn: AEUserSession = manager._get_account_conn(username=config["service_accounts"][0]["username"])
+    for project in manager.projects:
+        if project["record"]["owner"] == config["service_accounts"][0]["username"]:
+            project_name: str = project["record"]["name"]
+            project_id: str = project["record"]["id"]
+            logger.info(f"Configuring sharing on project {project['record']['name']} for {project['record']['owner']}")
+
+            if project_name == config["projects"][0]["name"]:
+                # Add user 2
+                target_user_name: str = config["service_accounts"][1]["username"]
+                source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
+            elif project_name == config["projects"][1]["name"]:
+                # Add user 2
+                target_user_name: str = config["service_accounts"][1]["username"]
+                source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
+
+                # Add user 3
+                target_user_name: str = config["service_accounts"][2]["username"]
+                source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
+
+            elif project_name == config["projects"][2]["name"]:
+                """"""
+            else:
+                raise NotImplementedError("Unknown project to update contributor on")
 
     # 3. Set editors for user 1's projects
     source_user_conn: AEUserSession = manager._get_account_conn(username=config["service_accounts"][0]["username"])
@@ -308,11 +327,11 @@ if __name__ == "__main__":
             )
 
             if project_name == config["projects"][0]["name"]:
-                source_user_conn.project_patch(ident=project_id, editor="vscode")  # jupyterlab, notebook, vscode
-            elif project_name == config["projects"][1]["name"]:
-                source_user_conn.project_patch(ident=project_id, editor="notebook")  # jupyterlab, notebook, vscode
-            elif project_name == config["projects"][2]["name"]:
                 source_user_conn.project_patch(ident=project_id, editor="jupyterlab")  # jupyterlab, notebook, vscode
+            elif project_name == config["projects"][1]["name"]:
+                source_user_conn.project_patch(ident=project_id, editor="vscode")  # jupyterlab, notebook, vscode
+            elif project_name == config["projects"][2]["name"]:
+                source_user_conn.project_patch(ident=project_id, editor="notebook")  # jupyterlab, notebook, vscode
             else:
                 raise NotImplementedError("Unknown project to update default editor on")
 

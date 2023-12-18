@@ -1,6 +1,4 @@
-# AE5 Command Line Tool
-
-[![GitHub Action](https://github.com/Anaconda-Platform/ae5-tools/workflows/Build%20and%20test/badge.svg)](https://github.com/Anaconda-Platform/ae5-tools/actions) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/latest_release_date.svg)](https://anaconda.org/ae5-admin/ae5-tools) &nbsp; [![Anaconda-Server Badge](https://anaconda.org/ae5-admin/ae5-tools/badges/version.svg)](https://anaconda.org/ae5-admin/ae5-tools)
+# AE5 Tools
 
 ## Overview
 
@@ -13,12 +11,6 @@ This tool uses AE5's internal APIs to do cool things, including:
 More to come. The intent is also to make it possible to allow packages to plug into the tool and provide additional commands.
 
 There is already a fair amount of inline help, so type `ae5 --help` to get started.
-
-## Articles
-For k8s service integration refer to:
-* [k8s Service Component Documentation](docs/source/K8S_SERVER.md)
-* [Project Commands Documentation](docs/source/COMMANDS.md)
-* [Contributing](CONTRIBUTING.md)
 
 ## Installation
 
