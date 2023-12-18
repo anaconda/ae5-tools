@@ -75,3 +75,6 @@ test_vars.sh
 .DS_Store
 envs/
 anaconda-project-local.yml
+/test_upload1-1.2.3.tar.gz
+/test_upload2-1.3.4.tar.gz
+/testproj3.tar.gz

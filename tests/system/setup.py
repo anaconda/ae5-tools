@@ -1,9 +1,16 @@
-# Configure our environment
-# 1. Create test accounts: 1,2,3
-# 2. Upload projects 1,2,3 -> user accounts 1,2,3
-# 3. Set expected fixture attributes (tool, sharing)
-# 4. Execute test harness
-# 5. cleanup
+"""
+System Test Setup
+    1. Environment Setup
+        A. Create test accounts: tooltest, tooltest2, tooltest3
+        B. Upload projects 1,2,3 -> user accounts 1,2,3
+        C. Set expected fixture attributes (tool, sharing)
+    3. (Optional) Environment Teardown
+
+    This covers the current suite of system tests.
+    Tests which need additions to this are expected to manage the lifecycle of those effects.
+"""
+
+
 from __future__ import annotations
 
 import logging
