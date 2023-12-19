@@ -138,7 +138,8 @@ class FixtureManager:
             self._destroy_account(username=account["username"])
 
     def destroy_fixture_projects(self, ignore_error: bool = False) -> None:
-        for project in self.projects:
+        local_projects: list[dict] = deepcopy(self.projects)
+        for project in local_projects:
             try:
                 self._destroy_fixture_project(name=project["record"]["name"], owner=project["record"]["owner"])
             except AEException as error:
@@ -207,8 +208,9 @@ class FixtureManager:
                 return project
 
     def _unmanage_fixture(self, name: str, owner: str) -> None:
-        new_projects = [project for project in self.projects if project["record"]["owner"] != owner and project["record"]["name"] != name]
-        self.projects = new_projects
+        for project in self.projects:
+            if project["record"]["owner"] == owner and project["record"]["name"] == name:
+                self.projects.remove(project)
 
     def _destroy_fixture_project(self, name: str, owner: str) -> None:
         # Ensure fixture is managed
@@ -226,6 +228,8 @@ class FixtureManager:
                     logger.info(f"Deleting project {name} for account {owner}")
                     conn.project_delete(ident=f"{owner}/{name}")
                     self._unmanage_fixture(name=name, owner=owner)
+                    logger.info("Enforcing wait after project removal")
+                    time.sleep(5)
                 except AEException as error:
                     if f"No projects found matching name={name}" in str(error):
                         # then we are out of sync ..
@@ -234,9 +238,9 @@ class FixtureManager:
                     else:
                         raise error from error
                 except Exception as error:
-                    print("unhandled exception")
-                    print(type(error))
-                    print(str(error))
+                    logger.error("unhandled exception")
+                    logger.error(type(error))
+                    logger.error(str(error))
                     raise error from error
             else:
                 retry = False
@@ -255,9 +259,9 @@ class FixtureManager:
             else:
                 raise error from error
         except Exception as error:
-            print("unhandled exception")
-            print(type(error))
-            print(str(error))
+            logger.error("unhandled exception")
+            logger.error(type(error))
+            logger.error(str(error))
             raise error from error
 
     def __str__(self) -> str:
