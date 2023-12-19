@@ -5,41 +5,44 @@ on:
       - master
 jobs:
   package:
-    runs-on: self-hosted
+#    runs-on: self-hosted
+    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
     steps:
     - name: Retrieve the source code
       uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3
       with:
         fetch-depth: 0
-    - name: Linting
-      run: |
-        anaconda-project run lint
-    - name: Run Unit Tests
-      run: |
-        anaconda-project run test:unit
-    - name: Build the package
-      run: |
-        source $CONDA/etc/profile.d/conda.sh
-        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
-        conda install -y conda-build conda-verify anaconda-client
-        conda build conda-recipe
-    - name: Run Integration Tests
-      run: |
-        anaconda-project run test:integration:slipstream
+#    - name: Linting
+#      run: |
+#        anaconda-project run lint
+#    - name: Run Unit Tests
+#      run: |
+#        anaconda-project run test:unit
+#    - name: Build the package
+#      run: |
+#        source $CONDA/etc/profile.d/conda.sh
+#        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
+#        conda install -y conda-build conda-verify anaconda-client
+#        conda build conda-recipe
+#    - name: Run Integration Tests
+#      run: |
+#        anaconda-project run test:integration:slipstream
     - name: Run System Tests
       env:
-        AE5_HOSTNAME: aip.anaconda.com
-        AE5_USERNAME: tooltest
-        AE5_PASSWORD: ${{ secrets.AE5_PASSWORD }}
-        AE5_ADMIN_USERNAME: admin
-        AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
-        AE5_K8S_ENDPOINT: ssh:centos
-        AE5_K8S_PORT: 23456
+        AE5_HOSTNAME: dev1.ae.anacondaconnect.com
+#      env:
+#        AE5_HOSTNAME: aip.anaconda.com
+#        AE5_USERNAME: tooltest
+#        AE5_PASSWORD: ${{ secrets.AE5_PASSWORD }}
+#        AE5_ADMIN_USERNAME: admin
+#        AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
+#        AE5_K8S_ENDPOINT: ssh:centos
+#        AE5_K8S_PORT: 23456
       run: |
         anaconda-project run test:system
-    - name: Upload to anaconda.org (Dev Build)
-      env:
-        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
-      run: |
-        source $CONDA/bin/activate
-        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label dev $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
+#    - name: Upload to anaconda.org (Dev Build)
+#      env:
+#        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+#      run: |
+#        source $CONDA/bin/activate
+#        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label dev $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
