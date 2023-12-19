@@ -1,18 +1,17 @@
+from __future__ import annotations
+
 import getpass
 import io
 import json
 import os
 import re
 import sys
-import tarfile
 import time
 import webbrowser
 from datetime import datetime
-from fnmatch import fnmatch
 from http.cookiejar import LWPCookieJar
 from os.path import abspath, basename, isdir, isfile, join
 from tempfile import TemporaryDirectory
-from typing import Dict, List, Optional
 
 import requests
 from dateutil import parser
@@ -724,25 +723,25 @@ class AEUserSession(AESessionBase):
         if not AEUserSession._is_valid_secret_name(key=key):
             raise AEException(f"User secret {key} can not be deleted. Key contains non-alphanumeric characters.")
 
-        secrets: List[str] = self.secret_list()
+        secrets: list[str] = self.secret_list()
         if key not in [name["secret_name"] for name in secrets]:
             raise AEException(f"User secret {key} was not found and cannot be deleted.")
 
         self._delete(f"credentials/user/{key}")
 
-    def secret_list(self, format: Optional[str] = None, **kwargs) -> List[str]:
+    def secret_list(self, format: str | None = None, **kwargs) -> list[dict]:
         """
         Returns user secret key names.
 
         Returns
         -------
-        secrets: List[str]
+        secrets: list[dict]
             A list of user secret key names.
         """
 
-        secret_names: List[str] = self._get("credentials/user")
+        secret_names: list[str] = self._get("credentials/user")
         if "data" in secret_names:
-            secrets: List[Dict] = [{"secret_name": secret_name} for secret_name in secret_names["data"]]
+            secrets: list[dict] = [{"secret_name": secret_name} for secret_name in secret_names["data"]]
             return self._format_response(secrets, format=format)
         else:
             raise AEException("Failed to retrieve user secrets.")
@@ -892,9 +891,7 @@ class AEUserSession(AESessionBase):
             name = record["name"]
             if make_unique is None:
                 make_unique = True
-        return self.project_create(
-            record["download_url"], name=name, tag=tag, make_unique=make_unique, wait=wait, format=format
-        )
+        return self.project_create(record["download_url"], name=name, tag=tag, make_unique=make_unique, wait=wait, format=format)
 
     def project_sessions(self, ident, format=None):
         id = self._ident_record("project", ident)["id"]
@@ -1119,9 +1116,7 @@ class AEUserSession(AESessionBase):
             if tag:
                 data["tag"] = tag
             f = (project_archive, f)
-            response = self._post_record(
-                "projects/upload", record_type="project", api_kwargs={"files": {b"project_file": f}, "data": data}
-            )
+            response = self._post_record("projects/upload", record_type="project", api_kwargs={"files": {b"project_file": f}, "data": data})
         finally:
             if f is not None:
                 f[1].close()
@@ -1152,9 +1147,7 @@ class AEUserSession(AESessionBase):
         if rlist:
             rlist2 = []
             # Limit the size of the input to pod_info to avoid 413 errors
-            idchunks = [
-                [r["id"] for r in rlist[k : k + K8S_JSON_LIST_MAX]] for k in range(0, len(rlist), K8S_JSON_LIST_MAX)
-            ]
+            idchunks = [[r["id"] for r in rlist[k : k + K8S_JSON_LIST_MAX]] for k in range(0, len(rlist), K8S_JSON_LIST_MAX)]
             record2 = sum((self._k8s("pod_info", ch) for ch in idchunks), [])
             for rec, rec2 in zip(rlist, record2):
                 if not rec2:
@@ -1531,7 +1524,7 @@ class AEUserSession(AESessionBase):
         response = self._ident_record("job", ident, quiet=quiet)
         return self._format_response(response, format=format)
 
-    def job_run(self, ident, format=None, quiet=False):
+    def job_run(self, ident, format: str | None = None, quiet=False):
         """
         Executes an instance of a job.
 
@@ -1539,7 +1532,7 @@ class AEUserSession(AESessionBase):
         ----------
         ident: str
             The job identifier
-        format: Optional[str]
+        format: str | None = None
             CLI output type.  If none is provided, `text` is the default.
         quiet: bool
             Default is `False`.
@@ -1650,9 +1643,7 @@ class AEUserSession(AESessionBase):
                 response = run
         return self._format_response(response, format=format)
 
-    def job_patch(
-        self, ident, name=None, command=None, schedule=None, resource_profile=None, variables=None, format=None
-    ):
+    def job_patch(self, ident, name=None, command=None, schedule=None, resource_profile=None, variables=None, format=None):
         jrec = self._ident_record("job", ident)
         id = jrec["id"]
         data = {}
@@ -1766,9 +1757,7 @@ class AEAdminSession(AESessionBase):
     def __init__(self, hostname, username, password=None, persist=True):
         self._sdata = None
         self._login_base = f"https://{hostname}/auth/realms/master/protocol/openid-connect"
-        super(AEAdminSession, self).__init__(
-            hostname, username, password, prefix="auth/admin/realms/AnacondaPlatform", persist=persist
-        )
+        super(AEAdminSession, self).__init__(hostname, username, password, prefix="auth/admin/realms/AnacondaPlatform", persist=persist)
 
     def _load(self):
         self._filename = os.path.join(config._path, "tokens", f"{self.username}@{self.hostname}")
@@ -1890,7 +1879,7 @@ class AEAdminSession(AESessionBase):
         # Add the default role
         self.user_roles_add(username=username, names=["default-roles-anacondaplatform"])
 
-    def _get_user_role_id(self, name: str) -> Optional[str]:
+    def _get_user_role_id(self, name: str) -> str | None:
         """
         Looks up and returns the role id of the named role if it is found.
 
@@ -1901,11 +1890,11 @@ class AEAdminSession(AESessionBase):
 
         Returns
         -------
-        role_id: Optional[str]
+        role_id: str | None
             The role id for the role, `None` otherwise.
         """
 
-        role_id: Optional[str] = None
+        role_id: str | None = None
 
         realm_roles = self._get(endpoint=f"roles")
         for role_details in realm_roles:
@@ -1937,7 +1926,7 @@ class AEAdminSession(AESessionBase):
 
         for name in names:
             # Get role id
-            role_id: Optional[str] = self._get_user_role_id(name=name)
+            role_id: str | None = self._get_user_role_id(name=name)
 
             # Create list of role to add
             data.append({"id": role_id, "name": name})
@@ -1966,7 +1955,7 @@ class AEAdminSession(AESessionBase):
 
         for name in names:
             # Get role id
-            role_id: Optional[str] = self._get_user_role_id(name=name)
+            role_id: str | None = self._get_user_role_id(name=name)
 
             # Create list of role to add
             data.append({"id": role_id, "name": name})
@@ -2002,15 +1991,15 @@ class AEAdminSession(AESessionBase):
             urec.setdefault("lastLogin", 0)
         return users
 
-    def user_list(self, filter=None, format=None, include_login=True):
+    def user_list(self, filter: str | None = None, format: str | None = None, include_login=True):
         """
         Provides User details.
 
         Parameters
         ----------
-        filter: Optional[str]=None
+        filter: str | None = None
             CLI filter expression.
-        format: Optional[str]=None
+        format: str | None = None
             CLI output type.  If none is provided, `text` is the default.
         include_login: bool = True
             Used for `_post_user` post-processing of records.
@@ -2040,7 +2029,7 @@ class AEAdminSession(AESessionBase):
         users = self._fix_records("user", users, filter, include_login=include_login)
         return self._format_response(users, format=format)
 
-    def _get_role_users(self, role_name: str, **kwargs) -> List[Dict]:
+    def _get_role_users(self, role_name: str, **kwargs) -> list[dict]:
         """
         Given a KeyCloak user realm role name retrieves a list of user objects who are mapped to the role.
 
@@ -2054,22 +2043,20 @@ class AEAdminSession(AESessionBase):
         role_name: str
             The realm role name (not ID)
         kwargs: dict[str, Any]
-            * first: Optional[int] = 0
-            * limit: Optional[int] = sys.maxsize
+            * first: int | None = 0
+            * limit: int | None = sys.maxsize
             * all other kwargs supported/needed by `_get_paginated`
 
         Returns
         -------
-        users: List[Dict]
+        users: list[dict]
             A list of user objects which are mapped to the role.
         """
 
         first = kwargs.pop("first", 0)
         limit = kwargs.pop("limit", sys.maxsize)
 
-        mapped_users: List[Dict] = self._get_paginated(
-            path=f"roles/{role_name}/users", first=first, max=limit, **kwargs
-        )
+        mapped_users: list[dict] = self._get_paginated(path=f"roles/{role_name}/users", first=first, max=limit, **kwargs)
         return mapped_users
 
     def _get_group_members(self, group_id: str, **kwargs) -> list[dict]:
@@ -2085,8 +2072,8 @@ class AEAdminSession(AESessionBase):
         group_id: str
             The realm group ID (not name)
         kwargs: dict[str, Any]
-            * first: Optional[int] = 0
-            * limit: Optional[int] = sys.maxsize
+            * first: int | None = 0
+            * limit: int | None = sys.maxsize
             * all other kwargs supported/needed by `_get_paginated`
 
         Returns
@@ -2098,9 +2085,7 @@ class AEAdminSession(AESessionBase):
         first = kwargs.pop("first", 0)
         limit = kwargs.pop("limit", sys.maxsize)
 
-        mapped_members: list[dict] = self._get_paginated(
-            path=f"groups/{group_id}/members", first=first, max=limit, **kwargs
-        )
+        mapped_members: list[dict] = self._get_paginated(path=f"groups/{group_id}/members", first=first, max=limit, **kwargs)
         return mapped_members
 
     def _build_realm_group_user_map(self) -> dict[str, list]:
@@ -2112,29 +2097,29 @@ class AEAdminSession(AESessionBase):
             A dictionary, where the keys are group names and the values are lists of user dictionaries mapped to the role.
         """
 
-        realm_groups: List[Dict] = self._get_realm_groups()
+        realm_groups: list[dict] = self._get_realm_groups()
         group_maps: dict[str, list] = {}
         for group in realm_groups:
             maps = self._get_group_members(group_id=group["id"])
             group_maps[group["name"]] = maps
         return group_maps
 
-    def _build_realm_role_user_map(self) -> Dict[str, List]:
+    def _build_realm_role_user_map(self) -> dict[str, list]:
         """
         Builds a dictionary of role names to mapped users.
 
         Returns
-        role_maps: Dict[str, List]
+        role_maps: dict[str, list]
             A dictionary, where the keys are role names and the values are lists of user dictionaries mapped to the role.
         """
 
-        realm_roles: List[Dict] = self._get_realm_roles()
-        role_maps: Dict[str, List] = {}
+        realm_roles: list[dict] = self._get_realm_roles()
+        role_maps: dict[str, list] = {}
         for role in realm_roles:
             role_maps[role["name"]] = self._get_role_users(role_name=role["name"])
         return role_maps
 
-    def _get_realm_roles(self, **kwargs) -> List[Dict]:
+    def _get_realm_roles(self, **kwargs) -> list[dict]:
         """
         Returns the list of realm roles.
 
@@ -2145,13 +2130,13 @@ class AEAdminSession(AESessionBase):
         Parameters
         ---------
         kwargs: dict[str, Any]
-            * first: Optional[int] = 0
-            * limit: Optional[int] = sys.maxsize
+            * first: int | None = 0
+            * limit: int | None = sys.maxsize
             * all other kwargs supported/needed by `_get_paginated`
 
         Returns
         -------
-        roles: List[Dict]
+        roles: list[dict]
             A list of role objects.
         """
 
@@ -2170,8 +2155,8 @@ class AEAdminSession(AESessionBase):
         Parameters
         ---------
         kwargs: dict[str, Any]
-            * first: Optional[int] = 0
-            * limit: Optional[int] = sys.maxsize
+            * first: int | None = 0
+            * limit: int | None = sys.maxsize
             * all other kwargs supported/needed by `_get_paginated`
 
         Returns
@@ -2184,24 +2169,24 @@ class AEAdminSession(AESessionBase):
         limit = kwargs.pop("limit", sys.maxsize)
         return self._get_paginated(path="groups", first=first, max=limit, **kwargs)
 
-    def _get_user_realm_roles(self, user: Dict, role_maps: Dict[str, List]) -> List[str]:
+    def _get_user_realm_roles(self, user: dict, role_maps: dict[str, list]) -> list[str]:
         """
         Given a user object and a mapping of roles to users, returns the list of realm roles the user has mapped.
 
         Parameters
         ----------
-        user: Dict
+        user: dict
             A user object (as a dictionary)
-        role_maps: Dict[str, List]
+        role_maps: dict[str, list]
             A diction of roles to mapped users.
 
         Returns
         -------
-        user_realm_roles: List[str]
+        user_realm_roles: list[str]
             A list of realm roles the user is mapped to.
         """
 
-        user_realm_roles: List[str] = []
+        user_realm_roles: list[str] = []
         for role_name, role_users in role_maps.items():
             for role_user in role_users:
                 if user["id"] == role_user["id"]:
@@ -2214,7 +2199,7 @@ class AEAdminSession(AESessionBase):
 
         Parameters
         ----------
-        user: Dict
+        user: dict
             A user object (as a dictionary)
         group_maps: dict[str, list]
             A diction of groups to mapped users.
@@ -2232,20 +2217,20 @@ class AEAdminSession(AESessionBase):
                     user_realm_groups.append(group_name)
         return user_realm_groups
 
-    def _merge_users_with_realm_roles(self, users: List[Dict], role_maps: Dict[str, List]) -> List[Dict]:
+    def _merge_users_with_realm_roles(self, users: list[dict], role_maps: dict[str, list]) -> list[dict]:
         """
         Given a list of user objects, and the role-to-user maps merge the realm_roles into the user objects.
 
         Parameters
         ----------
-        users: List[Dict]
+        users: list[dict]
             A list of user objects
-        role_maps: Dict[str, List]
+        role_maps: dict[str, list]
             A dictionary of realm role name to list of users mapped to each role.
 
         Returns
         -------
-        users: List[Dict]
+        users: list[dict]
             A list of user objects with realm role information included.
         """
 

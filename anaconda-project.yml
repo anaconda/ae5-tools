@@ -81,15 +81,14 @@ commands:
   test:system:
     env_spec: default
     unix: |
-      python -m tests.system.setup
-      py.test --cov=ae5_tools -v tests/system  --cov-append --cov-report=xml -vv
+      python -m tests.system.runner
 
   # Documentation Commands
 
   build:apidocs:
     env_spec: default
     unix: |
-      sphinx-apidoc -f -o docs/source/fraud_detection fraud_detection
+      sphinx-apidoc -f -o docs/source/ae5_tools ae5_tools
 
   build:docs:
     env_spec: default

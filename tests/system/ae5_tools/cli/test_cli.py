@@ -417,9 +417,7 @@ def test_deploy_collaborators(cli_deployment):
     assert len(clist) == 2
     clist = _cmd("deployment", "collaborator", "add", drec["id"], uname)
     assert len(clist) == 2
-    assert all(
-        c["id"] == uname and c["type"] == "user" or c["id"] == "everyone" and c["type"] == "group" for c in clist
-    )
+    assert all(c["id"] == uname and c["type"] == "user" or c["id"] == "everyone" and c["type"] == "group" for c in clist)
     for crec in clist:
         crec2 = _cmd("deployment", "collaborator", "info", drec["id"], crec["id"])
         assert crec2["id"] == crec["id"] and crec2["type"] == crec["type"]

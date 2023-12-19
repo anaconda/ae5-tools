@@ -16,9 +16,7 @@ def get_token_fixture():
 
 @pytest.fixture(scope="function")
 def user_session(get_token_fixture):
-    user_session = AEUserSession(
-        hostname="MOCK-HOSTNAME", username="MOCK-AE-USERNAME", password="MOCK-AE-USER-PASSWORD"
-    )
+    user_session = AEUserSession(hostname="MOCK-HOSTNAME", username="MOCK-AE-USERNAME", password="MOCK-AE-USER-PASSWORD")
     return user_session
 
 

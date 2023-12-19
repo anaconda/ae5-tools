@@ -1,5 +1,4 @@
 import uuid
-from typing import List
 
 import pytest
 
@@ -27,7 +26,7 @@ def secret_name():
 
 def test_secret_add_and_list(user_session, secret_name):
     user_session.secret_add(key=secret_name, value=str(uuid.uuid4()))
-    results: List[str] = user_session.secret_list()
+    results: list[dict] = user_session.secret_list()
     assert secret_name in [secret["secret_name"] for secret in results]
 
 

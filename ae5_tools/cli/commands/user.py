@@ -6,9 +6,7 @@ from ..login import cluster_call
 from ..utils import global_options, ident_filter
 
 
-@click.group(
-    short_help="info, list, create, delete", epilog='Type "ae5 user <command> --help" for help on a specific command.'
-)
+@click.group(short_help="info, list, create, delete", epilog='Type "ae5 user <command> --help" for help on a specific command.')
 @global_options
 def user():
     """Commands related to user accounts.
@@ -59,9 +57,7 @@ def events(param, limit, first):
 @click.option("--enabled", type=click.BOOL, help="Whether to enable the account on creation.", required=True)
 @click.option("--email-verified", type=click.BOOL, help="Whether the email address was verified.", required=True)
 @click.option("--password", type=click.STRING, help="The password of the new account.", required=True)
-@click.option(
-    "--password-temporary", type=click.BOOL, help="Whether the provided password is temporary.", required=True
-)
+@click.option("--password-temporary", type=click.BOOL, help="Whether the provided password is temporary.", required=True)
 @global_options
 def create(
     username: str,

@@ -1,5 +1,4 @@
 import time
-from typing import Dict, List
 
 import pytest
 
@@ -30,12 +29,10 @@ def test_job_run(cli_project):
 
     # Create a pre-existing job, (run it and wait for completion)
     prec = cli_project
-    create_job_result: Dict = _cmd(
-        "job", "create", prec["id"], "--name", "testjob1", "--command", "run", "--run", "--wait"
-    )
+    create_job_result: dict = _cmd("job", "create", prec["id"], "--name", "testjob1", "--command", "run", "--run", "--wait")
 
     # Execute the test (Run a previously created job)
-    run_job_result: Dict = _cmd("job", "run", "testjob1")
+    run_job_result: dict = _cmd("job", "run", "testjob1")
 
     # Review Test Results
     assert run_job_result["name"] == "testjob1"
@@ -47,7 +44,7 @@ def test_job_run(cli_project):
     max_loop: int = 100
     wait: bool = True
     while wait:
-        run_once_status: Dict = _cmd("run", "info", run_job_result["id"])
+        run_once_status: dict = _cmd("run", "info", run_job_result["id"])
         if run_once_status["state"] == "completed":
             wait = False
         else:
@@ -60,7 +57,7 @@ def test_job_run(cli_project):
     # Cleanup after the test
 
     # Remove runs
-    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    job_runs: list[dict] = _cmd("job", "runs", create_job_result["id"])
     for run in job_runs:
         _cmd("run", "delete", run["id"])
 
@@ -78,9 +75,7 @@ def test_job_run_implicit_revision_latest(cli_project):
 
     # Create a pre-existing job, (run it and wait for completion)
     prec = cli_project
-    create_job_result: Dict = _cmd(
-        "job", "create", prec["id"], "--name", "testjob1", "--command", "run", "--run", "--wait"
-    )
+    create_job_result: dict = _cmd("job", "create", prec["id"], "--name", "testjob1", "--command", "run", "--run", "--wait")
 
     # Review Test Results
     assert create_job_result["name"] == "testjob1"
@@ -90,7 +85,7 @@ def test_job_run_implicit_revision_latest(cli_project):
     # Cleanup after the test
 
     # Remove runs
-    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    job_runs: list[dict] = _cmd("job", "runs", create_job_result["id"])
     for run in job_runs:
         _cmd("run", "delete", run["id"])
 
@@ -103,9 +98,7 @@ def test_job_run_explicit_revision_latest(cli_project):
 
     # Create a pre-existing job, (run it and wait for completion)
     prec = cli_project
-    create_job_result: Dict = _cmd(
-        "job", "create", f"{prec['id']}:latest", "--name", "testjob1", "--command", "run", "--run", "--wait"
-    )
+    create_job_result: dict = _cmd("job", "create", f"{prec['id']}:latest", "--name", "testjob1", "--command", "run", "--run", "--wait")
 
     # Review Test Results
     assert create_job_result["name"] == "testjob1"
@@ -115,7 +108,7 @@ def test_job_run_explicit_revision_latest(cli_project):
     # Cleanup after the test
 
     # Remove runs
-    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    job_runs: list[dict] = _cmd("job", "runs", create_job_result["id"])
     for run in job_runs:
         _cmd("run", "delete", run["id"])
 
@@ -128,9 +121,7 @@ def test_job_run_explicit_revision_first(cli_project):
 
     # Create a pre-existing job, (run it and wait for completion)
     prec = cli_project
-    create_job_result: Dict = _cmd(
-        "job", "create", f"{prec['id']}:0.1.0", "--name", "testjob1", "--command", "run", "--run", "--wait"
-    )
+    create_job_result: dict = _cmd("job", "create", f"{prec['id']}:0.1.0", "--name", "testjob1", "--command", "run", "--run", "--wait")
 
     # Review Test Results
     assert create_job_result["name"] == "testjob1"
@@ -140,7 +131,7 @@ def test_job_run_explicit_revision_first(cli_project):
     # Cleanup after the test
 
     # Remove runs
-    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    job_runs: list[dict] = _cmd("job", "runs", create_job_result["id"])
     for run in job_runs:
         _cmd("run", "delete", run["id"])
 
@@ -158,9 +149,7 @@ def test_job_run_by_owner_and_name_implicit_revision_latest(cli_project):
 
     # Create a pre-existing job, (run it and wait for completion)
     prec = cli_project
-    create_job_result: Dict = _cmd(
-        "job", "create", f"{prec['owner']}/{prec['name']}", "--name", "testjob1", "--command", "run", "--run", "--wait"
-    )
+    create_job_result: dict = _cmd("job", "create", f"{prec['owner']}/{prec['name']}", "--name", "testjob1", "--command", "run", "--run", "--wait")
 
     # Review Test Results
     assert create_job_result["name"] == "testjob1"
@@ -170,7 +159,7 @@ def test_job_run_by_owner_and_name_implicit_revision_latest(cli_project):
     # Cleanup after the test
 
     # Remove runs
-    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    job_runs: list[dict] = _cmd("job", "runs", create_job_result["id"])
     for run in job_runs:
         _cmd("run", "delete", run["id"])
 
@@ -183,7 +172,7 @@ def test_job_run_by_owner_and_name_explicit_revision_latest(cli_project):
 
     # Create a pre-existing job, (run it and wait for completion)
     prec = cli_project
-    create_job_result: Dict = _cmd(
+    create_job_result: dict = _cmd(
         "job",
         "create",
         f"{prec['owner']}/{prec['name']}:latest",
@@ -203,7 +192,7 @@ def test_job_run_by_owner_and_name_explicit_revision_latest(cli_project):
     # Cleanup after the test
 
     # Remove runs
-    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    job_runs: list[dict] = _cmd("job", "runs", create_job_result["id"])
     for run in job_runs:
         _cmd("run", "delete", run["id"])
 
@@ -216,7 +205,7 @@ def test_job_run_by_owner_and_name_explicit_revision_first(cli_project):
 
     # Create a pre-existing job, (run it and wait for completion)
     prec = cli_project
-    create_job_result: Dict = _cmd(
+    create_job_result: dict = _cmd(
         "job",
         "create",
         f"{prec['owner']}/{prec['name']}:0.1.0",
@@ -236,7 +225,7 @@ def test_job_run_by_owner_and_name_explicit_revision_first(cli_project):
     # Cleanup after the test
 
     # Remove runs
-    job_runs: List[Dict] = _cmd("job", "runs", create_job_result["id"])
+    job_runs: list[dict] = _cmd("job", "runs", create_job_result["id"])
     for run in job_runs:
         _cmd("run", "delete", run["id"])
 

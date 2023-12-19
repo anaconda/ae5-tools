@@ -25,9 +25,7 @@ def raise_error(stdout, stderr, errcode, cmd, msg):
 
 def launch_background(cmd, waitfor, what, retries=1):
     for attempt in range(retries):
-        proc = subprocess.Popen(
-            cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
-        )
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout = ""
         for line in proc.stdout:
             stdout += line

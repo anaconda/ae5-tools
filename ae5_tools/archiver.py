@@ -10,9 +10,7 @@ def _list_project(project_directory):
 
     gitdir = os.path.join(project_directory, ".git")
     if os.path.exists(gitdir):
-        output = subprocess.check_output(
-            ["git", "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"], cwd=project_directory
-        )
+        output = subprocess.check_output(["git", "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"], cwd=project_directory)
         anchors.extend(output.decode("utf-8").splitlines())
 
     igfile = os.path.join(project_directory, ".projectignore")

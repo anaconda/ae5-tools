@@ -1,5 +1,4 @@
 import uuid
-from typing import List
 
 import pytest
 
@@ -30,7 +29,7 @@ def test_secret_create_and_list_and_delete(user_session, secret_name):
     secret_add_result: str = _cmd("secret", "add", secret_name, secret_value)
     assert secret_add_result == ""
 
-    user_secrets: List[str] = user_session.secret_list()
+    user_secrets: list[dict] = user_session.secret_list()
     assert secret_name in [secret["secret_name"] for secret in user_secrets]
 
     secret_delete_result: str = _cmd("secret", "delete", secret_name)

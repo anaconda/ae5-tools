@@ -4,9 +4,7 @@ from ..login import cluster_call
 from ..utils import global_options, ident_filter
 
 
-@click.group(
-    short_help="info, list", epilog='Type "ae5 resource-profile <command> --help" for help on a specific command.'
-)
+@click.group(short_help="info, list", epilog='Type "ae5 resource-profile <command> --help" for help on a specific command.')
 @global_options
 def resource_profile():
     """Commands related to resource profiles."""

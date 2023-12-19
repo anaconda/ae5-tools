@@ -92,9 +92,7 @@ _format_help = {
 
 
 _format_options = [
-    click.option(
-        "--filter", type=str, default=None, expose_value=False, callback=param_callback, hidden=True, multiple=True
-    ),
+    click.option("--filter", type=str, default=None, expose_value=False, callback=param_callback, hidden=True, multiple=True),
     click.option("--columns", type=str, default=None, expose_value=False, callback=param_callback, hidden=True),
     click.option("--sort", type=str, default=None, expose_value=False, callback=param_callback, hidden=True),
     click.option(
@@ -168,9 +166,7 @@ def filter_df(records, _columns, filter, columns, drop_under):
                 for filt4 in filt3.split("&"):
                     parts = re.split(r"(==?|!=|>=?|<=?)", filt4.strip())
                     if len(parts) != 3:
-                        raise click.UsageError(
-                            f"Invalid filter string: {filt4}\n   Required format: <fieldname><op><value>"
-                        )
+                        raise click.UsageError(f"Invalid filter string: {filt4}\n   Required format: <fieldname><op><value>")
                     field, op, value = list(map(str.strip, parts))
                     try:
                         ndx = _columns.index(field)

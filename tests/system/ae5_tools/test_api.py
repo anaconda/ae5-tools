@@ -451,9 +451,7 @@ def api_deployment(user_session, api_project):
     prec = api_project
     dname = "testdeploy"
     ename = "testendpoint"
-    drec = user_session.deployment_start(
-        prec, name=dname, endpoint=ename, command="default", public=False, wait=False, _skip_endpoint_test=True
-    )
+    drec = user_session.deployment_start(prec, name=dname, endpoint=ename, command="default", public=False, wait=False, _skip_endpoint_test=True)
     drec2 = user_session.deployment_restart(drec, wait=True)
     assert not any(r["id"] == drec["id"] for r in user_session.deployment_list())
     yield prec, drec2
@@ -521,9 +519,7 @@ def test_deploy_duplicate(user_session, api_deployment):
     prec, drec = api_deployment
     dname = drec["name"] + "-dup"
     with pytest.raises(RuntimeError) as excinfo:
-        user_session.deployment_start(
-            prec, name=dname, endpoint=drec["endpoint"], command="default", public=False, wait=True
-        )
+        user_session.deployment_start(prec, name=dname, endpoint=drec["endpoint"], command="default", public=False, wait=True)
     assert f'endpoint "{drec["endpoint"]}" is already in use' in str(excinfo.value)
     assert not any(r["name"] == dname for r in user_session.deployment_list())
 
@@ -539,9 +535,7 @@ def test_deploy_collaborators(user_session, api_deployment):
     assert len(clist) == 2
     clist = user_session.deployment_collaborator_add(drec, uname)
     assert len(clist) == 2
-    assert all(
-        c["id"] == uname and c["type"] == "user" or c["id"] == "everyone" and c["type"] == "group" for c in clist
-    )
+    assert all(c["id"] == uname and c["type"] == "user" or c["id"] == "everyone" and c["type"] == "group" for c in clist)
     for crec in clist:
         crec2 = user_session.deployment_collaborator_info(drec, crec["id"])
         assert crec2["id"] == crec["id"] and crec2["type"] == crec["type"]
@@ -616,9 +610,7 @@ def test_job_run2(user_session, api_project):
     prec = api_project
     # Test cleanup mode and variables in jobs
     variables = {"INTEGRATION_TEST_KEY_1": "value1", "INTEGRATION_TEST_KEY_2": "value2"}
-    user_session.job_create(
-        prec, name="testjob2", command="run_with_env_vars", variables=variables, run=True, wait=True, cleanup=True
-    )
+    user_session.job_create(prec, name="testjob2", command="run_with_env_vars", variables=variables, run=True, wait=True, cleanup=True)
     # The job, and run records should have already been deleted
     assert not user_session.job_list()
     assert not user_session.run_list()
@@ -636,11 +628,7 @@ def test_job_run3(user_session, api_project):
     assert len(rrecs) == 1, rrecs
     ldata2 = user_session.run_log(rrecs[0]["id"], format="text")
     # Confirm that the environment variables were passed through
-    outvars = dict(
-        line.strip().replace(" ", "").split(":", 1)
-        for line in ldata2.splitlines()
-        if line.startswith("INTEGRATION_TEST_KEY_")
-    )
+    outvars = dict(line.strip().replace(" ", "").split(":", 1) for line in ldata2.splitlines() if line.startswith("INTEGRATION_TEST_KEY_"))
     assert variables == outvars, outvars
     user_session.run_delete(rrecs[0]["id"])
     assert not user_session.run_list()

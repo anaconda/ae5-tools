@@ -55,9 +55,7 @@ def commands(**kwargs):
 
 def _download(**kwargs):
     file_s = f' to {kwargs["filename"]}' if kwargs.get("filename") else ""
-    cluster_call(
-        "project_download", **kwargs, prefix=f"Downloading project {{ident}}{file_s}...", postfix="downloaded."
-    )
+    cluster_call("project_download", **kwargs, prefix=f"Downloading project {{ident}}{file_s}...", postfix="downloaded.")
 
 
 @revision.command()

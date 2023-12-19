@@ -4,9 +4,7 @@ from ..login import cluster_call
 from ..utils import global_options, yes_option
 
 
-@click.group(
-    short_help="list, add, delete", epilog='Type "ae5 secret <command> --help" for help on a specific command.'
-)
+@click.group(short_help="list, add, delete", epilog='Type "ae5 secret <command> --help" for help on a specific command.')
 @global_options
 def secret():
     """Commands related to managing user secrets."""
