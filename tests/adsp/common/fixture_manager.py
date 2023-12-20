@@ -44,6 +44,9 @@ class FixtureManager(BaseModel):
         if "clean" in self.config and self.config["clean"]:
             self.__del__()
 
+    def _get_account(self, id: str) -> dict:
+        return [account for account in self.accounts if account["id"] == id][0]
+
     # def load(self, state: str, remove: bool = False) -> None:
     #     with open(file=state, mode="r", encoding="utf-8") as file:
     #         partial_state: dict = json.load(file)

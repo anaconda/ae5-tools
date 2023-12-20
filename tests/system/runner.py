@@ -34,23 +34,26 @@ class SystemTestFixtureSuite(FixtureManager):
         Tests which need additions to this are expected to manage the lifecycle of those effects.
     """
 
-    def _get_account(self, id: str) -> dict:
-        for account in self.accounts:
-            if account["id"] == id:
-                return account
-
     def _setup(self) -> None:
         # Create Fixtures
 
+        self._create_service_accounts()
+        self._upload_projects()
+        self._build_relationships()
+        self._set_project_properties()
+
+    def _create_service_accounts(self):
         # Create service accounts (and connections)
         self.create_fixture_accounts(accounts=self.config["service_accounts"], force=self.config["force"])
         self.create_fixture_connections()
 
+    def _upload_projects(self):
         # 1. Each user gets all three projects.
         for account in self.config["service_accounts"]:
             for proj in self.config["projects"]:
                 self.upload_fixture_project(proj_params=proj, owner=account["username"], force=self.config["force"])
 
+    def _build_relationships(self):
         # 2. Build our relationships.
         logger.info("Building project / account relationships")
 
@@ -93,6 +96,7 @@ class SystemTestFixtureSuite(FixtureManager):
                 else:
                     raise NotImplementedError("Unknown project to update contributor on")
 
+    def _set_project_properties(self):
         # 3. Set editors for user 1's projects
         source_user_conn: AEUserSession = self.get_account_conn(username=self._get_account(id="1")["username"])
         for project in self.projects:
@@ -130,6 +134,7 @@ if __name__ == "__main__":
         account["password"] = str(uuid.uuid4())
 
     with SystemTestFixtureSuite(config=config) as manager:
+        # serialize to allow individual tests to operate (in other processes)
         with open(file="system-test-state.json", mode="w", encoding="utf-8") as file:
             file.write(str(manager))
         run()
