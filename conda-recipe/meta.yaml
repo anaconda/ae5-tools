@@ -27,7 +27,6 @@ requirements:
     - requests
     - aiohttp
     - pandas
-    - pydantic>=2
 
 about:
   home: https://github.com/Anaconda-Platform/ae5-tools

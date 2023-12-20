@@ -1,5 +1,4 @@
 import glob
-import json
 import os
 import tarfile
 import tempfile
@@ -10,14 +9,8 @@ import pytest
 import requests
 
 from ae5_tools.api import AEException, AEUnexpectedResponseError, AEUserSession
+from tests.system.common import _get_account
 from tests.utils import _compare_tarfiles, _get_vars
-
-with open(file="system-test-state.json", mode="r", encoding="utf-8") as file:
-    FIXTURE_STATE: dict = json.load(file)
-
-
-def _get_account(id: str) -> dict:
-    return [account for account in FIXTURE_STATE["accounts"] if account["id"] == id][0]
 
 
 class AttrDict(dict):
@@ -539,7 +532,7 @@ def test_deploy_duplicate(user_session, api_deployment):
 
 
 def test_deploy_collaborators(user_session, api_deployment):
-    uname = "tooltest2"
+    uname: str = _get_account(id="2")["username"]
     prec, drec = api_deployment
     clist = user_session.deployment_collaborator_list(drec)
     assert len(clist) == 0

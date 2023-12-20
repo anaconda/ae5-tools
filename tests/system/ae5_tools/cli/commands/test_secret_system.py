@@ -4,14 +4,8 @@ import uuid
 import pytest
 
 from ae5_tools.api import AEUserSession
+from tests.system.common import _get_account
 from tests.utils import CMDException, _cmd, _get_vars
-
-with open(file="system-test-state.json", mode="r", encoding="utf-8") as file:
-    FIXTURE_STATE: dict = json.load(file)
-
-
-def _get_account(id: str) -> dict:
-    return [account for account in FIXTURE_STATE["accounts"] if account["id"] == id][0]
 
 
 @pytest.fixture(scope="session")

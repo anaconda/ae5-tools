@@ -86,12 +86,12 @@ commands:
   # Documentation Commands
 
   build:apidocs:
-    env_spec: default
+    env_spec: documentation
     unix: |
       sphinx-apidoc -f -o docs/source/ae5_tools ae5_tools
 
   build:docs:
-    env_spec: default
+    env_spec: documentation
     unix: |
       rm -rf docs/build
       cd docs && make clean && make html
@@ -129,7 +129,6 @@ env_specs:
       - defaults:requests
       - defaults:aiohttp # (k8s server code base)
       - defaults:pandas
-      - defaults:pydantic>=2
 
       # Project Maintenance, Development, and Testing
       - defaults:anaconda-project
@@ -140,10 +139,16 @@ env_specs:
       - defaults:pytest-cov
       - defaults:python-dotenv
 
+  documentation:
+    description: Environment for building documentation
+    packages:
+      # Python Version Selection
+      - defaults:python>=3.11
+
       # Documentation
-      - defaults:sphinx
-      - defaults:sphinx-rtd-theme
-      - defaultse:myst-parser
+      - conda-forge:sphinx
+      - conda-forge:sphinx-rtd-theme
+      - conda-forge:myst-parser
 
   k8s_server:
     description: Default environment spec for k8s server

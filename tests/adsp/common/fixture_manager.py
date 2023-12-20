@@ -6,27 +6,18 @@ import time
 from abc import abstractmethod
 from copy import copy, deepcopy
 
-from pydantic import BaseModel, ConfigDict
-
 from ae5_tools import AEAdminSession, AEException, AEUnexpectedResponseError, AEUserSession, demand_env_var
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class FixtureManager(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    ae_admin_session: AEAdminSession | None = None
-    config: dict
-    accounts: list[dict] = []
-    projects: list[dict] = []
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        if not self.ae_admin_session:
-            self.ae_admin_session = FixtureManager.build_session(admin=True)
+class FixtureManager:
+    def __init__(self, config: dict, ae_admin_session: AEAdminSession | None = None) -> None:
+        self.accounts: list[dict] = []
+        self.projects: list[dict] = []
+        self.config: dict = config
+        self.ae_admin_session: AEAdminSession = ae_admin_session if ae_admin_session else FixtureManager.build_session(admin=True)
 
     def __del__(self):
         if "teardown" in self.config and self.config["teardown"]:
@@ -66,7 +57,7 @@ class FixtureManager(BaseModel):
 
     @staticmethod
     def _resolve_conn_params(
-            hostname: str | None = None, username: str | None = None, password: str | None = None, admin: bool = False
+        hostname: str | None = None, username: str | None = None, password: str | None = None, admin: bool = False
     ) -> tuple[str, str, str]:
         hostname = hostname if hostname else demand_env_var(name="AE5_HOSTNAME")
 
@@ -86,10 +77,9 @@ class FixtureManager(BaseModel):
 
     @staticmethod
     def build_session(
-            hostname: str | None = None, username: str | None = None, password: str | None = None, admin: bool = False
+        hostname: str | None = None, username: str | None = None, password: str | None = None, admin: bool = False
     ) -> AEUserSession | AEAdminSession:
-        params: tuple = FixtureManager._resolve_conn_params(hostname=hostname, username=username, password=password,
-                                                            admin=admin)
+        params: tuple = FixtureManager._resolve_conn_params(hostname=hostname, username=username, password=password, admin=admin)
         if admin:
             return AEAdminSession(*params)
         return AEUserSession(*params)
@@ -121,8 +111,7 @@ class FixtureManager(BaseModel):
                             logger.warning("User account {account['username']} already exists, removing..")
                             self._destroy_account(username=account["username"])
                         else:
-                            logger.warning(
-                                f"User account {account['username']} already exists, will not [re]create (or remove).")
+                            logger.warning(f"User account {account['username']} already exists, will not [re]create (or remove).")
                             self.accounts.append(account)
                             retry = False
                     else:
@@ -197,8 +186,7 @@ class FixtureManager(BaseModel):
 
     def upload_fixture_project(self, proj_params: dict, owner: str, force: bool = False):
         logger.info(f"Uploading project {proj_params['name']} for account {owner}")
-        conn: AEUserSession = self.get_account_conn(
-            username=owner)  # [user for user in self.accounts if user["username"] == owner][0]["conn"]
+        conn: AEUserSession = self.get_account_conn(username=owner)  # [user for user in self.accounts if user["username"] == owner][0]["conn"]
 
         # {'git_repos': {}, 'repository': 'tooltest1-74ae9699eea84681ae49c8beb4d3ae58', 'editor': 'jupyterlab', 'owner': 'tooltest1', 'tags': [], 'repo_owned': True, 'name': 'testproj1', 'repo_url': 'http://anaconda-enterprise-ap-git-storage/anaconda/tooltest1-74ae9699eea84681ae49c8beb4d3ae58.git', 'created': '2023-12-14T17:36:26.094764+00:00', 'git_server': 'default', 'project_create_status': 'done', 'url': 'http://anaconda-enterprise-ap-storage/projects/74ae9699eea84681ae49c8beb4d3ae58', 'updated': '2023-12-14T17:36:26.094764+00:00', 'id': 'a0-74ae9699eea84681ae49c8beb4d3ae58', 'resource_profile': 'default', '_record_type': 'project'}
 
@@ -218,12 +206,10 @@ class FixtureManager(BaseModel):
                         logger.warning("Enforcing wait after encountering error on project upload")
                         time.sleep(30)
                         # delete, and then allow it to loop ...
-                        logger.warning(
-                            f"Project {proj_params['name']} for account {owner} already exists, forcibly deleting ..")
+                        logger.warning(f"Project {proj_params['name']} for account {owner} already exists, forcibly deleting ..")
                         self._destroy_fixture_project(name=proj_params["name"], owner=owner)
                     else:
-                        logger.warning(
-                            f"Project {proj_params['name']} for account {owner} already exists, pulling project info ..")
+                        logger.warning(f"Project {proj_params['name']} for account {owner} already exists, pulling project info ..")
                         response: dict = conn.project_info(ident=f"{owner}/{proj_params['name']}")
                         proj: dict = deepcopy(proj_params)
                         proj["record"] = response
@@ -245,8 +231,7 @@ class FixtureManager(BaseModel):
     def _destroy_fixture_project(self, name: str, owner: str) -> None:
         # Ensure fixture is managed
         if not self._lookup_fixture(name=name, owner=owner):
-            logger.warning(
-                f"Unable to find managed project fixture for project {name} for owner {owner}, skipping removal..")
+            logger.warning(f"Unable to find managed project fixture for project {name} for owner {owner}, skipping removal..")
             return
 
         conn: AEUserSession = self.get_account_conn(username=owner)

@@ -847,8 +847,12 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format)
 
     def _pre_editor(self, response):
+        # This does not appear to be needed on versions >5.7.0
+        # (packages has been removed).  Logic updated to continue
+        # support for prior releases.
         for rec in response:
-            rec["packages"] = ", ".join(rec["packages"])
+            if "packages" in rec:
+                rec["packages"] = ", ".join(rec["packages"])
         return response
 
     def editor_list(self, filter=None, format=None):
