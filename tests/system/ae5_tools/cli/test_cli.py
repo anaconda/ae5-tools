@@ -10,7 +10,7 @@ import pytest
 import requests
 
 from ae5_tools.api import AEUnexpectedResponseError
-from tests.utils import CMDException, _cmd, _compare_tarfiles
+from tests.adsp.common.utils import CMDException, _cmd, _compare_tarfiles
 
 
 @pytest.fixture(scope="module")

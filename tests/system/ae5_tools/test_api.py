@@ -9,8 +9,8 @@ import pytest
 import requests
 
 from ae5_tools.api import AEException, AEUnexpectedResponseError, AEUserSession
-from tests.system.common import _get_account
-from tests.utils import _compare_tarfiles, _get_vars
+from tests.adsp.common.utils import _compare_tarfiles, _get_vars
+from tests.system.state import load_account
 
 
 class AttrDict(dict):
@@ -48,7 +48,7 @@ def test_user_session(monkeypatch, capsys):
         AEUserSession("", "")
     assert "Must supply hostname and username" in str(excinfo.value)
     hostname: str = _get_vars("AE5_HOSTNAME")
-    local_account: dict = _get_account(id="1")
+    local_account: dict = load_account(id="1")
     username: str = local_account["username"]
     password: str = local_account["password"]
     with pytest.raises(AEException) as excinfo:
@@ -72,7 +72,7 @@ def test_user_k8s_session(monkeypatch, capsys):
         AEUserSession("", "")
     assert "Must supply hostname and username" in str(excinfo.value)
     hostname: str = _get_vars("AE5_HOSTNAME")
-    local_account: dict = _get_account(id="1")
+    local_account: dict = load_account(id="1")
     username: str = local_account["username"]
     password: str = local_account["password"]
     with pytest.raises(AEException) as excinfo:
@@ -532,7 +532,7 @@ def test_deploy_duplicate(user_session, api_deployment):
 
 
 def test_deploy_collaborators(user_session, api_deployment):
-    uname: str = _get_account(id="2")["username"]
+    uname: str = load_account(id="2")["username"]
     prec, drec = api_deployment
     clist = user_session.deployment_collaborator_list(drec)
     assert len(clist) == 0
@@ -655,7 +655,7 @@ def test_login_time(admin_session, user_session):
     assert ltm1 < now
 
     # Create new login session. This should change lastLogin
-    password: str = _get_account(id="1")["password"]
+    password: str = load_account(id="1")["password"]
     user_sess2 = AEUserSession(user_session.hostname, user_session.username, password, persist=False)
     plist1 = user_sess2.project_list()
     urec = admin_session.user_info(urec["id"])

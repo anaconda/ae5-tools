@@ -3,14 +3,14 @@ import uuid
 import pytest
 
 from ae5_tools.api import AEException, AEUserSession
-from tests.system.common import _get_account
-from tests.utils import _get_vars
+from tests.adsp.common.utils import _get_vars
+from tests.system.state import load_account
 
 
 @pytest.fixture(scope="session")
 def user_session():
     hostname: str = _get_vars("AE5_HOSTNAME")
-    local_account: dict = _get_account(id="1")
+    local_account: dict = load_account(id="1")
     username: str = local_account["username"]
     password: str = local_account["password"]
     s = AEUserSession(hostname, username, password)
