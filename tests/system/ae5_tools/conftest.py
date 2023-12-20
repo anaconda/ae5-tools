@@ -1,7 +1,17 @@
+import json
+import os
+
 import pytest
 
 from ae5_tools.api import AEAdminSession, AEUserSession
 from tests.utils import _get_vars
+
+with open(file="system-test-state.json", mode="r", encoding="utf-8") as file:
+    FIXTURE_STATE: dict = json.load(file)
+
+
+def _get_account(id: str) -> dict:
+    return [account for account in FIXTURE_STATE["accounts"] if account["id"] == id][0]
 
 
 # Expectations: the user AE5_USERNAME should have at least three projects:
@@ -13,7 +23,11 @@ from tests.utils import _get_vars
 # - AE5_USERNAME is a collaborator on both
 @pytest.fixture(scope="session")
 def user_session():
-    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
+    hostname: str = _get_vars("AE5_HOSTNAME")
+    local_account: dict = _get_account(id="1")
+    username: str = local_account["username"]
+    password: str = local_account["password"]
+
     s = AEUserSession(hostname, username, password)
     for run in s.run_list():
         if run["owner"] == username:
@@ -43,14 +57,19 @@ def user_session():
     plist = s.project_list(collaborators=True)
     powned = [p for p in plist if p["owner"] == username]
     pother = [p for p in plist if p["owner"] != username]
+
     # Assert there are exactly 3 projects owned by the test user
     assert len(powned) == 3
+
     # Need at least two duplicated project names to properly test sorting/filtering
     assert len(set(p["name"] for p in powned).intersection(p["name"] for p in pother)) >= 2
+
     # Make sure all three editors are represented
     assert len(set(p["editor"] for p in powned)) == 3
+
     # Make sure we have 0, 1, and 2 collaborators represented
     assert set(len(p["_collaborators"]) for p in plist if p["owner"] == username).issuperset((0, 1, 2))
+
     yield s
     s.disconnect()
 

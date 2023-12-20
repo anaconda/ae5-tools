@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import tarfile
 import tempfile
@@ -10,6 +11,13 @@ import requests
 
 from ae5_tools.api import AEException, AEUnexpectedResponseError, AEUserSession
 from tests.utils import _compare_tarfiles, _get_vars
+
+with open(file="system-test-state.json", mode="r", encoding="utf-8") as file:
+    FIXTURE_STATE: dict = json.load(file)
+
+
+def _get_account(id: str) -> dict:
+    return [account for account in FIXTURE_STATE["accounts"] if account["id"] == id][0]
 
 
 class AttrDict(dict):
@@ -46,7 +54,10 @@ def test_user_session(monkeypatch, capsys):
     with pytest.raises(ValueError) as excinfo:
         AEUserSession("", "")
     assert "Must supply hostname and username" in str(excinfo.value)
-    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
+    hostname: str = _get_vars("AE5_HOSTNAME")
+    local_account: dict = _get_account(id="1")
+    username: str = local_account["username"]
+    password: str = local_account["password"]
     with pytest.raises(AEException) as excinfo:
         c = AEUserSession(hostname, username, "x" + password, persist=False)
         c.authorize()
@@ -67,7 +78,10 @@ def test_user_k8s_session(monkeypatch, capsys):
     with pytest.raises(ValueError) as excinfo:
         AEUserSession("", "")
     assert "Must supply hostname and username" in str(excinfo.value)
-    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
+    hostname: str = _get_vars("AE5_HOSTNAME")
+    local_account: dict = _get_account(id="1")
+    username: str = local_account["username"]
+    password: str = local_account["password"]
     with pytest.raises(AEException) as excinfo:
         c = AEUserSession(hostname, username, "x" + password, persist=False)
         c.authorize()

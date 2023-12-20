@@ -1,12 +1,24 @@
+import json
+
 import pytest
 
 from ae5_tools.api import AEUserSession
 from tests.utils import _cmd, _get_vars
 
+with open(file="system-test-state.json", mode="r", encoding="utf-8") as file:
+    FIXTURE_STATE: dict = json.load(file)
+
+
+def _get_account(id: str) -> dict:
+    return [account for account in FIXTURE_STATE["accounts"] if account["id"] == id][0]
+
 
 @pytest.fixture(scope="session")
 def user_session():
-    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
+    hostname: str = _get_vars("AE5_HOSTNAME")
+    local_account: dict = _get_account(id="1")
+    username: str = local_account["username"]
+    password: str = local_account["password"]
     s = AEUserSession(hostname, username, password)
     yield s
     s.disconnect()

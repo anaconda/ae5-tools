@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 
 from dotenv import load_dotenv
 
 from ae5_tools import AEUserSession
-from tests.adsp.common.abstract_fixture_suite import AbstractFixtureSuite
 from tests.adsp.common.fixture_manager import FixtureManager
 from tests.adsp.common.utils import _process_launch_wait
 
@@ -21,7 +21,7 @@ def run() -> None:
     _process_launch_wait(shell_out_cmd=shell_out_cmd)
 
 
-class SystemTestFixtureSuite(AbstractFixtureSuite):
+class SystemTestFixtureSuite(FixtureManager):
     """
     System Test Setup
         1. Environment Setup
@@ -34,27 +34,33 @@ class SystemTestFixtureSuite(AbstractFixtureSuite):
         Tests which need additions to this are expected to manage the lifecycle of those effects.
     """
 
+    def _get_account(self, id: str) -> dict:
+        for account in self.accounts:
+            if account["id"] == id:
+                return account
+
     def _setup(self) -> None:
         # Create Fixtures
 
         # Create service accounts (and connections)
-        self.manager.create_fixture_accounts(accounts=self.config["service_accounts"], force=self.config["force"])
-        self.manager.create_fixture_connections()
+        self.create_fixture_accounts(accounts=self.config["service_accounts"], force=self.config["force"])
+        self.create_fixture_connections()
 
         # 1. Each user gets all three projects.
         for account in self.config["service_accounts"]:
             for proj in self.config["projects"]:
-                self.manager.upload_fixture_project(proj_params=proj, owner=account["username"], force=self.config["force"])
+                self.upload_fixture_project(proj_params=proj, owner=account["username"], force=self.config["force"])
 
         # 2. Build our relationships.
         logger.info("Building project / account relationships")
 
         # User 3 shares projects 1 & 2 with User 1
-        source_user_conn: AEUserSession = self.manager.get_account_conn(username=self.config["service_accounts"][2]["username"])
-        target_user_name: str = self.config["service_accounts"][0]["username"]
+        source_user = self._get_account(id="3")
+        source_user_conn: AEUserSession = self.get_account_conn(username=source_user["username"])
+        target_user_name: str = self._get_account(id="1")["username"]
 
-        for project in self.manager.projects:
-            if project["record"]["owner"] == self.config["service_accounts"][2]["username"] and project["record"]["name"] in [
+        for project in self.projects:
+            if project["record"]["owner"] == source_user["username"] and project["record"]["name"] in [
                 "testproj1",
                 "testproj2",
             ]:
@@ -62,24 +68,24 @@ class SystemTestFixtureSuite(AbstractFixtureSuite):
                 response = source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
 
         # User 1 shares projects to different numbers of users
-        source_user_conn: AEUserSession = self.manager.get_account_conn(username=self.config["service_accounts"][0]["username"])
-        for project in self.manager.projects:
-            if project["record"]["owner"] == self.config["service_accounts"][0]["username"]:
+        source_user_conn: AEUserSession = self.get_account_conn(username=self._get_account(id="1")["username"])
+        for project in self.projects:
+            if project["record"]["owner"] == self._get_account(id="1")["username"]:
                 project_name: str = project["record"]["name"]
                 project_id: str = project["record"]["id"]
                 logger.info(f"Configuring sharing on project {project['record']['name']} for {project['record']['owner']}")
 
                 if project_name == self.config["projects"][0]["name"]:
                     # Add user 2
-                    target_user_name: str = self.config["service_accounts"][1]["username"]
+                    target_user_name: str = self._get_account(id="2")["username"]
                     source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
                 elif project_name == self.config["projects"][1]["name"]:
                     # Add user 2
-                    target_user_name: str = self.config["service_accounts"][1]["username"]
+                    target_user_name: str = self._get_account(id="2")["username"]
                     source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
 
                     # Add user 3
-                    target_user_name: str = self.config["service_accounts"][2]["username"]
+                    target_user_name: str = self._get_account(id="3")["username"]
                     source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
 
                 elif project_name == self.config["projects"][2]["name"]:
@@ -88,9 +94,9 @@ class SystemTestFixtureSuite(AbstractFixtureSuite):
                     raise NotImplementedError("Unknown project to update contributor on")
 
         # 3. Set editors for user 1's projects
-        source_user_conn: AEUserSession = self.manager.get_account_conn(username=self.config["service_accounts"][0]["username"])
-        for project in self.manager.projects:
-            if project["record"]["owner"] == self.config["service_accounts"][0]["username"]:
+        source_user_conn: AEUserSession = self.get_account_conn(username=self._get_account(id="1")["username"])
+        for project in self.projects:
+            if project["record"]["owner"] == self._get_account(id="1")["username"]:
                 project_name: str = project["record"]["name"]
                 project_id: str = project["record"]["id"]
                 logger.info(f"Setting default editor on project {project['record']['name']} for {project['record']['owner']}")
@@ -113,6 +119,17 @@ if __name__ == "__main__":
     with open(file="tests/fixtures/system/fixtures.json", mode="r", encoding="utf-8") as file:
         config: dict = json.load(file)
 
-    with SystemTestFixtureSuite(config=config, manager=FixtureManager()) as fixtures:
-        # Execute the test runner
+    # randomize!
+    for account in config["service_accounts"]:
+        prefix: str = "ae-system-test"
+        account_id: str = str(uuid.uuid4())
+        account["username"] = prefix + "-" + account_id
+        account["email"] = account["username"] + "@localhost.local"
+        account["firstname"] = account_id
+        account["lastname"] = prefix
+        account["password"] = str(uuid.uuid4())
+
+    with SystemTestFixtureSuite(config=config) as manager:
+        with open(file="system-test-state.json", mode="w", encoding="utf-8") as file:
+            file.write(str(manager))
         run()

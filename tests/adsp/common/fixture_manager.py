@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
+from abc import abstractmethod
 from copy import copy, deepcopy
+
+from pydantic import BaseModel, ConfigDict
 
 from ae5_tools import AEAdminSession, AEException, AEUnexpectedResponseError, AEUserSession, demand_env_var
 
@@ -12,32 +14,52 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class FixtureManager:
-    def __init__(self, ae_admin_session: AEAdminSession | None = None) -> None:
-        self.ae_admin_session: AEAdminSession = ae_admin_session if ae_admin_session else FixtureManager.build_session(admin=True)
-        self.accounts: list[dict] = []
-        self.projects: list[dict] = []
+class FixtureManager(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    ae_admin_session: AEAdminSession | None = None
+    config: dict
+    accounts: list[dict] = []
+    projects: list[dict] = []
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        if not self.ae_admin_session:
+            self.ae_admin_session = FixtureManager.build_session(admin=True)
 
     def __del__(self):
         self.destroy_fixture_projects(ignore_error=True)
         self.destroy_fixture_accounts()
 
-    def load(self, state: str, remove: bool = False) -> None:
-        with open(file=state, mode="r", encoding="utf-8") as file:
-            partial_state: dict = json.load(file)
-        self.accounts = []
-        self.projects = []
+    @abstractmethod
+    def _setup(self) -> None:
+        """ """
 
-        partial_accounts: list[dict] = partial_state["accounts"]
-        partial_projects: list[dict] = partial_state["projects"]
+    def __enter__(self) -> FixtureManager:
+        self._setup()
+        return self
 
-        self.accounts = partial_accounts
-        self.create_fixture_connections()
+    def __exit__(self, type, value, traceback):
+        if "clean" in self.config and self.config["clean"]:
+            self.__del__()
 
-        self.projects = partial_projects
-
-        if remove:
-            os.unlink(path=state)
+    # def load(self, state: str, remove: bool = False) -> None:
+    #     with open(file=state, mode="r", encoding="utf-8") as file:
+    #         partial_state: dict = json.load(file)
+    #     self.accounts = []
+    #     self.projects = []
+    #
+    #     partial_accounts: list[dict] = partial_state["accounts"]
+    #     partial_projects: list[dict] = partial_state["projects"]
+    #
+    #     self.accounts = partial_accounts
+    #     self.create_fixture_connections()
+    #
+    #     self.projects = partial_projects
+    #
+    #     if remove:
+    #         os.unlink(path=state)
 
     @staticmethod
     def _resolve_conn_params(
@@ -229,7 +251,7 @@ class FixtureManager:
                     conn.project_delete(ident=f"{owner}/{name}")
                     self._unmanage_fixture(name=name, owner=owner)
                     logger.info("Enforcing wait after project removal")
-                    time.sleep(5)
+                    time.sleep(2)
                 except AEException as error:
                     if f"No projects found matching name={name}" in str(error):
                         # then we are out of sync ..

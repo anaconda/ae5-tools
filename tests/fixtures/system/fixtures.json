@@ -2,6 +2,7 @@
   "force": false,
   "service_accounts": [
     {
+      "id": "1",
       "username": "tooltest",
       "email": "tooltest@localhost.local",
       "firstname": "tooltest",
@@ -9,6 +10,7 @@
       "password": "tooltest"
     },
     {
+      "id": "2",
       "username": "tooltest2",
       "email": "tooltest2@localhost.local",
       "firstname": "tooltest",
@@ -16,6 +18,7 @@
       "password": "tooltest2"
     },
     {
+      "id": "3",
       "username": "tooltest3",
       "email": "tooltest3@localhost.local",
       "firstname": "tooltest",
