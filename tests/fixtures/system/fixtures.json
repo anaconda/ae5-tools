@@ -1,5 +1,6 @@
 {
-  "force": false,
+  "force": true,
+  "teardown": false,
   "service_accounts": [
     {
       "id": "1",

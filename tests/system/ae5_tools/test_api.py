@@ -662,7 +662,7 @@ def test_login_time(admin_session, user_session):
     assert ltm1 < now
 
     # Create new login session. This should change lastLogin
-    password = os.environ.get("AE5_PASSWORD")
+    password: str = _get_account(id="1")["password"]
     user_sess2 = AEUserSession(user_session.hostname, user_session.username, password, persist=False)
     plist1 = user_sess2.project_list()
     urec = admin_session.user_info(urec["id"])

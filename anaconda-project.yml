@@ -120,7 +120,7 @@ env_specs:
     description: Default environment spec for running commands
     packages:
       # Python Version Selection
-      - defaults:python>=3.8
+      - defaults:python>=3.11
 
       # Project Dependencies
       - defaults:python-dateutil>=2.7
@@ -129,7 +129,7 @@ env_specs:
       - defaults:requests
       - defaults:aiohttp # (k8s server code base)
       - defaults:pandas
-      - defaults:pydantic
+      - defaults:pydantic>=2
 
       # Project Maintenance, Development, and Testing
       - defaults:anaconda-project
@@ -141,15 +141,15 @@ env_specs:
       - defaults:python-dotenv
 
       # Documentation
-      - conda-forge:sphinx
-      - conda-forge:sphinx-rtd-theme
-      - conda-forge:myst-parser
+      - defaults:sphinx
+      - defaults:sphinx-rtd-theme
+      - defaultse:myst-parser
 
   k8s_server:
     description: Default environment spec for k8s server
     packages:
       # Python Version Selection
-      - defaults:defaults:python>=3.8
+      - defaults:python>=3.11
 
       # Project Dependencies
       - defaults:python-dateutil
