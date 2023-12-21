@@ -1,7 +1,7 @@
 {
   "force": true,
   "teardown": true,
-  "service_accounts": [
+  "accounts": [
     {
       "id": "1",
       "username": "tooltest",

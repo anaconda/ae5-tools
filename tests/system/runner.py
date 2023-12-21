@@ -8,7 +8,7 @@ import uuid
 
 from dotenv import load_dotenv
 
-from ae5_tools import AEUserSession
+from ae5_tools import AEUserSession, demand_env_var_as_bool, get_env_var
 from tests.adsp.common.fixture_manager import FixtureManager
 from tests.adsp.common.utils import _process_launch_wait
 
@@ -17,7 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 def run() -> None:
-    shell_out_cmd: str = "python -m pytest --cov=ae5_tools --show-capture=all -rP tests/system --cov-append --cov-report=xml -vv --ci-skip"
+    shell_out_cmd: str = "python -m pytest --cov=ae5_tools --show-capture=all -rP tests/system/ae5_tools --cov-append --cov-report=xml -vv"
+
+    if get_env_var(name="CI") and demand_env_var_as_bool(name="CI"):
+        shell_out_cmd += " --ci-skip"
+
     _process_launch_wait(shell_out_cmd=shell_out_cmd)
 
 
@@ -44,12 +48,12 @@ class SystemTestFixtureSuite(FixtureManager):
 
     def _create_service_accounts(self):
         # Create service accounts (and connections)
-        self.create_fixture_accounts(accounts=self.config["service_accounts"], force=self.config["force"])
+        self.create_fixture_accounts(accounts=self.config["accounts"], force=self.config["force"])
         self.create_fixture_connections()
 
     def _upload_projects(self):
         # 1. Each user gets all three projects.
-        for account in self.config["service_accounts"]:
+        for account in self.config["accounts"]:
             for proj in self.config["projects"]:
                 self.upload_fixture_project(proj_params=proj, owner=account["username"], force=self.config["force"])
 
@@ -68,7 +72,7 @@ class SystemTestFixtureSuite(FixtureManager):
                 "testproj2",
             ]:
                 project_id: str = project["record"]["id"]
-                response = source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
+                source_user_conn.project_collaborator_add(ident=project_id, userid=target_user_name)
 
         # User 1 shares projects to different numbers of users
         source_user_conn: AEUserSession = self.get_account_conn(username=self._get_account(id="1")["username"])
@@ -121,7 +125,7 @@ class SystemTestFixtureSuite(FixtureManager):
             config: dict = json.load(file)
 
         # randomize!
-        for account in config["service_accounts"]:
+        for account in config["accounts"]:
             prefix: str = "ae-system-test"
             account_id: str = str(uuid.uuid4())
             account["username"] = prefix + "-" + account_id

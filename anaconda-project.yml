@@ -78,6 +78,11 @@ commands:
       conda install $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
       py.test --cov=ae5_tools -v tests/integration  --cov-append --cov-report=xml -vv
 
+  test:load:
+    env_spec: default
+    unix: |
+      python -m tests.load.runner
+
   test:system:
     env_spec: default
     unix: |
