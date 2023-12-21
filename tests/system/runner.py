@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def run() -> None:
-    shell_out_cmd: str = "python -m pytest --cov=ae5_tools --show-capture=all -rP tests/system --cov-append --cov-report=xml -vv"
+    shell_out_cmd: str = "python -m pytest --cov=ae5_tools --show-capture=all -rP tests/system --cov-append --cov-report=xml -vv --ci-skip"
     _process_launch_wait(shell_out_cmd=shell_out_cmd)
 
 

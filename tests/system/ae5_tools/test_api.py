@@ -412,7 +412,7 @@ def api_session(user_session, api_project):
     assert not any(r["id"] == srec2["id"] for r in user_session.session_list())
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_session(user_session, api_session):
     prec, srec = api_session
     assert srec["owner"] == prec["owner"], srec
@@ -424,20 +424,20 @@ def test_session(user_session, api_session):
     assert "Jupyter Notebook requires JavaScript." in sdata, sdata
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_session_name(user_session, api_session):
     prec, srec = api_session
     assert srec["name"] == prec["name"], srec
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_project_sessions(user_session, api_session):
     prec, srec = api_session
     slist = user_session.project_sessions(prec)
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_session_branches_5_7_0(user_session, api_session):
     """Behavior changed in 5.7.0"""
     prec, srec = api_session
@@ -447,7 +447,7 @@ def test_session_branches_5_7_0(user_session, api_session):
     assert bdict["local"] == bdict["master"], branches
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_session_before_changes(user_session, api_session):
     prec, srec = api_session
     changes1 = user_session.session_changes(srec, format="json")
@@ -471,6 +471,7 @@ def api_deployment(user_session, api_project):
     assert not any(r["id"] == drec2["id"] for r in user_session.deployment_list())
 
 
+@pytest.mark.ci_skip
 def test_deploy(user_session, api_deployment):
     prec, drec = api_deployment
     assert drec["owner"] == prec["owner"], drec
@@ -501,6 +502,7 @@ def test_deploy_patch(user_session, api_deployment):
     assert drec3["public"] == drec["public"]
 
 
+@pytest.mark.ci_skip
 def test_deploy_token(user_session, api_deployment):
     prec, drec = api_deployment
     token = user_session.deployment_token(drec)
@@ -527,6 +529,7 @@ def test_deploy_logs(user_session, api_deployment):
     assert "App Proxy is fully operational!" in logs["proxy"], logs["proxy"]
 
 
+@pytest.mark.ci_skip
 def test_deploy_duplicate(user_session, api_deployment):
     prec, drec = api_deployment
     dname = drec["name"] + "-dup"

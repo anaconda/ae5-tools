@@ -267,7 +267,7 @@ def cli_session(cli_project):
     assert not any(r["id"] == srec2["id"] for r in _cmd("session", "list"))
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_session(cli_session):
     prec, srec = cli_session
     assert srec["owner"] == prec["owner"], srec
@@ -280,14 +280,14 @@ def test_session(cli_session):
     assert "Jupyter Notebook requires JavaScript." in sdata, sdata
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_project_sessions(cli_session):
     prec, srec = cli_session
     slist = _cmd("project", "sessions", prec["id"])
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_session_branches_5_7_0(cli_session):
     """Behavior updated in 5.7.0"""
     prec, srec = cli_session
@@ -297,7 +297,7 @@ def test_session_branches_5_7_0(cli_session):
     assert bdict["local"] == bdict["master"], branches
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_session_before_changes(cli_session):
     prec, srec = cli_session
     changes1 = _cmd("session", "changes", prec["id"])
@@ -332,7 +332,7 @@ def cli_deployment(cli_project):
     assert not any(r["id"] == drec2["id"] for r in _cmd("deployment", "list"))
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_deploy(cli_deployment):
     prec, drec = cli_deployment
     assert drec["owner"] == prec["owner"], drec
@@ -349,6 +349,7 @@ def test_deploy(cli_deployment):
     assert ldata.strip() == "Hello Anaconda Enterprise!", ldata
 
 
+@pytest.mark.ci_skip
 def test_project_deployments(cli_deployment):
     prec, drec = cli_deployment
     dlist = _cmd("project", "deployments", prec["id"])
@@ -365,7 +366,7 @@ def test_deploy_patch(cli_deployment):
     assert drec3["public"] == drec["public"]
 
 
-@pytest.mark.skip(reason="Failing against CI - Environmental DNS Issue")
+@pytest.mark.ci_skip
 def test_deploy_token(user_session, cli_deployment):
     prec, drec = cli_deployment
     token = _cmd("deployment", "token", drec["id"], table=False).strip()
@@ -390,7 +391,7 @@ def test_deploy_logs(cli_deployment):
     assert "App Proxy is fully operational!" in proxy_logs, proxy_logs
 
 
-@pytest.mark.skip(reason="Failing against CI - Unable to reproduce in other environments")
+@pytest.mark.ci_skip
 def test_deploy_duplicate(cli_deployment):
     prec, drec = cli_deployment
     dname = drec["name"] + "-dup"
@@ -412,7 +413,7 @@ def test_deploy_duplicate(cli_deployment):
     assert not any(r["name"] == dname for r in _cmd("deployment", "list"))
 
 
-@pytest.mark.skip(reason="Failing against CI - Unable to reproduce in other environments")
+@pytest.mark.ci_skip
 def test_deploy_collaborators(cli_deployment):
     uname = "tooltest2"
     prec, drec = cli_deployment
