@@ -114,26 +114,30 @@ class SystemTestFixtureSuite(FixtureManager):
                 else:
                     raise NotImplementedError("Unknown project to update default editor on")
 
+    @staticmethod
+    def gen_config() -> dict:
+        # load our fixtures
+        with open(file="tests/fixtures/system/fixtures.json", mode="r", encoding="utf-8") as file:
+            config: dict = json.load(file)
+
+        # randomize!
+        for account in config["service_accounts"]:
+            prefix: str = "ae-system-test"
+            account_id: str = str(uuid.uuid4())
+            account["username"] = prefix + "-" + account_id
+            account["email"] = account["username"] + "@localhost.local"
+            account["firstname"] = account_id
+            account["lastname"] = prefix
+            account["password"] = str(uuid.uuid4())
+
+        return config
+
 
 if __name__ == "__main__":
     # Load env vars, - do NOT override previously defined ones
     load_dotenv(override=False)
 
-    # load our fixtures
-    with open(file="tests/fixtures/system/fixtures.json", mode="r", encoding="utf-8") as file:
-        config: dict = json.load(file)
-
-    # randomize!
-    for account in config["service_accounts"]:
-        prefix: str = "ae-system-test"
-        account_id: str = str(uuid.uuid4())
-        account["username"] = prefix + "-" + account_id
-        account["email"] = account["username"] + "@localhost.local"
-        account["firstname"] = account_id
-        account["lastname"] = prefix
-        account["password"] = str(uuid.uuid4())
-
-    with SystemTestFixtureSuite(config=config) as manager:
+    with SystemTestFixtureSuite(config=SystemTestFixtureSuite.gen_config()) as manager:
         # serialize to allow individual tests to operate (in other processes)
         with open(file="system-test-state.json", mode="w", encoding="utf-8") as file:
             file.write(str(manager))

@@ -284,7 +284,8 @@ class FixtureManager:
         partial: dict = {"accounts": [], "projects": self.projects}
         for account in self.accounts:
             new_account: dict = copy(account)  # shallow
-            del new_account["conn"]
+            if "conn" in new_account:
+                del new_account["conn"]
             partial["accounts"].append(new_account)
 
         return json.dumps(partial, indent=4)
