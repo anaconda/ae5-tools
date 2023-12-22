@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class FixtureManager:
-    def __init__(self, config: dict, ae_admin_session: AEAdminSession | None = None) -> None:
+    def __init__(self, config: dict | None = None, ae_admin_session: AEAdminSession | None = None) -> None:
         self.accounts: list[dict] = []
         self.projects: list[dict] = []
+        self.sessions: list[dict] = [] # not connections, but user sessions within adsp
         self.config: dict = config
         self.ae_admin_session: AEAdminSession = ae_admin_session if ae_admin_session else FixtureManager.build_session(admin=True)
 
@@ -38,22 +39,14 @@ class FixtureManager:
     def _get_account(self, id: str) -> dict:
         return [account for account in self.accounts if account["id"] == id][0]
 
-    # def load(self, state: str, remove: bool = False) -> None:
-    #     with open(file=state, mode="r", encoding="utf-8") as file:
-    #         partial_state: dict = json.load(file)
-    #     self.accounts = []
-    #     self.projects = []
-    #
-    #     partial_accounts: list[dict] = partial_state["accounts"]
-    #     partial_projects: list[dict] = partial_state["projects"]
-    #
-    #     self.accounts = partial_accounts
-    #     self.create_fixture_connections()
-    #
-    #     self.projects = partial_projects
-    #
-    #     if remove:
-    #         os.unlink(path=state)
+    def load(self, state: str) -> None:
+        with open(file=state, mode="r", encoding="utf-8") as file:
+            partial_state: dict = json.load(file)
+
+        self.projects = partial_state["projects"]
+        self.config = partial_state["config"]
+        self.accounts = partial_state["accounts"]
+        self.create_fixture_connections()
 
     @staticmethod
     def _resolve_conn_params(
@@ -161,20 +154,22 @@ class FixtureManager:
     def destroy_fixture_projects(self, ignore_error: bool = False) -> None:
         local_projects: list[dict] = deepcopy(self.projects)
         for project in local_projects:
-            try:
-                if "record" in project:
-                    self._destroy_fixture_project(name=project["record"]["name"], owner=project["record"]["owner"], force=self.config["force"])
-            except AEException as error:
-                if ignore_error:
-                    logger.warning(str(error))
-                    if "Invalid username or password." in str(error):
-                        pass
+            retry: bool = True
+            while retry:
+                try:
+                    if "record" in project:
+                        self._destroy_fixture_project(name=project["record"]["name"], owner=project["record"]["owner"], force=self.config["force"])
+                    retry = False
+                except AEException as error:
+                    if ignore_error:
+                        logger.warning(str(error))
+                        if "Invalid username or password." in str(error):
+                            retry = False
+                        else:
+                            logger.error(str(error))
                     else:
                         logger.error(str(error))
-                        raise error from error
-                else:
-                    logger.error(str(error))
-                    raise error from error
+                    time.sleep(5)
 
     def _destroy_account(self, username: str) -> None:
         if username == self.ae_admin_session.username:
@@ -290,7 +285,7 @@ class FixtureManager:
             raise error from error
 
     def __str__(self) -> str:
-        partial: dict = {"accounts": [], "projects": self.projects}
+        partial: dict = {"config": self.config, "accounts": [], "projects": self.projects}
         for account in self.accounts:
             new_account: dict = copy(account)  # shallow
             if "conn" in new_account:
