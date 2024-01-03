@@ -16,7 +16,7 @@ class FixtureManager:
     def __init__(self, config: dict | None = None, ae_admin_session: AEAdminSession | None = None) -> None:
         self.accounts: list[dict] = []
         self.projects: list[dict] = []
-        self.sessions: list[dict] = [] # not connections, but user sessions within adsp
+        self.sessions: list[dict] = []  # not connections, but user sessions within adsp
         self.config: dict = config
         self.ae_admin_session: AEAdminSession = ae_admin_session if ae_admin_session else FixtureManager.build_session(admin=True)
 
