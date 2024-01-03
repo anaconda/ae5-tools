@@ -124,15 +124,16 @@ class SystemTestFixtureSuite(FixtureManager):
         with open(file="tests/fixtures/system/fixtures.json", mode="r", encoding="utf-8") as file:
             config: dict = json.load(file)
 
-        # randomize!
-        for account in config["accounts"]:
-            prefix: str = "ae-system-test"
-            account_id: str = str(uuid.uuid4())
-            account["username"] = prefix + "-" + account_id
-            account["email"] = account["username"] + "@localhost.local"
-            account["firstname"] = account_id
-            account["lastname"] = prefix
-            account["password"] = str(uuid.uuid4())
+        if randomize:
+            # randomize!
+            for account in config["accounts"]:
+                prefix: str = "ae-system-test"
+                account_id: str = str(uuid.uuid4())
+                account["username"] = prefix + "-" + account_id
+                account["email"] = account["username"] + "@localhost.local"
+                account["firstname"] = account_id
+                account["lastname"] = prefix
+                account["password"] = str(uuid.uuid4())
 
         return config
 
