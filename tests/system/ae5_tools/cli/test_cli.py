@@ -11,6 +11,7 @@ import requests
 
 from ae5_tools.api import AEUnexpectedResponseError
 from tests.adsp.common.utils import CMDException, _cmd, _compare_tarfiles
+from tests.system.state import load_account
 
 
 @pytest.fixture(scope="module")
@@ -415,7 +416,7 @@ def test_deploy_duplicate(cli_deployment):
 
 @pytest.mark.ci_skip
 def test_deploy_collaborators(cli_deployment):
-    uname = "tooltest2"
+    uname: str = load_account(id="2")["username"]
     prec, drec = cli_deployment
     clist = _cmd("deployment", "collaborator", "list", drec["id"])
     assert len(clist) == 0
