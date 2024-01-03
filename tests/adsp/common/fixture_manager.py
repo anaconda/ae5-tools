@@ -108,7 +108,7 @@ class FixtureManager:
                                 f"User account {account['username']} already exists, will not [re]create (or remove). Password may be incorrect.."
                             )
                             if get_env_var(name="AE5_PASSWORD"):
-                                logger.warning("Found `AE5_PASSWORD` defined, will attempt to leverage password from this source..")
+                                logger.warning(f"Found `AE5_PASSWORD` defined, will attempt to leverage password from this source.. {demand_env_var(name='AE5_PASSWORD')}")
                                 account["password"] = demand_env_var(name="AE5_PASSWORD")
                             self.accounts.append(account)
                             retry = False
