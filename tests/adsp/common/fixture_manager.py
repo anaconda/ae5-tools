@@ -6,7 +6,7 @@ import time
 from abc import abstractmethod
 from copy import copy, deepcopy
 
-from ae5_tools import AEAdminSession, AEException, AEUnexpectedResponseError, AEUserSession, demand_env_var
+from ae5_tools import AEAdminSession, AEException, AEUnexpectedResponseError, AEUserSession, demand_env_var, get_env_var
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -107,6 +107,9 @@ class FixtureManager:
                             logger.warning(
                                 f"User account {account['username']} already exists, will not [re]create (or remove). Password may be incorrect.."
                             )
+                            if get_env_var(name="AE5_PASSWORD"):
+                                logger.warning("Found `AE5_PASSWORD` defined, will attempt to leverage password from this source..")
+                                account["password"] = demand_env_var(name="AE5_PASSWORD")
                             self.accounts.append(account)
                             retry = False
                     else:
