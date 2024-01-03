@@ -1,8 +1,12 @@
 #####################################################
 # Test Cases For user_list
 #####################################################
+import pytest
 
 
+# NOTE: This test WILL fail against AIP due to the account being created in an older version of keycloak.
+# TODO: Remove CI skip once the transition to new CI environment has been completed.
+@pytest.mark.ci_skip
 def test_user_list_has_realm_roles(admin_session):
     # Test Case - User list contains realm roles
 
