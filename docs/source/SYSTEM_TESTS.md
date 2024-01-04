@@ -105,3 +105,74 @@ anaconda-project run test:system
 ```commandline
 anaconda-project run test:load
 ```
+
+## Creating Test Suites
+Additional test suites can be created and used as context objects within testing frameworks.  Below is a simple example of how to subclass the FixtureManager in order to create a suite which handles account creation for a development team.
+
+**tests/system/create-dev-accounts.py**
+```python
+from __future__ import annotations
+
+import json
+import logging
+
+from dotenv import load_dotenv
+
+from tests.adsp.common.fixture_manager import FixtureManager
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class DevTeamSystemFixtures(FixtureManager):
+    def _setup(self) -> None:
+        # Create dev accounts
+        self.create_fixture_accounts(accounts=self.config["service_accounts"], force=self.config["force"])
+
+
+if __name__ == "__main__":
+    # Load env vars, - do NOT override previously defined ones
+    load_dotenv(override=False)
+
+    fixtures_file: str = "tests/fixtures/system/dev-team.json"
+
+    with open(file=fixtures_file, mode="r", encoding="utf-8") as file:
+        config: dict = json.load(file)
+
+    with DevTeamSystemFixtures(config=config) as manager:
+        print(str(manager))
+
+```
+
+**tests/fixtures/system/dev-team.json**
+```json lines
+{
+  "force": false,
+  "teardown": false,
+  "accounts": [
+    {
+      "id": "1",
+      "username": "developerone",
+      "email": "developerone@localhost.local",
+      "firstname": "Developer",
+      "lastname": "One",
+      "enabled": true,
+      "email_verified": true,
+      "password": "developerone",
+      "password_temporary": false
+    },
+    {
+      "id": "2",
+      "username": "developertwo",
+      "email": "developertwo@localhost.local",
+      "firstname": "Developer",
+      "lastname": "Two",
+      "enabled": true,
+      "email_verified": true,
+      "password": "developertwo",
+      "password_temporary": false
+    },
+  ],
+  "projects": []
+}
+```
