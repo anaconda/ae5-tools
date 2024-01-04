@@ -7,6 +7,7 @@ AE5 Tools Documentation
 
    README
    COMMANDS
+   SYSTEM_TESTS
    K8S_SERVER
 
 

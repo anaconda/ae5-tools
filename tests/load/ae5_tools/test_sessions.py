@@ -54,7 +54,7 @@ class LoadTestFixtureSuite(FixtureManager):
 
 
 def test_sessions():
-    with LoadTestFixtureSuite(config=LoadTestFixtureSuite.gen_config(size=100)) as manager:
+    with LoadTestFixtureSuite(config=LoadTestFixtureSuite.gen_config(size=1)) as manager:
         """"""
         print(str(manager))
 

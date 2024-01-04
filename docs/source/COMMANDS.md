@@ -16,6 +16,7 @@ These commands are used during project development.
 | test:unit        | Default     | Unit Test Suite                           |
 | test:integration | Default     | Integration Test Suite                    |
 | test:system      | Default     | System Test Suite                         |
+| test:load        | Default     | Load Test Suite                           |
 
 
 ### Runtime

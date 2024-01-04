@@ -119,7 +119,7 @@ class SystemTestFixtureSuite(FixtureManager):
                     raise NotImplementedError("Unknown project to update default editor on")
 
     @staticmethod
-    def gen_config(randomize: bool = True) -> dict:
+    def gen_config(randomize: bool = False) -> dict:
         # load our fixtures
         with open(file="tests/fixtures/system/fixtures.json", mode="r", encoding="utf-8") as file:
             config: dict = json.load(file)
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     # Load env vars, - do NOT override previously defined ones
     load_dotenv(override=False)
 
-    with SystemTestFixtureSuite(config=SystemTestFixtureSuite.gen_config(randomize=False)) as manager:
+    with SystemTestFixtureSuite(config=SystemTestFixtureSuite.gen_config()) as manager:
         # serialize to allow individual tests to operate (in other processes)
         with open(file="system-test-state.json", mode="w", encoding="utf-8") as file:
             file.write(str(manager))

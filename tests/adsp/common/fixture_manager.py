@@ -107,14 +107,6 @@ class FixtureManager:
                             logger.warning(
                                 f"User account {account['username']} already exists, will not [re]create (or remove). Password may be incorrect.."
                             )
-                            if get_env_var(name="AE5_PASSWORD"):
-                                import base64
-                                account["password"] = demand_env_var(name="AE5_PASSWORD")
-                                string_bytes = account["password"].encode("ascii")
-                                base64_bytes = base64.b64encode(string_bytes)
-                                base64_string = base64_bytes.decode("ascii")
-                                logger.warning(
-                                    f"Found `AE5_PASSWORD` defined, will attempt to leverage password from this source.. {base64_string}")
                             self.accounts.append(account)
                             retry = False
                     else:

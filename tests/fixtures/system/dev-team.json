@@ -1,0 +1,106 @@
+{
+  "force": false,
+  "teardown": false,
+  "accounts": [
+    {
+      "id": "1",
+      "username": "jburt",
+      "email": "jburt@anaconda.com",
+      "firstname": "Josh",
+      "lastname": "Burt",
+      "enabled": true,
+      "email_verified": true,
+      "password": "jburt",
+      "password_temporary": false
+    },
+    {
+      "id": "2",
+      "username": "athomas",
+      "email": "athomas@anaconda.com",
+      "firstname": "Aaron",
+      "lastname": "Thomas",
+      "enabled": true,
+      "email_verified": true,
+      "password": "athomas",
+      "password_temporary": false
+    },
+    {
+      "id": "3",
+      "username": "asedletska",
+      "email": "asedletska@anaconda.com",
+      "firstname": "Alina",
+      "lastname": "Sedletska",
+      "enabled": true,
+      "email_verified": "RUE",
+      "password": "asedletska",
+      "password_temporary": false
+    },
+    {
+      "id": "4",
+      "username": "cgunn",
+      "email": "cgunn@anaconda.com",
+      "firstname": "Connor",
+      "lastname": "Gunn",
+      "enabled": true,
+      "email_verified": true,
+      "password": "cgunn",
+      "password_temporary": false
+    },
+    {
+      "id": "5",
+      "username": "jsandhu",
+      "email": "jsandhu@anaconda.com",
+      "firstname": "Jasmine",
+      "lastname": "Sandhu",
+      "enabled": true,
+      "email_verified": true,
+      "password": "jsandhu",
+      "password_temporary": false
+    },
+    {
+      "id": "6",
+      "username": "jrohloff",
+      "email": "jrohloff@anaconda.com",
+      "firstname": "Johannes",
+      "lastname": "Rohloff",
+      "enabled": true,
+      "email_verified": true,
+      "password": "jrohloff",
+      "password_temporary": false
+    },
+    {
+      "id": "7",
+      "username": "mgrant",
+      "email": "mgrant@anaconda.com",
+      "firstname": "Michael",
+      "lastname": "Grant",
+      "enabled": true,
+      "email_verified": true,
+      "password": "mgrant",
+      "password_temporary": false
+    },
+    {
+      "id": "8",
+      "username": "nrees",
+      "email": "nrees@anaconda.com",
+      "firstname": "Nathan",
+      "lastname": "Rees",
+      "enabled": true,
+      "email_verified": true,
+      "password": "nrees",
+      "password_temporary": false
+    },
+    {
+      "id": "9",
+      "username": "ybiletskyi",
+      "email": "ybiletskyi@anaconda.com",
+      "firstname": "Yaroslav",
+      "lastname": "Biletskyi",
+      "enabled": true,
+      "email_verified": true,
+      "password": "ybiletskyi",
+      "password_temporary": false
+    }
+  ],
+  "projects": []
+}
