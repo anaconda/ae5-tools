@@ -5,19 +5,12 @@
 name: ae5-tools
 description: Command-line manipulation of Anaconda Enterprise 5.
 
+
 ###############################################################################
 ## Variables
 ###############################################################################
 variables: {}
-#  AE5_HOSTNAME: anaconda.example.com
-#  AE5_ADMIN_USERNAME: admin
-#  AE5_ADMIN_PASSWORD: admin
-#  AE5_USERNAME: tooltest
-#  AE5_PASSWORD: tooltest
-#
-#  # k8s service integration configuration
-#  AE5_K8S_ENDPOINT: ssh:centos
-#  AE5_K8S_PORT:  23456
+
 
 ###############################################################################
 # Commands
@@ -54,7 +47,7 @@ commands:
       isort .
       black .
 
-  # Test Commands
+  # Test Commands #############################################################
 
   test:
     env_spec: default
@@ -88,7 +81,7 @@ commands:
     unix: |
       python -m tests.system.runner
 
-  # Documentation Commands
+  # Documentation Commands ####################################################
 
   build:apidocs:
     env_spec: documentation
