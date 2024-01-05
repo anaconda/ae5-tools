@@ -5,10 +5,10 @@ on:
       - master
 jobs:
   package:
-#    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 #    runs-on: self-hosted
 #    runs-on: self-hosted-amd64-small-privileged
-    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
+#    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
     steps:
     - name: Retrieve the source code
       uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3
