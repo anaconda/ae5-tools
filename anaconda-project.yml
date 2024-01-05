@@ -118,7 +118,7 @@ env_specs:
     description: Default environment spec for running commands
     packages:
       # Python Version Selection
-      - defaults:python>=3.11
+      - defaults:python>=3.11.0
 
       # Project Dependencies
       - defaults:python-dateutil>=2.7
@@ -141,7 +141,7 @@ env_specs:
     description: Environment for building documentation
     packages:
       # Python Version Selection
-      - defaults:python>=3.11
+      - defaults:python>=3.11.0
 
       # Documentation
       - conda-forge:sphinx
@@ -152,7 +152,7 @@ env_specs:
     description: Default environment spec for k8s server
     packages:
       # Python Version Selection
-      - defaults:python>=3.11
+      - defaults:python>=3.11.0
 
       # Project Dependencies
       - defaults:python-dateutil
