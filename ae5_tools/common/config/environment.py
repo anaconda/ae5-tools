@@ -21,7 +21,8 @@ def demand_env_var(name: str) -> str:
     """
 
     if name not in os.environ:
-        raise EnvironmentVariableNotFoundError("Environment variable (%s) not found", name)
+        msg: str = f"Environment variable ({name}) not found"
+        raise EnvironmentVariableNotFoundError(msg)
     return os.environ[name]
 
 
@@ -64,4 +65,5 @@ def demand_env_var_as_bool(name: str) -> bool:
         return True
     if value_str in ("false", "0"):
         return False
-    raise EnvironmentVariableNotFoundError("Environment variable (%s) not boolean and can not be loaded", name)
+    msg: str = f"Environment variable ({name}) not boolean and can not be loaded"
+    raise EnvironmentVariableNotFoundError(msg)
