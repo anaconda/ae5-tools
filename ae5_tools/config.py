@@ -22,7 +22,7 @@ class ConfigManager:
 
     def init_path(self):
         """Ensure the config directory exists"""
-        logger.debug(f"Creating directory: {self._path}")
+        logger.debug("Creating directory: %s", self._path)
         try:
             os.makedirs(self._path, mode=0o700, exist_ok=True)
         except OSError as e:
@@ -46,11 +46,7 @@ class ConfigManager:
         for label in ("cookies", "tokens"):
             cpath = os.path.join(self._path, label)
             if os.path.isdir(cpath):
-                files = [
-                    os.path.join(cpath, fname)
-                    for fname in os.listdir(cpath)
-                    if not fname.startswith(".") and len(fname.split("@")) == 2
-                ]
+                files = [os.path.join(cpath, fname) for fname in os.listdir(cpath) if not fname.startswith(".") and len(fname.split("@")) == 2]
                 files = sorted(files, key=lambda x: os.path.getmtime(x), reverse=True)
             else:
                 files = []

@@ -57,9 +57,7 @@ _login_help = {
         "to the master node through that username. (AE5_K8S_ENDPOINT)"
     ),
     "impersonate": (
-        "Use the Keycloak administrator account to impersonate the "
-        "given user instead of requiring the user password. "
-        "(AE5_IMPERSONATE)"
+        "Use the Keycloak administrator account to impersonate the " "given user instead of requiring the user password. " "(AE5_IMPERSONATE)"
     ),
     "no-saved-logins": (
         "Do not load or save login sessions to/from disk. A password "
@@ -212,9 +210,7 @@ def cluster_connect(hostname, username, admin):
                     password = cluster(True)
                 else:
                     password = opts.get("password")
-                conn = AEUserSession(
-                    hostname, username, password, persist=session_save, k8s_endpoint=opts.get("k8s_endpoint")
-                )
+                conn = AEUserSession(hostname, username, password, persist=session_save, k8s_endpoint=opts.get("k8s_endpoint"))
             SESSIONS[key] = conn
         except (ValueError, AEException) as e:
             raise click.ClickException(str(e))

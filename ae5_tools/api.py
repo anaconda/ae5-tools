@@ -1,18 +1,17 @@
+from __future__ import annotations
+
 import getpass
 import io
 import json
 import os
 import re
 import sys
-import tarfile
 import time
 import webbrowser
 from datetime import datetime
-from fnmatch import fnmatch
 from http.cookiejar import LWPCookieJar
 from os.path import abspath, basename, isdir, isfile, join
 from tempfile import TemporaryDirectory
-from typing import Dict, List, Optional
 
 import requests
 from dateutil import parser
@@ -724,25 +723,25 @@ class AEUserSession(AESessionBase):
         if not AEUserSession._is_valid_secret_name(key=key):
             raise AEException(f"User secret {key} can not be deleted. Key contains non-alphanumeric characters.")
 
-        secrets: List[str] = self.secret_list()
+        secrets: list[str] = self.secret_list()
         if key not in [name["secret_name"] for name in secrets]:
             raise AEException(f"User secret {key} was not found and cannot be deleted.")
 
         self._delete(f"credentials/user/{key}")
 
-    def secret_list(self, format: Optional[str] = None, **kwargs) -> List[str]:
+    def secret_list(self, format: str | None = None, **kwargs) -> list[dict]:
         """
         Returns user secret key names.
 
         Returns
         -------
-        secrets: List[str]
+        secrets: list[dict]
             A list of user secret key names.
         """
 
-        secret_names: List[str] = self._get("credentials/user")
+        secret_names: list[str] = self._get("credentials/user")
         if "data" in secret_names:
-            secrets: List[Dict] = [{"secret_name": secret_name} for secret_name in secret_names["data"]]
+            secrets: list[dict] = [{"secret_name": secret_name} for secret_name in secret_names["data"]]
             return self._format_response(secrets, format=format)
         else:
             raise AEException("Failed to retrieve user secrets.")
@@ -848,8 +847,12 @@ class AEUserSession(AESessionBase):
         return self._format_response(response, format=format)
 
     def _pre_editor(self, response):
+        # This does not appear to be needed on versions >5.7.0
+        # (packages has been removed).  Logic updated to continue
+        # support for prior releases.
         for rec in response:
-            rec["packages"] = ", ".join(rec["packages"])
+            if "packages" in rec:
+                rec["packages"] = ", ".join(rec["packages"])
         return response
 
     def editor_list(self, filter=None, format=None):
@@ -892,9 +895,7 @@ class AEUserSession(AESessionBase):
             name = record["name"]
             if make_unique is None:
                 make_unique = True
-        return self.project_create(
-            record["download_url"], name=name, tag=tag, make_unique=make_unique, wait=wait, format=format
-        )
+        return self.project_create(record["download_url"], name=name, tag=tag, make_unique=make_unique, wait=wait, format=format)
 
     def project_sessions(self, ident, format=None):
         id = self._ident_record("project", ident)["id"]
@@ -1119,9 +1120,7 @@ class AEUserSession(AESessionBase):
             if tag:
                 data["tag"] = tag
             f = (project_archive, f)
-            response = self._post_record(
-                "projects/upload", record_type="project", api_kwargs={"files": {b"project_file": f}, "data": data}
-            )
+            response = self._post_record("projects/upload", record_type="project", api_kwargs={"files": {b"project_file": f}, "data": data})
         finally:
             if f is not None:
                 f[1].close()
@@ -1152,9 +1151,7 @@ class AEUserSession(AESessionBase):
         if rlist:
             rlist2 = []
             # Limit the size of the input to pod_info to avoid 413 errors
-            idchunks = [
-                [r["id"] for r in rlist[k : k + K8S_JSON_LIST_MAX]] for k in range(0, len(rlist), K8S_JSON_LIST_MAX)
-            ]
+            idchunks = [[r["id"] for r in rlist[k : k + K8S_JSON_LIST_MAX]] for k in range(0, len(rlist), K8S_JSON_LIST_MAX)]
             record2 = sum((self._k8s("pod_info", ch) for ch in idchunks), [])
             for rec, rec2 in zip(rlist, record2):
                 if not rec2:
@@ -1531,7 +1528,7 @@ class AEUserSession(AESessionBase):
         response = self._ident_record("job", ident, quiet=quiet)
         return self._format_response(response, format=format)
 
-    def job_run(self, ident, format=None, quiet=False):
+    def job_run(self, ident, format: str | None = None, quiet=False):
         """
         Executes an instance of a job.
 
@@ -1539,7 +1536,7 @@ class AEUserSession(AESessionBase):
         ----------
         ident: str
             The job identifier
-        format: Optional[str]
+        format: str | None = None
             CLI output type.  If none is provided, `text` is the default.
         quiet: bool
             Default is `False`.
@@ -1650,9 +1647,7 @@ class AEUserSession(AESessionBase):
                 response = run
         return self._format_response(response, format=format)
 
-    def job_patch(
-        self, ident, name=None, command=None, schedule=None, resource_profile=None, variables=None, format=None
-    ):
+    def job_patch(self, ident, name=None, command=None, schedule=None, resource_profile=None, variables=None, format=None):
         jrec = self._ident_record("job", ident)
         id = jrec["id"]
         data = {}
@@ -1766,9 +1761,7 @@ class AEAdminSession(AESessionBase):
     def __init__(self, hostname, username, password=None, persist=True):
         self._sdata = None
         self._login_base = f"https://{hostname}/auth/realms/master/protocol/openid-connect"
-        super(AEAdminSession, self).__init__(
-            hostname, username, password, prefix="auth/admin/realms/AnacondaPlatform", persist=persist
-        )
+        super(AEAdminSession, self).__init__(hostname, username, password, prefix="auth/admin/realms/AnacondaPlatform", persist=persist)
 
     def _load(self):
         self._filename = os.path.join(config._path, "tokens", f"{self.username}@{self.hostname}")
@@ -1833,6 +1826,161 @@ class AEAdminSession(AESessionBase):
         records = self._get_paginated("events", limit=limit, first=first, **kwargs)
         return self._format_response(records, format=format, columns=[])
 
+    def user_create(
+        self,
+        username: str,
+        email: str,
+        firstname: str,
+        lastname: str,
+        enabled: bool,
+        email_verified: bool,
+        password: str,
+        password_temporary: bool,
+        **kwargs,
+    ):
+        """
+        Creates an AE5 user account.
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_userrepresentation
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_credentialrepresentation
+
+        Parameters
+        ----------
+        username: str
+            The username of the new account
+        email: str
+            The email address of the new account
+        firstname: str
+            The first name of the new account
+        lastname: str
+            The last name of the new account
+        enabled: bool
+            Whether to enable the account on creation
+        email_verified: bool
+            Whether the email address was verified.
+        password: str
+            The password of the new account
+        password_temporary: bool
+            Whether the provided password is temporary
+        """
+
+        # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
+        # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_userrepresentation
+        # https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_credentialrepresentation
+
+        data: dict = {
+            "username": username,
+            "email": email,
+            "firstName": firstname,
+            "lastName": lastname,
+            "enabled": enabled,
+            "emailVerified": email_verified,
+            "groups": ["everyone"],  # default
+            "credentials": [{"type": "password", "temporary": password_temporary, "value": password}],
+        }
+        self._post(endpoint="users", json=data)
+
+        # Add the default role
+        self.user_roles_add(username=username, names=["default-roles-anacondaplatform"])
+
+    def _get_user_role_id(self, name: str) -> str | None:
+        """
+        Looks up and returns the role id of the named role if it is found.
+
+        Parameters
+        ----------
+        name: str
+            The role name to query.
+
+        Returns
+        -------
+        role_id: str | None
+            The role id for the role, `None` otherwise.
+        """
+
+        role_id: str | None = None
+
+        realm_roles = self._get(endpoint=f"roles")
+        for role_details in realm_roles:
+            if role_details["name"] == name:
+                role_id = role_details["id"]
+        if role_id is None:
+            raise AEException("Unable to find the specified realm role")
+
+        return role_id
+
+    def user_roles_add(self, username: str, names: list[str], **kwargs) -> None:
+        """
+        Add a client-level (realm) role to a user role mapping.
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_client_role_mappings_resource
+
+        Parameters
+        ----------
+        username: str
+            The user to operate against.
+        names: list[str]
+            The list of role names to add to the user.
+        """
+
+        # Get user id
+        user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
+
+        # Create list of role to add
+        data: list[dict] = []
+
+        for name in names:
+            # Get role id
+            role_id: str | None = self._get_user_role_id(name=name)
+
+            # Create list of role to add
+            data.append({"id": role_id, "name": name})
+
+        # Add the roles
+        self._post(endpoint=f"users/{user_info['id']}/role-mappings/realm", json=data)
+
+    def user_roles_remove(self, username: str, names: list[str], **kwargs) -> None:
+        """
+        Remove client-level (realm) role from a user role mapping.
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html#_client_role_mappings_resource
+
+        Parameters
+        ----------
+        username: str
+            The user to operate against.
+        names: list[str]
+            The list of role names to remove from the user.
+        """
+
+        # Get user id
+        user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
+
+        # Create list of role to add
+        data: list[dict] = []
+
+        for name in names:
+            # Get role id
+            role_id: str | None = self._get_user_role_id(name=name)
+
+            # Create list of role to add
+            data.append({"id": role_id, "name": name})
+
+        # Add the roles
+        self._delete(endpoint=f"users/{user_info['id']}/role-mappings/realm", json=data)
+
+    def user_delete(self, username: str, format=None):
+        """
+        Delete an AE5 user account.
+        https://www.keycloak.org/docs-api/20.0.5/rest-api/index.html
+
+        Parameters
+        ----------
+        username: str
+            The username of the account to remove.
+        """
+
+        user_info = self.user_info(ident=username, format=None, quiet=False, include_login=True)
+        self._delete(endpoint=f"users/{user_info['id']}")
+
     def _post_user(self, users, include_login=False):
         users = {u["id"]: u for u in users}
         if include_login:
@@ -1847,15 +1995,15 @@ class AEAdminSession(AESessionBase):
             urec.setdefault("lastLogin", 0)
         return users
 
-    def user_list(self, filter=None, format=None, include_login=True):
+    def user_list(self, filter: str | None = None, format: str | None = None, include_login=True):
         """
         Provides User details.
 
         Parameters
         ----------
-        filter: Optional[str]=None
+        filter: str | None = None
             CLI filter expression.
-        format: Optional[str]=None
+        format: str | None = None
             CLI output type.  If none is provided, `text` is the default.
         include_login: bool = True
             Used for `_post_user` post-processing of records.
@@ -1870,126 +2018,249 @@ class AEAdminSession(AESessionBase):
         users = self._get_paginated("users")
 
         # Get realm roles user map
-        role_maps: Dict[str, List] = self._build_realm_role_user_map()
+        role_maps: dict[str, list] = self._build_realm_role_user_map()
+
+        # Get realm groups user map
+        group_maps: dict[str, list] = self._build_realm_group_user_map()
 
         # Get realm roles for the users and merge results
         users = self._merge_users_with_realm_roles(users=users, role_maps=role_maps)
+
+        # Get realm groups for the users and merge results
+        users = self._merge_users_with_realm_groups(users=users, group_maps=group_maps)
 
         # Complete record format, and filtering before returning.
         users = self._fix_records("user", users, filter, include_login=include_login)
         return self._format_response(users, format=format)
 
-    def _get_role_users(self, role_name: str, **kwargs) -> List[Dict]:
+    def _get_role_users(self, role_name: str, **kwargs) -> list[dict]:
         """
         Given a KeyCloak user realm role name retrieves a list of user objects who are mapped to the role.
 
 
-        From https://www.keycloak.org/docs-api/12.0/rest-api/#_rolerepresentation
+        From https://www.keycloak.org/docs-api/22.0.4/rest-api/index.html
         Returns a stream of users that have the specified role name:
-        GET /{realm}/roles/{role-name}/users
+        GET /admin/realms/{realm}/roles/{role-name}/users
 
         Parameters
         ---------
         role_name: str
             The realm role name (not ID)
         kwargs: dict[str, Any]
-            * first: Optional[int] = 0
-            * limit: Optional[int] = sys.maxsize
+            * first: int | None = 0
+            * limit: int | None = sys.maxsize
             * all other kwargs supported/needed by `_get_paginated`
 
         Returns
         -------
-        users: List[Dict]
+        users: list[dict]
             A list of user objects which are mapped to the role.
         """
 
         first = kwargs.pop("first", 0)
         limit = kwargs.pop("limit", sys.maxsize)
-        return self._get_paginated(path=f"roles/{role_name}/users", first=first, max=limit, **kwargs)
 
-    def _build_realm_role_user_map(self) -> Dict[str, List]:
+        mapped_users: list[dict] = self._get_paginated(path=f"roles/{role_name}/users", first=first, max=limit, **kwargs)
+        return mapped_users
+
+    def _get_group_members(self, group_id: str, **kwargs) -> list[dict]:
         """
-        Builds a dictionary of role names to mapped users.
+        Given a KeyCloak realm group name retrieves a list of user objects who are mapped to it.
 
-        Returns
-        role_maps: Dict[str, List]
-            A dictionary, where the keys are role names and the values are lists of user dictionaries mapped to the role.
-        """
-
-        realm_roles: List[Dict] = self._get_realm_roles()
-        role_maps: Dict[str, List] = {}
-        for role in realm_roles:
-            role_maps[role["name"]] = self._get_role_users(role_name=role["name"])
-        return role_maps
-
-    def _get_realm_roles(self, **kwargs) -> List[Dict]:
-        """
-        Returns the list of realm roles.
-
-        From https://www.keycloak.org/docs-api/12.0/rest-api/#_rolerepresentation
-        Get all roles for the realm or client:
-        GET /{realm}/roles
+        From https://www.keycloak.org/docs-api/22.0.4/rest-api/index.html
+        Returns a stream of users that have the specified role name:
+        GET /admin/realms/{realm}/groups/{group-name}/users
 
         Parameters
         ---------
+        group_id: str
+            The realm group ID (not name)
         kwargs: dict[str, Any]
-            * first: Optional[int] = 0
-            * limit: Optional[int] = sys.maxsize
+            * first: int | None = 0
+            * limit: int | None = sys.maxsize
             * all other kwargs supported/needed by `_get_paginated`
 
         Returns
         -------
-        roles: List[Dict]
-            A list of roles objects.
+        mapped_members: list[dict]
+            A list of user objects which are mapped to the group.
+        """
+
+        first = kwargs.pop("first", 0)
+        limit = kwargs.pop("limit", sys.maxsize)
+
+        mapped_members: list[dict] = self._get_paginated(path=f"groups/{group_id}/members", first=first, max=limit, **kwargs)
+        return mapped_members
+
+    def _build_realm_group_user_map(self) -> dict[str, list]:
+        """
+        Builds a dictionary of group names to mapped users.
+
+        Returns
+        group_maps: dict[str, list]
+            A dictionary, where the keys are group names and the values are lists of user dictionaries mapped to the role.
+        """
+
+        realm_groups: list[dict] = self._get_realm_groups()
+        group_maps: dict[str, list] = {}
+        for group in realm_groups:
+            maps = self._get_group_members(group_id=group["id"])
+            group_maps[group["name"]] = maps
+        return group_maps
+
+    def _build_realm_role_user_map(self) -> dict[str, list]:
+        """
+        Builds a dictionary of role names to mapped users.
+
+        Returns
+        role_maps: dict[str, list]
+            A dictionary, where the keys are role names and the values are lists of user dictionaries mapped to the role.
+        """
+
+        realm_roles: list[dict] = self._get_realm_roles()
+        role_maps: dict[str, list] = {}
+        for role in realm_roles:
+            role_maps[role["name"]] = self._get_role_users(role_name=role["name"])
+        return role_maps
+
+    def _get_realm_roles(self, **kwargs) -> list[dict]:
+        """
+        Returns the list of realm roles.
+
+        From https://www.keycloak.org/docs-api/22.0.4/rest-api/index.html
+        Get all roles for the realm or client:
+        GET /admin/realms/{realm}/roles
+
+        Parameters
+        ---------
+        kwargs: dict[str, Any]
+            * first: int | None = 0
+            * limit: int | None = sys.maxsize
+            * all other kwargs supported/needed by `_get_paginated`
+
+        Returns
+        -------
+        roles: list[dict]
+            A list of role objects.
         """
 
         first = kwargs.pop("first", 0)
         limit = kwargs.pop("limit", sys.maxsize)
         return self._get_paginated(path="roles", first=first, max=limit, **kwargs)
 
-    def _get_user_realm_roles(self, user: Dict, role_maps: Dict[str, List]) -> List[str]:
+    def _get_realm_groups(self, **kwargs) -> list[dict]:
+        """
+        Returns the list of realm groups.
+
+        From https://www.keycloak.org/docs-api/22.0.4/rest-api/index.html
+        Get all roles for the realm or client:
+        GET /admin/realms/{realm}/groups
+
+        Parameters
+        ---------
+        kwargs: dict[str, Any]
+            * first: int | None = 0
+            * limit: int | None = sys.maxsize
+            * all other kwargs supported/needed by `_get_paginated`
+
+        Returns
+        -------
+        groups: list[dict]
+            A list of group objects.
+        """
+
+        first = kwargs.pop("first", 0)
+        limit = kwargs.pop("limit", sys.maxsize)
+        return self._get_paginated(path="groups", first=first, max=limit, **kwargs)
+
+    def _get_user_realm_roles(self, user: dict, role_maps: dict[str, list]) -> list[str]:
         """
         Given a user object and a mapping of roles to users, returns the list of realm roles the user has mapped.
 
         Parameters
         ----------
-        user: Dict
+        user: dict
             A user object (as a dictionary)
-        role_maps: Dict[str, List]
+        role_maps: dict[str, list]
             A diction of roles to mapped users.
 
         Returns
         -------
-        user_realm_roles: List[str]
+        user_realm_roles: list[str]
             A list of realm roles the user is mapped to.
         """
 
-        user_realm_roles: List[str] = []
+        user_realm_roles: list[str] = []
         for role_name, role_users in role_maps.items():
             for role_user in role_users:
                 if user["id"] == role_user["id"]:
                     user_realm_roles.append(role_name)
         return user_realm_roles
 
-    def _merge_users_with_realm_roles(self, users: List[Dict], role_maps: Dict[str, List]) -> List[Dict]:
+    def _get_user_realm_groups(self, user: dict, group_maps: dict[str, list]) -> list[str]:
+        """
+        Given a user object and a mapping of groups to users, returns the list of realm groups the user has mapped.
+
+        Parameters
+        ----------
+        user: dict
+            A user object (as a dictionary)
+        group_maps: dict[str, list]
+            A diction of groups to mapped users.
+
+        Returns
+        -------
+        user_realm_groups: List[str]
+            A list of realm groups the user is mapped to.
+        """
+
+        user_realm_groups: list[str] = []
+        for group_name, group_users in group_maps.items():
+            for group_user in group_users:
+                if user["id"] == group_user["id"]:
+                    user_realm_groups.append(group_name)
+        return user_realm_groups
+
+    def _merge_users_with_realm_roles(self, users: list[dict], role_maps: dict[str, list]) -> list[dict]:
         """
         Given a list of user objects, and the role-to-user maps merge the realm_roles into the user objects.
 
         Parameters
         ----------
-        users: List[Dict]
+        users: list[dict]
             A list of user objects
-        role_maps: Dict[str, List]
-            A dictionary of realm rol name to list of users mapped to each role.
+        role_maps: dict[str, list]
+            A dictionary of realm role name to list of users mapped to each role.
 
         Returns
         -------
-        users: List[Dict]
+        users: list[dict]
             A list of user objects with realm role information included.
         """
 
         for user in users:
             user["realm_roles"] = self._get_user_realm_roles(user=user, role_maps=role_maps)
+        return users
+
+    def _merge_users_with_realm_groups(self, users: list[dict], group_maps: dict[str, list]) -> list[dict]:
+        """
+        Given a list of user objects, and the group-to-user maps merge the realm_groups into the user objects.
+
+        Parameters
+        ----------
+        users: list[dict]
+            A list of user objects
+        group_maps: dict[str, list]
+            A dictionary of realm groups name to list of users mapped to each group.
+
+        Returns
+        -------
+        users: list[dict]
+            A list of user objects with realm group information included.
+        """
+
+        for user in users:
+            user["realm_groups"] = self._get_user_realm_groups(user=user, group_maps=group_maps)
         return users
 
     def user_info(self, ident, format=None, quiet=False, include_login=True):

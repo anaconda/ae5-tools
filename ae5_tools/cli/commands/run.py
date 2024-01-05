@@ -4,9 +4,7 @@ from ..login import cluster_call
 from ..utils import global_options, ident_filter, yes_option
 
 
-@click.group(
-    short_help="delete, info, list, log, stop", epilog='Type "ae5 run <command> --help" for help on a specific command.'
-)
+@click.group(short_help="delete, info, list, log, stop", epilog='Type "ae5 run <command> --help" for help on a specific command.')
 @global_options
 def run():
     """Commands related to run records."""
@@ -78,6 +76,4 @@ def delete(**kwargs):
     The RUN identifier need not be fully specified, and may even include
     wildcards. But it must match exactly one run.
     """
-    cluster_call(
-        "run_delete", **kwargs, confirm="Delete run {ident}", prefix="Deleting run {ident}...", postfix="deleted."
-    )
+    cluster_call("run_delete", **kwargs, confirm="Delete run {ident}", prefix="Deleting run {ident}...", postfix="deleted.")

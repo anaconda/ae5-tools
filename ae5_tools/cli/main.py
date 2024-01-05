@@ -33,6 +33,7 @@ from .commands.node import node
 from .commands.pod import pod
 from .commands.project import project
 from .commands.resource_profile import resource_profile
+from .commands.role import role
 from .commands.run import run
 from .commands.sample import sample
 from .commands.secret import secret
@@ -141,6 +142,7 @@ cli.add_command(editor)
 cli.add_command(node)
 cli.add_command(pod)
 cli.add_command(secret)
+cli.add_command(role)
 
 
 def main():

@@ -1,7 +1,7 @@
 """ Helper functions for environment variables. """
+from __future__ import annotations
 
 import os
-from typing import Optional
 
 from ..contracts.errors.environment_variable_not_found_error import EnvironmentVariableNotFoundError
 
@@ -21,11 +21,12 @@ def demand_env_var(name: str) -> str:
     """
 
     if name not in os.environ:
-        raise EnvironmentVariableNotFoundError(f"Environment variable ({name}) not found")
+        msg: str = f"Environment variable ({name}) not found"
+        raise EnvironmentVariableNotFoundError(msg)
     return os.environ[name]
 
 
-def get_env_var(name: str) -> Optional[str]:
+def get_env_var(name: str) -> str | None:
     """
     Returns an environment variable as a string, otherwise `None` if it does not exist.
 
@@ -36,7 +37,8 @@ def get_env_var(name: str) -> Optional[str]:
 
     Returns
     -------
-        The environment variables value as a string, or `None` if it does not exist.
+        value: str | None
+            The environment variables value as a string, or `None` if it does not exist.
     """
 
     if name not in os.environ:
@@ -63,4 +65,5 @@ def demand_env_var_as_bool(name: str) -> bool:
         return True
     if value_str in ("false", "0"):
         return False
-    raise EnvironmentVariableNotFoundError(f"Environment variable ({name}) not boolean and can not be loaded")
+    msg: str = f"Environment variable ({name}) not boolean and can not be loaded"
+    raise EnvironmentVariableNotFoundError(msg)

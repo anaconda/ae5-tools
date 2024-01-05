@@ -1,5 +1,4 @@
 import uuid
-from typing import List
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,9 +16,7 @@ def get_token_fixture():
 
 @pytest.fixture(scope="function")
 def user_session(get_token_fixture):
-    user_session = AEUserSession(
-        hostname="MOCK-HOSTNAME", username="MOCK-AE-USERNAME", password="MOCK-AE-USER-PASSWORD"
-    )
+    user_session = AEUserSession(hostname="MOCK-HOSTNAME", username="MOCK-AE-USERNAME", password="MOCK-AE-USER-PASSWORD")
     return user_session
 
 
@@ -115,7 +112,7 @@ def test_secret_list(user_session, monkeypatch):
     monkeypatch.setattr(AEUserSession, "_get", mock_get)
 
     # Execute the test
-    secrets: List[str] = user_session.secret_list()
+    secrets: list[str] = user_session.secret_list()
 
     # Review the result
     assert secrets == [{"secret_name": mock_key}]

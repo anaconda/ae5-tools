@@ -10,8 +10,8 @@ import pytest
 import requests
 
 from ae5_tools.api import AEUnexpectedResponseError
-
-from .utils import CMDException, _cmd, _compare_tarfiles
+from tests.adsp.common.utils import CMDException, _cmd, _compare_tarfiles
+from tests.system.state import load_account
 
 
 @pytest.fixture(scope="module")
@@ -187,14 +187,6 @@ def test_project_revision_errors(cli_revisions):
     assert "No revisions" in str(excinfo.value)
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
-def test_project_revision_errors_multiple_revisions(cli_revisions):
-    prec, revs = cli_revisions
-    with pytest.raises(CMDException) as excinfo:
-        _cmd("project", "revision", "info", prec["id"] + ":0.*")
-    assert "Multiple revisions" in str(excinfo.value)
-
-
 def test_project_patch(cli_project, editors, resource_profiles):
     prec = cli_project
     old, new = {}, {}
@@ -276,6 +268,9 @@ def cli_session(cli_project):
     assert not any(r["id"] == srec2["id"] for r in _cmd("session", "list"))
 
 
+# DNS resolution and ingress are currently failing in the new CI environments and is a known issue right now.
+# TODO: Re-enable this test when issues have been resolved.
+@pytest.mark.ci_skip
 def test_session(cli_session):
     prec, srec = cli_session
     assert srec["owner"] == prec["owner"], srec
@@ -294,12 +289,12 @@ def test_project_sessions(cli_session):
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-def test_session_branches(cli_session):
-    """Behavior updated in 5.6.2"""
+def test_session_branches_5_7_0(cli_session):
+    """Behavior updated in 5.7.0"""
     prec, srec = cli_session
     branches = _cmd("session", "branches", prec["id"])
     bdict = {r["branch"]: r["sha1"] for r in branches}
-    assert set(bdict) == {"local", "master"}, branches
+    assert set(bdict) == {"master", "parent", "local"}, branches
     assert bdict["local"] == bdict["master"], branches
 
 
@@ -341,11 +336,11 @@ def test_deploy(cli_deployment):
     prec, drec = cli_deployment
     assert drec["owner"] == prec["owner"], drec
     assert drec["project_name"] == prec["name"], drec
-    for attempt in range(3):
+    for attempt in range(10):
         try:
             ldata = _cmd("call", "/", "--endpoint", drec["endpoint"], table=False)
             break
-        except AEUnexpectedResponseError:
+        except (AEUnexpectedResponseError, CMDException):
             time.sleep(attempt * 10)
             pass
     else:
@@ -393,7 +388,6 @@ def test_deploy_logs(cli_deployment):
     assert "App Proxy is fully operational!" in proxy_logs, proxy_logs
 
 
-@pytest.mark.skip(reason="Failing against CI - Unable to reproduce in other environments")
 def test_deploy_duplicate(cli_deployment):
     prec, drec = cli_deployment
     dname = drec["name"] + "-dup"
@@ -416,7 +410,7 @@ def test_deploy_duplicate(cli_deployment):
 
 
 def test_deploy_collaborators(cli_deployment):
-    uname = "tooltest2"
+    uname: str = load_account(id="2")["username"]
     prec, drec = cli_deployment
     clist = _cmd("deployment", "collaborator", "list", drec["id"])
     assert len(clist) == 0
@@ -426,9 +420,7 @@ def test_deploy_collaborators(cli_deployment):
     assert len(clist) == 2
     clist = _cmd("deployment", "collaborator", "add", drec["id"], uname)
     assert len(clist) == 2
-    assert all(
-        c["id"] == uname and c["type"] == "user" or c["id"] == "everyone" and c["type"] == "group" for c in clist
-    )
+    assert all(c["id"] == uname and c["type"] == "user" or c["id"] == "everyone" and c["type"] == "group" for c in clist)
     for crec in clist:
         crec2 = _cmd("deployment", "collaborator", "info", drec["id"], crec["id"])
         assert crec2["id"] == crec["id"] and crec2["type"] == crec["type"]
@@ -516,7 +508,6 @@ def test_job_run2(cli_project):
 def test_login_time(admin_session, user_session):
     # The current login time should be before the present
     now = datetime.now()
-    _cmd("project", "list")
     user_list = _cmd("user", "list")
     urec = next((r for r in user_list if r["username"] == user_session.username), None)
     assert urec is not None

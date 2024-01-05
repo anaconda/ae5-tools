@@ -1,10 +1,31 @@
+from __future__ import annotations
+
 import csv
-import json
+import logging
 import os
 import shlex
 import subprocess
 import tarfile
 from io import StringIO
+
+logger = logging.getLogger(__name__)
+
+
+def _process_launch_wait(shell_out_cmd: str, cwd: str = ".") -> None:
+    args = shlex.split(shell_out_cmd)
+
+    try:
+        with subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE) as process:
+            for line in iter(process.stdout.readline, b""):
+                logger.info(line)
+
+        if process.returncode != 0:
+            raise Exception("subprocess failed")
+    except Exception as error:
+        # Catch and handle ALL errors
+        logger.error("Exception was caught while executing task.")
+        logger.error(str(error))
+        raise error
 
 
 class CMDException(Exception):
@@ -39,6 +60,7 @@ def _cmd(*cmd, table=True):
     cmd = ("coverage", "run", "--source=ae5_tools", "-m", "ae5_tools.cli.main") + cmd + ("--yes",)
     if table:
         cmd += "--format", "csv"
+    print(f"Executing: {cmd}")
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=open(os.devnull))
     stdoutb, stderrb = p.communicate()
     if p.returncode != 0:

@@ -1,80 +1,160 @@
+###############################################################################
+# AE5 Tools
+###############################################################################
+
 name: ae5-tools
 description: Command-line manipulation of Anaconda Enterprise 5.
 
+
+###############################################################################
+## Variables
+###############################################################################
+variables: {}
+
+
+###############################################################################
+# Commands
+###############################################################################
 commands:
-  #
-  # Run Time Commands
-  #
+  # Run Time Commands #########################################################
 
   default:
-    env_spec: default
+    env_spec: k8s_server
     unix: python -m ae5_tools.k8s.server
 
-  #
-  # Development Time Commands
-  #
+  # Development Time Commands #################################################
 
   bash:
-    env_spec: development
+    env_spec: default
     unix: |
       bash
 
+  clean:
+    env_spec: default
+    unix: |
+      rm -rf .coverage htmlcov coverage.xml build docs/build .pytest_cache tests/system/.pytest_cache test_upload1-1.2.3.tar.gz test_upload2-1.3.4.tar.gz testproj3.tar.gz system-test-state.json
+
   lint:
-    env_spec: development
+    env_spec: default
     unix: |
       pylint ae5_tools
       isort --check --diff .
       black --check --diff .
 
   lint:fix:
-    env_spec: development
+    env_spec: default
     unix: |
       isort .
       black .
 
+  # Test Commands #############################################################
+
   test:
-    env_spec: development
-    unix: anaconda-project run clean && anaconda-project run test:unit && anaconda-project run test:system
+    env_spec: default
+    unix: |
+      anaconda-project run clean
+      anaconda-project run test:unit
+      anaconda-project run test:integration
+      anaconda-project run test:system
 
   test:unit:
-    env_spec: development
-    unix: py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml
+    env_spec: default
+    unix: py.test --cov=ae5_tools -v tests/unit  --cov-append --cov-report=xml -vv
+
+  test:integration:
+    env_spec: default
+    unix: py.test --cov=ae5_tools -v tests/integration  --cov-append --cov-report=xml -vv
+
+  test:integration:slipstream:
+    env_spec: default
+    unix: |
+      conda install build/noarch/ae5-tools-*.tar.bz2
+      py.test --cov=ae5_tools -v tests/integration  --cov-append --cov-report=xml -vv
+
+  test:load:
+    env_spec: default
+    unix: |
+      python -m tests.load.runner
 
   test:system:
-    env_spec: development
-    unix: py.test --cov=ae5_tools -v tests/system  --cov-append --cov-report=xml
+    env_spec: default
+    unix: |
+      python -m tests.system.runner
 
+  # Documentation Commands ####################################################
+
+  build:apidocs:
+    env_spec: documentation
+    unix: |
+      sphinx-apidoc -f -o docs/source/ae5_tools ae5_tools
+
+  build:docs:
+    env_spec: documentation
+    unix: |
+      rm -rf docs/build
+      cd docs && make clean && make html
+
+###############################################################################
+# Channels
+###############################################################################
 channels:
   - defaults
   - conda-forge
 
+###############################################################################
+# Platforms
+###############################################################################
 platforms:
   - linux-64
   - osx-64
   - osx-arm64
   - win-64
 
+###############################################################################
+# Environment Definitions
+###############################################################################
 env_specs:
   default:
+    description: Default environment spec for running commands
+    packages:
+      # Python Version Selection
+      - defaults:python>=3.11.0,<3.12.0
+
+      # Project Dependencies
+      - defaults:python-dateutil>=2.7
+      - defaults:click>7
+      - defaults:click-repl
+      - defaults:requests
+      - defaults:aiohttp # (k8s server code base)
+      - defaults:pandas
+
+      # Project Maintenance, Development, and Testing
+      - defaults:anaconda-project
+      - defaults:isort
+      - defaults:pylint
+      - defaults:black
+      - defaults:pytest
+      - defaults:pytest-cov
+      - defaults:python-dotenv
+
+  documentation:
+    description: Environment for building documentation
+    packages:
+      # Python Version Selection
+      - defaults:python>=3.11.0,<3.12.0
+
+      # Documentation
+      - conda-forge:sphinx
+      - conda-forge:sphinx-rtd-theme
+      - conda-forge:myst-parser
+
+  k8s_server:
     description: Default environment spec for k8s server
     packages:
-      - python>=3.6
-      - python-dateutil
-      - requests
-      - aiohttp
-  development:
-    description: Development environment spec for running commands
-    packages:
-      - python>=3.6
-      - python-dateutil
-      - click>7
-      - click-repl
-      - requests
-      - aiohttp
-      - pytest
-      - pytest-cov
-      - pandas
-      - isort
-      - black
-      - pylint
-      - anaconda-project
+      # Python Version Selection
+      - defaults:python>=3.11.0,<3.12.0
+
+      # Project Dependencies
+      - defaults:python-dateutil
+      - defaults:requests
+      - defaults:aiohttp

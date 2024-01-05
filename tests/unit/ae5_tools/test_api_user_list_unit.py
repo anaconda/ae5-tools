@@ -1,7 +1,6 @@
 import datetime
 import sys
 import uuid
-from typing import Dict, List
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,19 +18,19 @@ def get_token_fixture():
 
 @pytest.fixture(scope="function")
 def admin_session(get_token_fixture):
-    admin_session = AEAdminSession(
-        hostname="MOCK-HOSTNAME", username="MOCK-AE-USERNAME", password="MOCK-AE-USER-PASSWORD"
-    )
+    admin_session = AEAdminSession(hostname="MOCK-HOSTNAME", username="MOCK-AE-USERNAME", password="MOCK-AE-USER-PASSWORD")
     admin_session._load = MagicMock()
     admin_session._sdata = get_token_fixture
     return admin_session
 
 
 @pytest.fixture(scope="function")
-def generate_raw_user_fixture() -> Dict:
+def generate_raw_user_fixture() -> dict:
     mock_user_id: str = str(uuid.uuid4())
     return {
+        "_record_type": "user",
         "id": mock_user_id,
+        "lastLogin": 0,
         "name": "MOCK-USERNAME",
         "details": {},
         "userId": mock_user_id,
@@ -43,7 +42,7 @@ def generate_raw_user_fixture() -> Dict:
 # Test Cases For _get_role_users
 #####################################################
 def test_get_role_users(admin_session):
-    test_cases: List[Dict] = [
+    test_cases: list[dict] = [
         # Scenario 1 - No users are mapped to the role
         {"role_users": []},
         # Scenario 2 - A single mapped user
@@ -55,7 +54,7 @@ def test_get_role_users(admin_session):
         admin_session._get_paginated = MagicMock(return_value=test_case["role_users"])
 
         # Execute the test
-        role_users: List[Dict] = admin_session._get_role_users(role_name="MOCK-ROLE-NAME")
+        role_users: list[dict] = admin_session._get_role_users(role_name="MOCK-ROLE-NAME")
 
         # Review the results
         assert role_users == test_case["role_users"]
@@ -82,7 +81,7 @@ def test_get_realm_roles(admin_session):
 # Test Cases For _get_user_realm_roles
 #####################################################
 def test_get_user_realm_roles_from_map(admin_session, generate_raw_user_fixture):
-    test_cases: List[Dict] = [
+    test_cases: list[dict] = [
         # Scenario 1 - Nothing to generate
         {"user": {}, "role_maps": {}, "expected_realm_roles": []},
         # Scenario 2 - No roles assigned to user
@@ -97,9 +96,7 @@ def test_get_user_realm_roles_from_map(admin_session, generate_raw_user_fixture)
 
     for test_case in test_cases:
         # Execute the test
-        user_realm_roles: List[str] = admin_session._get_user_realm_roles(
-            user=test_case["user"], role_maps=test_case["role_maps"]
-        )
+        user_realm_roles: list[str] = admin_session._get_user_realm_roles(user=test_case["user"], role_maps=test_case["role_maps"])
 
         # Review the results
         assert user_realm_roles == test_case["expected_realm_roles"]
@@ -109,7 +106,7 @@ def test_get_user_realm_roles_from_map(admin_session, generate_raw_user_fixture)
 # Test Cases For _build_realm_role_user_map
 #####################################################
 def test_build_realm_role_user_map(admin_session, generate_raw_user_fixture):
-    test_cases: List[Dict] = [
+    test_cases: list[dict] = [
         # Scenario 1 - No realm roles
         {"realm_roles": [], "role_users": [], "expected_role_maps": {}},
         # Scenario 2 - Role exists, but no users are mapped to it.
@@ -157,9 +154,7 @@ def test_build_realm_role_user_map_multiple_returns(admin_session, generate_raw_
 
     # Set up the test
     admin_session._get_realm_roles = MagicMock(return_value=test_case["realm_roles"])
-    admin_session._get_role_users = MagicMock(
-        side_effect=[test_case["role_users_1"], test_case["role_users_2"], test_case["role_users_3"]]
-    )
+    admin_session._get_role_users = MagicMock(side_effect=[test_case["role_users_1"], test_case["role_users_2"], test_case["role_users_3"]])
 
     # Execute the test
     role_maps = admin_session._build_realm_role_user_map()
@@ -212,9 +207,11 @@ def test_user_list_roles(admin_session, generate_raw_user_fixture):
                 "ae-reader": [generate_raw_user_fixture, generate_raw_user_fixture],
                 "fake-role": [],
             },
+            "group_maps": {},
             "users": [],
             "events": [],
             "merged_users": [],
+            "merged_groups": [],
         },
         # Test Case 2 - Users with mapped roles are returned
         {
@@ -223,17 +220,21 @@ def test_user_list_roles(admin_session, generate_raw_user_fixture):
                 "ae-reader": [generate_raw_user_fixture, generate_raw_user_fixture],
                 "fake-role": [],
             },
+            "group_maps": {},
             "users": [generate_raw_user_fixture],
             "events": [],
             "merged_users": [{**generate_raw_user_fixture, "realm_roles": ["ae-admin", "ae-reader"]}],
+            "merged_groups": [{**generate_raw_user_fixture, "realm_roles": ["ae-admin", "ae-reader"]}],
         },
     ]
 
     for test_case in test_cases:
         # Set up test
         admin_session._get_paginated = MagicMock(side_effect=[test_case["users"], test_case["events"]])
+        admin_session._build_realm_group_user_map = MagicMock(return_value=test_case["group_maps"])
         admin_session._build_realm_role_user_map = MagicMock(return_value=test_case["role_maps"])
         admin_session._merge_users_with_realm_roles = MagicMock(return_value=test_case["merged_users"])
+        admin_session._merge_users_with_realm_groups = MagicMock(return_value=test_case["merged_groups"])
 
         # Execute the test
         result = admin_session.user_list()

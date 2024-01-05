@@ -6,7 +6,7 @@ from ..login import cluster_call
 from ..utils import global_options, ident_filter
 
 
-@click.group(short_help="info, list", epilog='Type "ae5 user <command> --help" for help on a specific command.')
+@click.group(short_help="info, list, create, delete", epilog='Type "ae5 user <command> --help" for help on a specific command.')
 @global_options
 def user():
     """Commands related to user accounts.
@@ -47,3 +47,48 @@ def events(param, limit, first):
     param = [z.split("=", 1) for z in param]
     param = dict((x.rstrip(), y.lstrip()) for x, y in param)
     cluster_call("user_events", limit=limit, first=first, **param, admin=True)
+
+
+@user.command()
+@click.option("--username", type=click.STRING, help="The username of the new account.", required=True)
+@click.option("--email", type=click.STRING, help="The email address of the new account.", required=True)
+@click.option("--firstname", type=click.STRING, help="The first name of the new account.", required=True)
+@click.option("--lastname", type=click.STRING, help="The last name of the new account.", required=True)
+@click.option("--enabled", type=click.BOOL, help="Whether to enable the account on creation.", required=True)
+@click.option("--email-verified", type=click.BOOL, help="Whether the email address was verified.", required=True)
+@click.option("--password", type=click.STRING, help="The password of the new account.", required=True)
+@click.option("--password-temporary", type=click.BOOL, help="Whether the provided password is temporary.", required=True)
+@global_options
+def create(
+    username: str,
+    email: str,
+    firstname: str,
+    lastname: str,
+    enabled: bool,
+    email_verified: bool,
+    password: str,
+    password_temporary: bool,
+):
+    """Create a new user account."""
+
+    cluster_call(
+        "user_create",
+        username=username,
+        email=email,
+        firstname=firstname,
+        lastname=lastname,
+        enabled=enabled,
+        email_verified=email_verified,
+        password=password,
+        password_temporary=password_temporary,
+        admin=True,
+    )
+
+
+@user.command()
+@click.option("--username", type=click.STRING, help="The username of the account to delete.", required=True)
+@global_options
+def delete(username: str):
+    """Delete a new user account."""
+
+    cluster_call("user_delete", username=username, admin=True)

@@ -4,9 +4,7 @@ from ..login import cluster_call
 from ..utils import global_options, ident_filter
 
 
-@click.group(
-    short_help="info, list", epilog='Type "ae5 project sample <command> --help" for help on a specific command.'
-)
+@click.group(short_help="info, list", epilog='Type "ae5 project sample <command> --help" for help on a specific command.')
 @global_options
 def sample():
     """Commands related to sample and template projects."""

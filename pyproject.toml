@@ -1,10 +1,11 @@
 [tool.black]
-line-length = 120
-target-version = ['py310']
+line-length = 150
+target-version = ['py311']
 
 
 [tool.isort]
-line_length = 120
+line_length = 150
 profile = 'black'
 src_paths = ["ae5_tools","tests"]
 skip = ["envs"]
+

@@ -46,9 +46,7 @@ def info(**kwargs):
 @ident_filter("project", required=True)
 @click.argument("userid", nargs=-1)
 @click.option("--group", is_flag=True, help="The collaborator is a group.")
-@click.option(
-    "--read-only/--read-write", is_flag=True, help="The collaborator should be read-only/read-write (default)."
-)
+@click.option("--read-only/--read-write", is_flag=True, help="The collaborator should be read-only/read-write (default).")
 @global_options
 def add(**kwargs):
     """Add/modify one or more collaborators for a project.

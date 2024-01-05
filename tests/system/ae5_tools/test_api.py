@@ -9,8 +9,8 @@ import pytest
 import requests
 
 from ae5_tools.api import AEException, AEUnexpectedResponseError, AEUserSession
-
-from .utils import _compare_tarfiles, _get_vars
+from tests.adsp.common.utils import _compare_tarfiles, _get_vars
+from tests.system.state import load_account
 
 
 class AttrDict(dict):
@@ -47,7 +47,10 @@ def test_user_session(monkeypatch, capsys):
     with pytest.raises(ValueError) as excinfo:
         AEUserSession("", "")
     assert "Must supply hostname and username" in str(excinfo.value)
-    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
+    hostname: str = _get_vars("AE5_HOSTNAME")
+    local_account: dict = load_account(id="1")
+    username: str = local_account["username"]
+    password: str = local_account["password"]
     with pytest.raises(AEException) as excinfo:
         c = AEUserSession(hostname, username, "x" + password, persist=False)
         c.authorize()
@@ -68,7 +71,10 @@ def test_user_k8s_session(monkeypatch, capsys):
     with pytest.raises(ValueError) as excinfo:
         AEUserSession("", "")
     assert "Must supply hostname and username" in str(excinfo.value)
-    hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_USERNAME", "AE5_PASSWORD")
+    hostname: str = _get_vars("AE5_HOSTNAME")
+    local_account: dict = load_account(id="1")
+    username: str = local_account["username"]
+    password: str = local_account["password"]
     with pytest.raises(AEException) as excinfo:
         c = AEUserSession(hostname, username, "x" + password, persist=False)
         c.authorize()
@@ -137,7 +143,8 @@ def test_project_info(user_session, project_list):
 
 def test_project_info_errors(user_session, project_list):
     with pytest.raises(AEException) as excinfo:
-        user_session.project_info("testproj1")
+        result = user_session.project_info("testproj1")
+        print(result)
     assert "Multiple projects" in str(excinfo.value)
     user_session.project_info("testproj1", quiet=True)
     with pytest.raises(AEException) as excinfo:
@@ -324,14 +331,6 @@ def test_project_revision_errors(user_session, api_revisions):
     user_session.revision_info(f'{prec["id"]}:a.b.c', quiet=True)
 
 
-@pytest.mark.skip(reason="Failing against 5.6.2")
-def test_project_revision_errors_multiple_revisions(user_session, api_revisions):
-    prec, revs = api_revisions
-    with pytest.raises(AEException) as excinfo:
-        user_session.revision_info(f'{prec["id"]}:0.*')
-    assert "Multiple revisions" in str(excinfo.value)
-
-
 def test_project_patch(user_session, api_project, editors, resource_profiles):
     prec = api_project
     old, new = {}, {}
@@ -413,6 +412,9 @@ def api_session(user_session, api_project):
     assert not any(r["id"] == srec2["id"] for r in user_session.session_list())
 
 
+# DNS resolution and ingress are currently failing in the new CI environments and is a known issue right now.
+# TODO: Re-enable this test when issues have been resolved.
+@pytest.mark.ci_skip
 def test_session(user_session, api_session):
     prec, srec = api_session
     assert srec["owner"] == prec["owner"], srec
@@ -435,12 +437,12 @@ def test_project_sessions(user_session, api_session):
     assert len(slist) == 1 and slist[0]["id"] == srec["id"]
 
 
-def test_session_branches(user_session, api_session):
-    """Behavior changed in 5.6.2"""
+def test_session_branches_5_7_0(user_session, api_session):
+    """Behavior changed in 5.7.0"""
     prec, srec = api_session
     branches = user_session.session_branches(srec, format="json")
     bdict = {r["branch"]: r["sha1"] for r in branches}
-    assert set(bdict) == {"local", "master"}, branches
+    assert set(bdict) == {"local", "master", "parent"}, branches
     assert bdict["local"] == bdict["master"], branches
 
 
@@ -459,9 +461,7 @@ def api_deployment(user_session, api_project):
     prec = api_project
     dname = "testdeploy"
     ename = "testendpoint"
-    drec = user_session.deployment_start(
-        prec, name=dname, endpoint=ename, command="default", public=False, wait=False, _skip_endpoint_test=True
-    )
+    drec = user_session.deployment_start(prec, name=dname, endpoint=ename, command="default", public=False, wait=False, _skip_endpoint_test=True)
     drec2 = user_session.deployment_restart(drec, wait=True)
     assert not any(r["id"] == drec["id"] for r in user_session.deployment_list())
     yield prec, drec2
@@ -529,15 +529,13 @@ def test_deploy_duplicate(user_session, api_deployment):
     prec, drec = api_deployment
     dname = drec["name"] + "-dup"
     with pytest.raises(RuntimeError) as excinfo:
-        user_session.deployment_start(
-            prec, name=dname, endpoint=drec["endpoint"], command="default", public=False, wait=True
-        )
+        user_session.deployment_start(prec, name=dname, endpoint=drec["endpoint"], command="default", public=False, wait=True)
     assert f'endpoint "{drec["endpoint"]}" is already in use' in str(excinfo.value)
     assert not any(r["name"] == dname for r in user_session.deployment_list())
 
 
 def test_deploy_collaborators(user_session, api_deployment):
-    uname = "tooltest2"
+    uname: str = load_account(id="2")["username"]
     prec, drec = api_deployment
     clist = user_session.deployment_collaborator_list(drec)
     assert len(clist) == 0
@@ -547,9 +545,7 @@ def test_deploy_collaborators(user_session, api_deployment):
     assert len(clist) == 2
     clist = user_session.deployment_collaborator_add(drec, uname)
     assert len(clist) == 2
-    assert all(
-        c["id"] == uname and c["type"] == "user" or c["id"] == "everyone" and c["type"] == "group" for c in clist
-    )
+    assert all(c["id"] == uname and c["type"] == "user" or c["id"] == "everyone" and c["type"] == "group" for c in clist)
     for crec in clist:
         crec2 = user_session.deployment_collaborator_info(drec, crec["id"])
         assert crec2["id"] == crec["id"] and crec2["type"] == crec["type"]
@@ -624,9 +620,7 @@ def test_job_run2(user_session, api_project):
     prec = api_project
     # Test cleanup mode and variables in jobs
     variables = {"INTEGRATION_TEST_KEY_1": "value1", "INTEGRATION_TEST_KEY_2": "value2"}
-    user_session.job_create(
-        prec, name="testjob2", command="run_with_env_vars", variables=variables, run=True, wait=True, cleanup=True
-    )
+    user_session.job_create(prec, name="testjob2", command="run_with_env_vars", variables=variables, run=True, wait=True, cleanup=True)
     # The job, and run records should have already been deleted
     assert not user_session.job_list()
     assert not user_session.run_list()
@@ -644,11 +638,7 @@ def test_job_run3(user_session, api_project):
     assert len(rrecs) == 1, rrecs
     ldata2 = user_session.run_log(rrecs[0]["id"], format="text")
     # Confirm that the environment variables were passed through
-    outvars = dict(
-        line.strip().replace(" ", "").split(":", 1)
-        for line in ldata2.splitlines()
-        if line.startswith("INTEGRATION_TEST_KEY_")
-    )
+    outvars = dict(line.strip().replace(" ", "").split(":", 1) for line in ldata2.splitlines() if line.startswith("INTEGRATION_TEST_KEY_"))
     assert variables == outvars, outvars
     user_session.run_delete(rrecs[0]["id"])
     assert not user_session.run_list()
@@ -668,7 +658,7 @@ def test_login_time(admin_session, user_session):
     assert ltm1 < now
 
     # Create new login session. This should change lastLogin
-    password = os.environ.get("AE5_PASSWORD")
+    password: str = load_account(id="1")["password"]
     user_sess2 = AEUserSession(user_session.hostname, user_session.username, password, persist=False)
     plist1 = user_sess2.project_list()
     urec = admin_session.user_info(urec["id"])

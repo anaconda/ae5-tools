@@ -79,9 +79,7 @@ def changes(**kwargs):
     "--resource-profile",
     help="The resource profile to use. If supplied, future sessions will use this resource profile as well. If not supplied, uses the resource profile currently selected for the project.",
 )
-@click.option(
-    "--wait", is_flag=True, help="Wait/do not wait (default) for the session to complete initialization before exiting."
-)
+@click.option("--wait", is_flag=True, help="Wait/do not wait (default) for the session to complete initialization before exiting.")
 @click.option("--open", is_flag=True, help="Open a browser upon initialization. Implies --wait.")
 @click.option("--frame", is_flag=True, help="Include the AE banner when opening.")
 @global_options
@@ -107,9 +105,7 @@ def stop(**kwargs):
     The SESSION identifier need not be fully specified, and may even include
     wildcards. But it must match exactly one session.
     """
-    cluster_call(
-        "session_stop", **kwargs, confirm="Stop session {ident}", prefix="Stopping {ident}...", postfix="stopped."
-    )
+    cluster_call("session_stop", **kwargs, confirm="Stop session {ident}", prefix="Stopping {ident}...", postfix="stopped.")
 
 
 @session.command()

@@ -120,9 +120,7 @@ def _k8s_pod_to_record(pRec):
         elif not name.startswith("tool-proxy-"):
             cid = "editor"
         elif name.rsplit("-", 1)[-1] in [
-            c["name"].rsplit("-", 1)[-1]
-            for c in pRec["spec"]["containers"]
-            if c["name"].startswith("tool-anaconda-platform-sync-")
+            c["name"].rsplit("-", 1)[-1] for c in pRec["spec"]["containers"] if c["name"].startswith("tool-anaconda-platform-sync-")
         ]:
             cid = "sync-proxy"
         else:
@@ -170,9 +168,7 @@ def _pod_merge_metrics(pRec, mRec):
         dst[key] = _to_text(value)
 
 
-_period_regex = re.compile(
-    r"((?P<weeks>\d+?)w)?((?P<days>\d+?)d)?((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?"
-)
+_period_regex = re.compile(r"((?P<weeks>\d+?)w)?((?P<days>\d+?)d)?((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?")
 
 
 def parse_timedelta(time_str):
@@ -309,12 +305,7 @@ class AE5K8STransformer(AE5BaseTransformer):
         cmd = [
             "/bin/sh",
             "-c",
-            (
-                "cd /opt/continuum/project;"
-                'find . -name .git -prune -o  -printf "%T+ %p\\n";'
-                "echo ----;"
-                "git status --porcelain || /bin/true"
-            ),
+            ("cd /opt/continuum/project;" 'find . -name .git -prune -o  -printf "%T+ %p\\n";' "echo ----;" "git status --porcelain || /bin/true"),
         ]
         result = {"modified": [], "deleted": [], "added": [], "mtime": None}
         try:
@@ -406,9 +397,7 @@ class AE5K8STransformer(AE5BaseTransformer):
                     "gpu": rec["status"]["allocatable"].get("nvidia.com/gpu", "0"),
                 },
                 "ready": any(c["type"] == "Ready" and c["status"] == "True" for c in rec["status"]["conditions"]),
-                "conditions": [
-                    c["type"] for c in rec["status"]["conditions"] if c["type"] != "Ready" and c["status"] == "True"
-                ],
+                "conditions": [c["type"] for c in rec["status"]["conditions"] if c["type"] != "Ready" and c["status"] == "True"],
                 "timestamp": None,
                 "window": None,
             }
@@ -478,9 +467,7 @@ class AE5K8STransformer(AE5BaseTransformer):
 
 
 class AE5PromQLTransformer(AE5BaseTransformer):
-    async def query_range(
-        self, pod_id=None, query=None, metric=None, start=None, end=None, step=None, period=None, samples=None
-    ):
+    async def query_range(self, pod_id=None, query=None, metric=None, start=None, end=None, step=None, period=None, samples=None):
         if period is None:
             timedelta = datetime.timedelta(weeks=4)
         else:
