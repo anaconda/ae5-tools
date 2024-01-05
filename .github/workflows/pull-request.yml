@@ -5,11 +5,11 @@ on:
       - master
 jobs:
   build:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash -el {0}
-#    runs-on: self-hosted
+#    runs-on: ubuntu-latest
+#    defaults:
+#      run:
+#        shell: bash -el {0}
+    runs-on: self-hosted
 #    runs-on: self-hosted-amd64-small-privileged
 #    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
     steps:
@@ -17,17 +17,17 @@ jobs:
       uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3
       with:
         fetch-depth: 0
-    - name: Install dependencies
-      # https://github.com/conda-incubator/setup-miniconda
-      uses: conda-incubator/setup-miniconda@3b0f2504dd76ef23b6d31f291f4913fb60ab5ff3 # v2
-      with:
-        channels: defaults
-        auto-activate-base: true
-        activate-environment: github.action
-        environment-file: environment.github.yml
-    - name: Conda Info
-      run: |
-        conda info
+#    - name: Install dependencies
+#      # https://github.com/conda-incubator/setup-miniconda
+#      uses: conda-incubator/setup-miniconda@3b0f2504dd76ef23b6d31f291f4913fb60ab5ff3 # v2
+#      with:
+#        channels: defaults
+#        auto-activate-base: true
+#        activate-environment: github.action
+#        environment-file: environment.github.yml
+#    - name: Conda Info
+#      run: |
+#        conda info
     - name: Anaconda Project Setup
       run: |
         anaconda-project prepare --env-spec default
