@@ -30,14 +30,14 @@ jobs:
         conda info
     - name: Anaconda Project Setup
       run: |
-        anaconda-project prepare --env-spec development
+        anaconda-project prepare --env-spec default
     - name: Linting
       run: |
         anaconda-project run lint
     - name: Run Unit Tests
       run: |
         anaconda-project run test:unit
-    - name: Build the package
+    - name: Package Build
       run: |
         source $CONDA/etc/profile.d/conda.sh
         rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
