@@ -64,9 +64,10 @@ class LoadTestFixtureSuite(FixtureManager):
 
 
 # Create scenarios
-max_sessions: int = 10
+min_sessions: int = 1
+max_sessions: int = 15
 scenarios: list = []
-for size in range(1, max_sessions + 1):
+for size in range(min_sessions, max_sessions + 1):
     scenarios.append(("session load scenario ", {"size": size}))
 
 

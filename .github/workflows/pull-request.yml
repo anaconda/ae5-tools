@@ -5,8 +5,10 @@ on:
       - master
 jobs:
   package:
-    runs-on: self-hosted
+#    runs-on: ubuntu-latest
+#    runs-on: self-hosted
 #    runs-on: self-hosted-amd64-small-privileged
+    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
     steps:
     - name: Retrieve the source code
       uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3
@@ -30,19 +32,7 @@ jobs:
 #    - name: Run System Tests
 #      env:
 #        AE5_HOSTNAME: dev1.ae.anacondaconnect.com
-#        AE5_HOSTNAME: aip.anaconda.com
-#        AE5_ADMIN_USERNAME: admin
-#        AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
 #        CI: true
-#      env:
-#        AE5_HOSTNAME: aip.anaconda.com
-#        AE5_USERNAME: tooltest
-#        AE5_PASSWORD: ${{ secrets.AE5_PASSWORD }}
-#        AE5_ADMIN_USERNAME: admin
-#        AE5_ADMIN_PASSWORD: ${{ secrets.AE5_ADMIN_PASSWORD }}
-#        CI: true
-#        AE5_K8S_ENDPOINT: ssh:centos
-#        AE5_K8S_PORT: 23456
 #      run: |
 #        anaconda-project run test:system
     - name: Upload to anaconda.org (Dev Build)

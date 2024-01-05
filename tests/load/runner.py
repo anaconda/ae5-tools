@@ -18,7 +18,7 @@ def run() -> None:
         shell_out_cmd += " --ci-skip"
 
     logger.info("Test Runner Configuration Complete")
-    logger.info(f"Executing: {shell_out_cmd}")
+    logger.info("Executing: %s", shell_out_cmd)
     _process_launch_wait(shell_out_cmd=shell_out_cmd)
 
 

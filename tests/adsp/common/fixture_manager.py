@@ -95,17 +95,17 @@ class FixtureManager:
                         password_temporary=False,
                     )
                     self.accounts.append(account)
-                    logger.info(f"User account {account['username']} created.")
+                    logger.info("User account %s created.", account["username"])
                     retry = False
                 except AEUnexpectedResponseError as error:
                     if "Unexpected response: 409 Conflict" in str(error):
                         if force:
                             # remove, and retry.
-                            logger.warning(f"User account {account['username']} already exists, removing..")
+                            logger.warning("User account %s already exists, removing..", account["username"])
                             self._destroy_account(username=account["username"])
                         else:
                             logger.warning(
-                                f"User account {account['username']} already exists, will not [re]create (or remove). Password may be incorrect.."
+                                "User account %s already exists, will not [re]create (or remove). Password may be incorrect..", account["username"]
                             )
                             self.accounts.append(account)
                             retry = False
@@ -119,10 +119,10 @@ class FixtureManager:
     def _create_fixture_conn(self, username: str) -> None:
         account: dict = [user for user in self.accounts if user["username"] == username][0]
         if "conn" in account:
-            logger.warning(f"User account {username} already has an active connection, skipping ...")
+            logger.warning("User account %s already has an active connection, skipping ...", username)
         else:
             if "password" in account:
-                logger.info(f"Creating connection for user {account['username']}")
+                logger.info("Creating connection for user %s", account["username"])
                 account["conn"] = FixtureManager.build_session(
                     hostname=self.ae_admin_session.hostname,
                     username=account["username"],
@@ -130,13 +130,13 @@ class FixtureManager:
                     admin=False,
                 )
             else:
-                logger.warning(f"Unable to create connection for user {account['username']}, no password specified!")
+                logger.warning("Unable to create connection for user %s, no password specified!", account["username"])
 
     def destroy_fixture_accounts(self) -> None:
         while len(self.accounts) > 0:
             account: dict = self.accounts.pop()
             if account["conn"]:
-                logger.info(f"Disconnecting user {account['username']}")
+                logger.info("Disconnecting user %s", account["username"])
                 try:
                     account["conn"].disconnect()
                 except AEException as error:
@@ -177,22 +177,20 @@ class FixtureManager:
         else:
             try:
                 self.ae_admin_session.user_delete(username=username)
-                logger.info(f"User account {username} deleted.")
+                logger.info("User account %s deleted.", username)
             except AEException as error:
                 msg: str = error.args[0]
                 if msg == f"No records found matching username={username}|id={username}":
-                    logger.warning(f"No user found matching username={username}|id={username}, skipping removal.")
+                    logger.warning("No user found matching username=%s|id=%s, skipping removal.", username, username)
                 else:
                     raise error from error
 
     def upload_fixture_project(self, proj_params: dict, owner: str, force: bool = False):
         conn: AEUserSession = self.get_account_conn(username=owner)  # [user for user in self.accounts if user["username"] == owner][0]["conn"]
 
-        # {'git_repos': {}, 'repository': 'tooltest1-74ae9699eea84681ae49c8beb4d3ae58', 'editor': 'jupyterlab', 'owner': 'tooltest1', 'tags': [], 'repo_owned': True, 'name': 'testproj1', 'repo_url': 'http://anaconda-enterprise-ap-git-storage/anaconda/tooltest1-74ae9699eea84681ae49c8beb4d3ae58.git', 'created': '2023-12-14T17:36:26.094764+00:00', 'git_server': 'default', 'project_create_status': 'done', 'url': 'http://anaconda-enterprise-ap-storage/projects/74ae9699eea84681ae49c8beb4d3ae58', 'updated': '2023-12-14T17:36:26.094764+00:00', 'id': 'a0-74ae9699eea84681ae49c8beb4d3ae58', 'resource_profile': 'default', '_record_type': 'project'}
-
         retry: bool = True
         while retry:
-            logger.info(f"Uploading project {proj_params['name']} for account {owner} ..")
+            logger.info("Uploading project %s for account %s ..", proj_params["name"], owner)
             try:
                 response: dict = conn.project_upload(
                     project_archive=proj_params["artifact"], name=proj_params["name"], tag=proj_params["tag"], wait=True
@@ -204,13 +202,12 @@ class FixtureManager:
             except AEUnexpectedResponseError as error:
                 if "Unexpected response: 400 Project name is not unique" in str(error):
                     if force:
-                        # logger.warning("Enforcing wait after encountering error on project upload")
                         # delete, and then allow it to loop ...
-                        logger.warning(f"Project {proj_params['name']} for account {owner} already exists, forcibly deleting ..")
+                        logger.warning("Project %s for account %s already exists, forcibly deleting ..", proj_params["name"], owner)
                         time.sleep(2)
                         self._destroy_fixture_project(name=proj_params["name"], owner=owner, force=force)
                     else:
-                        logger.warning(f"Project {proj_params['name']} for account {owner} already exists, pulling project info ..")
+                        logger.warning("Project %s for account %s already exists, pulling project info ..", proj_params["name"], owner)
                         response: dict = conn.project_info(ident=f"{owner}/{proj_params['name']}")
                         proj: dict = deepcopy(proj_params)
                         proj["record"] = response
@@ -234,7 +231,7 @@ class FixtureManager:
     def _destroy_fixture_project(self, name: str, owner: str, force: bool) -> None:
         # Ensure fixture is managed
         if not force and not self._lookup_fixture(name=name, owner=owner):
-            logger.warning(f"Unable to find managed project fixture for project {name} for owner {owner}, skipping removal..")
+            logger.warning("Unable to find managed project fixture for project %s for owner %s, skipping removal..", name, owner)
             logger.warning(self.projects)
             return
 
@@ -245,10 +242,9 @@ class FixtureManager:
             if self._does_project_exist(name=name, owner=owner):
                 """"""
                 try:
-                    logger.info(f"Deleting project {name} for account {owner} ..")
+                    logger.info("Deleting project %s for account %s ..", name, owner)
                     conn.project_delete(ident=f"{owner}/{name}")
                     self._unmanage_fixture(name=name, owner=owner)
-                    # logger.info("Enforcing wait after project removal")
                     time.sleep(10)
                 except AEException as error:
                     if f"No projects found matching name={name}" in str(error):

@@ -78,7 +78,7 @@ class SystemTestFixtureSuite(FixtureManager):
             if project["record"]["owner"] == self._get_account(id="1")["username"]:
                 project_name: str = project["record"]["name"]
                 project_id: str = project["record"]["id"]
-                logger.info(f"Configuring sharing on project {project['record']['name']} for {project['record']['owner']}")
+                logger.info("Configuring sharing on project %s for %s", project["record"]["name"], project["record"]["owner"])
 
                 if project_name == self.config["projects"][0]["name"]:
                     # Add user 2
@@ -105,7 +105,7 @@ class SystemTestFixtureSuite(FixtureManager):
             if project["record"]["owner"] == self._get_account(id="1")["username"]:
                 project_name: str = project["record"]["name"]
                 project_id: str = project["record"]["id"]
-                logger.info(f"Setting default editor on project {project['record']['name']} for {project['record']['owner']}")
+                logger.info("Setting default editor on project %s for %s", project["record"]["name"], project["record"]["owner"])
 
                 if project_name == self.config["projects"][0]["name"]:
                     source_user_conn.project_patch(ident=project_id, editor="jupyterlab")  # jupyterlab, notebook, vscode

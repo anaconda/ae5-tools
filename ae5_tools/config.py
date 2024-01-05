@@ -22,7 +22,7 @@ class ConfigManager:
 
     def init_path(self):
         """Ensure the config directory exists"""
-        logger.debug(f"Creating directory: {self._path}")
+        logger.debug("Creating directory: %s", self._path)
         try:
             os.makedirs(self._path, mode=0o700, exist_ok=True)
         except OSError as e:

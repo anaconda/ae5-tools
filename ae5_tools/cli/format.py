@@ -362,7 +362,7 @@ def print_output(result):
             print(result)
         return
     elif not isinstance(result, tuple):
-        raise NotImplementedError(f"Not prepared to print an object of type {type(result)}")
+        raise NotImplementedError("Not prepared to print an object of type %s", type(result))
     result, columns = result
     opts = get_options()
     if opts.get("sort"):

@@ -24,7 +24,7 @@ class TestEnvironment(unittest.TestCase):
     def test_demand_env_var_should_gracefully_fail(self):
         with self.assertRaises(EnvironmentVariableNotFoundError) as context:
             demand_env_var("SOME_VALUE")
-        self.assertEqual(str(context.exception), "Environment variable (SOME_VALUE) not found")
+        self.assertEqual(str(context.exception), "('Environment variable (%s) not found', 'SOME_VALUE')")
 
     def test_get_env_var(self):
         self.assertEqual(get_env_var("FAKE_VALUE"), os.environ["FAKE_VALUE"])
@@ -45,7 +45,7 @@ class TestEnvironment(unittest.TestCase):
         os.environ["FAKE_VALUE"] = "FAKE_VALUE"
         with self.assertRaises(EnvironmentVariableNotFoundError) as context:
             demand_env_var_as_bool("FAKE_VALUE")
-        self.assertEqual(str(context.exception), "Environment variable (FAKE_VALUE) not boolean and can not be loaded")
+        self.assertEqual(str(context.exception), "('Environment variable (%s) not boolean and can not be loaded', 'FAKE_VALUE')")
 
 
 if __name__ == "__main__":
