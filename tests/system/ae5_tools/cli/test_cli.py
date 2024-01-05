@@ -271,7 +271,7 @@ def cli_session(cli_project):
 # DNS resolution and ingress are currently failing in the new CI environments and is a known issue right now.
 # TODO: Re-enable this test when issues have been resolved.
 @pytest.mark.ci_skip
-def test_session():
+def test_session(cli_session):
     prec, srec = cli_session
     assert srec["owner"] == prec["owner"], srec
     assert srec["name"] == prec["name"], srec

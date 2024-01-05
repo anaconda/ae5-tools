@@ -37,11 +37,15 @@ jobs:
     - name: Run Unit Tests
       run: |
         anaconda-project run test:unit
-    - name: Package Build
+    - name: Build Conda Package
       run: |
-        source $CONDA/etc/profile.d/conda.sh
-        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
-        conda install -y conda-build conda-verify anaconda-client
+        mkdir build
+        conda build conda-recipe --output-folder build
+#    - name: Package Build
+#      run: |
+#        source $CONDA/etc/profile.d/conda.sh
+#        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
+#        conda install -y conda-build conda-verify anaconda-client
         conda build conda-recipe
     - name: Run Integration Tests
       run: |

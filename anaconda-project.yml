@@ -68,7 +68,7 @@ commands:
   test:integration:slipstream:
     env_spec: default
     unix: |
-      conda install $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
+      conda install build/conda-bld/noarch/ae5-tools-*.tar.bz2
       py.test --cov=ae5_tools -v tests/integration  --cov-append --cov-report=xml -vv
 
   test:load:

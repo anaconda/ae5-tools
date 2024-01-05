@@ -8,3 +8,4 @@ line_length = 150
 profile = 'black'
 src_paths = ["ae5_tools","tests"]
 skip = ["envs"]
+
