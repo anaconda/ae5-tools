@@ -1,12 +1,22 @@
+import logging
 import uuid
-
-from dotenv import load_dotenv
 
 from ae5_tools import AEUserSession
 from tests.adsp.common.fixture_manager import FixtureManager
 
-# Load env vars, - do NOT override previously defined ones
-load_dotenv(override=False)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def pytest_generate_tests(metafunc):
+    idlist = []
+    argvalues = []
+    for scenario in metafunc.cls.scenarios:
+        idlist.append(scenario[0])
+        items = scenario[1].items()
+        argnames = [x[0] for x in items]
+        argvalues.append([x[1] for x in items])
+    metafunc.parametrize(argnames, argvalues, ids=idlist, scope="class")
 
 
 class LoadTestFixtureSuite(FixtureManager):
@@ -53,17 +63,25 @@ class LoadTestFixtureSuite(FixtureManager):
         return config
 
 
-def test_sessions():
-    with LoadTestFixtureSuite(config=LoadTestFixtureSuite.gen_config(size=1)) as manager:
-        """"""
-        print(str(manager))
+# Create scenarios
+max_sessions: int = 10
+scenarios: list = []
+for size in range(1, max_sessions + 1):
+    scenarios.append(("session load scenario ", {"size": size}))
 
-        sessions: list[dict] = []
-        records = [project["record"] for project in manager.projects]
-        for record in records:
-            owner: str = record["owner"]
-            project_id: str = record["id"]
-            account_conn: AEUserSession = manager.get_account_conn(username=owner)
-            account_session = account_conn.session_start(ident=project_id, editor="jupyterlab", resource_profile="default", wait=False)
-            sessions.append(account_session)
-        print(sessions)
+
+class TestSeries:
+    scenarios = scenarios
+
+    def test_sessions(self, size):
+        with LoadTestFixtureSuite(config=LoadTestFixtureSuite.gen_config(size=size)) as manager:
+            print(f"Testing Session Count {size}")
+
+            sessions: list[dict] = []
+            records = [project["record"] for project in manager.projects]
+            for record in records:
+                owner: str = record["owner"]
+                project_id: str = record["id"]
+                account_conn: AEUserSession = manager.get_account_conn(username=owner)
+                account_session = account_conn.session_start(ident=project_id, editor="jupyterlab", resource_profile="default", wait=False)
+                sessions.append(account_session)
