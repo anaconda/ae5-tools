@@ -7,21 +7,35 @@ on:
       - '*'
 jobs:
   package:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+#    runs-on: self-hosted
+#    runs-on: self-hosted-amd64-small-privileged
+#    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
+    defaults:
+      run:
+        shell: bash -el {0}
     steps:
     - name: Retrieve the source code
       uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3
       with:
         fetch-depth: 0
-    - name: Build the package
+    - name: Install dependencies
+      # https://github.com/conda-incubator/setup-miniconda
+      uses: conda-incubator/setup-miniconda@3b0f2504dd76ef23b6d31f291f4913fb60ab5ff3 # v2
+      with:
+        channels: defaults
+        auto-activate-base: true
+        activate-environment: github.action
+        environment-file: environment.github.yml
+    - name: Conda Info
       run: |
-        source $CONDA/etc/profile.d/conda.sh
-        rm -f $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2
-        conda install -y conda-build conda-verify anaconda-client
-        conda build conda-recipe
+        conda info
+    - name: Build Conda Package
+      run: |
+        mkdir build
+        conda build conda-recipe --output-folder build
     - name: Upload to anaconda.org
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
       run: |
-        source $CONDA/bin/activate
-        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin $CONDA/conda-bld/noarch/ae5-tools-*.tar.bz2 --force
+        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin build/noarch/ae5-tools-*.tar.bz2 --force
