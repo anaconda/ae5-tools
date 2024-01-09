@@ -5,9 +5,9 @@ on:
       - master
 jobs:
   build:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
 #    runs-on: self-hosted
-#    runs-on: self-hosted-amd64-small-privileged
+    runs-on: self-hosted-amd64-small-privileged
 #    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
     defaults:
       run:
@@ -31,27 +31,27 @@ jobs:
     - name: Anaconda Project Setup
       run: |
         anaconda-project prepare --env-spec default
-    - name: Linting
-      run: |
-        anaconda-project run lint
-    - name: Run Unit Tests
-      run: |
-        anaconda-project run test:unit
-    - name: Build Conda Package
-      run: |
-        mkdir build
-        conda build conda-recipe --output-folder build
-    - name: Run Integration Tests
-      run: |
-        anaconda-project run test:integration:slipstream
-#    - name: Run System Tests
-#      env:
-#        AE5_HOSTNAME: dev1.ae.anacondaconnect.com
-#        CI: true
+#    - name: Linting
 #      run: |
-#        anaconda-project run test:system
-    - name: Upload to anaconda.org (Dev Build)
+#        anaconda-project run lint
+#    - name: Run Unit Tests
+#      run: |
+#        anaconda-project run test:unit
+#    - name: Build Conda Package
+#      run: |
+#        mkdir build
+#        conda build conda-recipe --output-folder build
+#    - name: Run Integration Tests
+#      run: |
+#        anaconda-project run test:integration:slipstream
+    - name: Run System Tests
       env:
-        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        AE5_HOSTNAME: dev1.ae.anacondaconnect.com
+        CI: true
       run: |
-        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label dev build/noarch/ae5-tools-*.tar.bz2 --force
+        anaconda-project run test:system
+#    - name: Upload to anaconda.org (Dev Build)
+#      env:
+#        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+#      run: |
+#        anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label dev build/noarch/ae5-tools-*.tar.bz2 --force
