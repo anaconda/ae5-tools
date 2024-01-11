@@ -200,11 +200,7 @@ class FixtureManager:
                 self.projects.append(proj)
                 retry = False
             except AEUnexpectedResponseError as error:
-                print("------------------------------------------")
-                print(error)
-                print("------------------------------------------")
-                if 'Project name is not unique' in str(error):
-                # if "Unexpected response: 400 Project name is not unique" in str(error):
+                if "Project name is not unique" in str(error):
                     if force:
                         # delete, and then allow it to loop ...
                         logger.warning("Project %s for account %s already exists, forcibly deleting ..", proj_params["name"], owner)
