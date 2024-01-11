@@ -15,7 +15,10 @@ from tempfile import TemporaryDirectory
 
 import requests
 from dateutil import parser
+from requests import Session
+from requests.adapters import HTTPAdapter
 from requests.packages import urllib3
+from urllib3 import Retry
 
 from .archiver import create_tar_archive
 from .config import config
@@ -222,7 +225,7 @@ class AEUnexpectedResponseError(AEException):
             msg.append(f'  json: {kwargs["json"]}')
         super(AEUnexpectedResponseError, self).__init__("\n".join(msg))
 
-    pass
+    # pass
 
 
 class AESessionBase(object):
@@ -250,14 +253,36 @@ class AESessionBase(object):
         self.password = password
         self.persist = persist
         self.prefix = prefix.lstrip("/")
-        self.session = requests.Session()
-        self.session.verify = False
-        self.session.cookies = LWPCookieJar()
+        self.session: Session = AESessionBase._build_requests_session()
         if self.persist:
             self._load()
         self.connected = self._connected()
         if self.connected:
             self._set_header()
+
+    @staticmethod
+    def _build_requests_session() -> Session:
+        session: Session = Session()
+        session.cookies = LWPCookieJar()
+
+        # TODO: This should be parameterized
+        session.verify = False
+
+        # status code defaults
+        # 403, 501, 502 are seen when ae5 is behind CloudFlare
+        # 502, 503, 504 can be encountered when ae5 is under heavy load
+        # TODO: this should be definable on a per command basis, and parameterized.
+        retries: Retry = Retry(
+            total=10,
+            backoff_factor=0.1,
+            status_forcelist=[403, 502, 503, 504],
+            allowed_methods={"POST", "PUT", "PATCH", "GET", "DELETE", "OPTIONS", "HEAD"},
+        )
+
+        adapter: HTTPAdapter = HTTPAdapter(max_retries=retries)
+        session.mount(prefix="https://", adapter=adapter)
+
+        return session
 
     @staticmethod
     def _auth_message(msg, nl=True):
@@ -1124,13 +1149,8 @@ class AEUserSession(AESessionBase):
         finally:
             if f is not None:
                 f[1].close()
-        if response.get("error"):
-            raise RuntimeError("Error uploading project: {}".format(response["error"]["message"]))
         if wait:
             self._wait(response)
-        if response["action"]["error"]:
-            raise RuntimeError("Error processing upload: {}".format(response["action"]["message"]))
-        if wait:
             return self.project_info(response["id"], format=format, retry=True)
 
     def _join_collaborators(self, what, response):
