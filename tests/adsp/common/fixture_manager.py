@@ -186,7 +186,7 @@ class FixtureManager:
                     raise error from error
 
     def upload_fixture_project(self, proj_params: dict, owner: str, force: bool = False):
-        conn: AEUserSession = self.get_account_conn(username=owner)  # [user for user in self.accounts if user["username"] == owner][0]["conn"]
+        conn: AEUserSession = self.get_account_conn(username=owner)
 
         retry: bool = True
         while retry:
@@ -200,7 +200,11 @@ class FixtureManager:
                 self.projects.append(proj)
                 retry = False
             except AEUnexpectedResponseError as error:
-                if "Unexpected response: 400 Project name is not unique" in str(error):
+                print("------------------------------------------")
+                print(error)
+                print("------------------------------------------")
+                if 'Project name is not unique' in str(error):
+                # if "Unexpected response: 400 Project name is not unique" in str(error):
                     if force:
                         # delete, and then allow it to loop ...
                         logger.warning("Project %s for account %s already exists, forcibly deleting ..", proj_params["name"], owner)

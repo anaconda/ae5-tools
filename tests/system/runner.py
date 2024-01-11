@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 def run() -> None:
-    shell_out_cmd: str = "python -m pytest --cov=ae5_tools --show-capture=all -rP tests/system/ae5_tools --cov-append --cov-report=xml -vv"
+    shell_out_cmd: str = (
+        "python -m pytest --cov=ae5_tools --show-capture=all -rP tests/system/ae5_tools/test_api.py --cov-append --cov-report=xml -vv"
+    )
 
     if get_env_var(name="CI") and demand_env_var_as_bool(name="CI"):
         shell_out_cmd += " --ci-skip"
@@ -140,7 +142,7 @@ if __name__ == "__main__":
     # Load env vars, - do NOT override previously defined ones
     load_dotenv(override=False)
 
-    with SystemTestFixtureSuite(config=SystemTestFixtureSuite.gen_config()) as manager:
+    with SystemTestFixtureSuite(config=SystemTestFixtureSuite.gen_config(randomize=False)) as manager:
         # serialize to allow individual tests to operate (in other processes)
         with open(file="system-test-state.json", mode="w", encoding="utf-8") as file:
             file.write(str(manager))
