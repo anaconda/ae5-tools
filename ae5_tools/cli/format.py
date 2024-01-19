@@ -227,7 +227,7 @@ def _str(x, isodate=False):
     elif isinstance(x, datetime):
         if isodate:
             return x.isoformat()
-        return x.strftime("%m-%d-%Y %H:%M:%S")
+        return x.strftime("%Y-%m-%d %H:%M:%S")
     else:
         return str(x)
 
