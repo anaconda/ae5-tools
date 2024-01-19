@@ -1,6 +1,6 @@
 {
-  "force": false,
-  "teardown": false,
+  "force": true,
+  "teardown": true,
   "accounts": [
     {
       "id": "1",

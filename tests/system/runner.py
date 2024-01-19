@@ -140,7 +140,7 @@ if __name__ == "__main__":
     # Load env vars, - do NOT override previously defined ones
     load_dotenv(override=False)
 
-    with SystemTestFixtureSuite(config=SystemTestFixtureSuite.gen_config(randomize=False)) as manager:
+    with SystemTestFixtureSuite(config=SystemTestFixtureSuite.gen_config(randomize=True)) as manager:
         # serialize to allow individual tests to operate (in other processes)
         with open(file="system-test-state.json", mode="w", encoding="utf-8") as file:
             file.write(str(manager))

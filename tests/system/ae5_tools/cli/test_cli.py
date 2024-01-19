@@ -268,9 +268,6 @@ def cli_session(cli_project):
     assert not any(r["id"] == srec2["id"] for r in _cmd("session", "list"))
 
 
-# DNS resolution and ingress are currently failing in the new CI environments and is a known issue right now.
-# TODO: Re-enable this test when issues have been resolved.
-@pytest.mark.ci_skip
 def test_session(cli_session):
     prec, srec = cli_session
     assert srec["owner"] == prec["owner"], srec
