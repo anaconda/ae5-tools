@@ -518,7 +518,7 @@ def test_deploy_logs(user_session, api_deployment):
     prec, drec = api_deployment
     app_prefix = "anaconda-app-" + drec["id"].rsplit("-", 1)[-1] + "-"
     logs = user_session.deployment_logs(drec, format="json")
-    assert set(logs) == {"app", "events", "name", "proxy"}, logs
+    assert set(logs) == {"app", "events", "name", "proxy", "timestamp"}, logs
     assert logs["name"].startswith(app_prefix), logs["name"]
     assert "The project is ready to run commands." in logs["app"], logs["app"]
     assert app_prefix in logs["events"], logs["events"]
