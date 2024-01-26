@@ -10,7 +10,7 @@ import pytest
 import requests
 
 from ae5_tools.api import AEUnexpectedResponseError
-from tests.adsp.common.utils import CMDException, _cmd, _compare_tarfiles
+from tests.adsp.common.utils import CMDException, _cmd, _compare_tarfiles, _str_to_datetime
 from tests.system.state import load_account
 
 
@@ -508,7 +508,7 @@ def test_login_time(admin_session, user_session):
     user_list = _cmd("user", "list")
     urec = next((r for r in user_list if r["username"] == user_session.username), None)
     assert urec is not None
-    ltm1 = datetime.strptime(urec["lastLogin"], "%Y-%m-%d %H:%M:%S.%f")
+    ltm1 = _str_to_datetime(datetime_string=urec["lastLogin"])
     assert ltm1 < now
     # No more testing here, because we want to preserve the existing sessions
 

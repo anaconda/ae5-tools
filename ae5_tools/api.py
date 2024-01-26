@@ -1153,8 +1153,13 @@ class AEUserSession(AESessionBase):
         finally:
             if f is not None:
                 f[1].close()
+        if response.get("error"):
+            raise RuntimeError("Error uploading project: {}".format(response["error"]["message"]))
         if wait:
             self._wait(response)
+        if response["action"]["error"]:
+            raise RuntimeError("Error processing upload: {}".format(response["action"]["message"]))
+        if wait:
             return self.project_info(response["id"], format=format, retry=True)
 
     def _join_collaborators(self, what, response):

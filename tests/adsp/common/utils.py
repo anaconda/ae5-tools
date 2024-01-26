@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import csv
 import json
 import logging
 import os
 import shlex
 import subprocess
 import tarfile
-from io import StringIO
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -97,3 +96,7 @@ def _compare_tarfiles(fname1, fname2):
         else:
             msg.append("File {} differs: f1: {}B, f2: {}zB".format(k, len(c1), len(c2)))
     assert False, "\n".join(msg)
+
+
+def _str_to_datetime(datetime_string: str) -> datetime:
+    return datetime.strptime(datetime_string, "%Y-%m-%dT%H:%M:%S.%f")
