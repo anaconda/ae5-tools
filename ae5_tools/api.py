@@ -225,8 +225,6 @@ class AEUnexpectedResponseError(AEException):
             msg.append(f'  json: {kwargs["json"]}')
         super(AEUnexpectedResponseError, self).__init__("\n".join(msg))
 
-    # pass
-
 
 class AESessionBase(object):
     """Base class for AE5 API interactions."""
@@ -262,13 +260,19 @@ class AESessionBase(object):
 
     @staticmethod
     def _build_requests_session() -> Session:
+        """
+        Responsible for creating the requests session object.
+        This implementation is global right now, but future work should allow more granular
+        control of retries on a per-call basis.
+        """
+
         session: Session = Session()
         session.cookies = LWPCookieJar()
 
         # TODO: This should be parameterized
         session.verify = False
 
-        # status code defaults
+        # Status Code Defaults
         # 403, 501, 502 are seen when ae5 is behind CloudFlare
         # 502, 503, 504 can be encountered when ae5 is under heavy load
         # TODO: this should be definable on a per command basis, and parameterized.
