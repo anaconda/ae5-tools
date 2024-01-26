@@ -67,9 +67,9 @@ def _cmd(*cmd, table=True):
         raise CMDException(cmd_str, p.returncode, stdoutb, stderrb)
     text = stdoutb.decode(encoding="utf-8")
     try:
-        json_result: dict = json.loads(text)
-        return json_result
+        return json.loads(text)
     except Exception:
+        # Not json parable, so return as-is to caller
         pass
     return text
 
