@@ -66,7 +66,7 @@ def editors(user_session):
 def test_editors(editors):
     for rec in editors:
         assert rec == _cmd("editor", "info", rec["id"])
-    assert sum(rec["is_default"].lower() == "true" for rec in editors) == 1
+    assert sum(rec["is_default"] is True for rec in editors) == 1
     assert set(rec["id"] for rec in editors).issuperset({"jupyterlab", "notebook"})
 
 
@@ -80,8 +80,8 @@ def test_endpoints():
 
 def test_samples():
     slist = _cmd("sample", "list")
-    assert sum(rec["is_default"].lower() == "true" for rec in slist) == 1
-    assert sum(rec["is_template"].lower() == "true" for rec in slist) > 1
+    assert sum(rec["is_default"] is True for rec in slist) == 1
+    assert sum(rec["is_template"] is True for rec in slist) > 1
     for rec in slist:
         rec2 = _cmd("sample", "info", rec["id"])
         rec3 = _cmd("sample", "info", rec["name"])
@@ -301,7 +301,7 @@ def test_session_before_changes(cli_session):
     changes1 = [c for c in changes1 if c["path"] != ".projectignore"]
     assert changes1 == [], changes1
     changes2 = _cmd("session", "changes", "--master", prec["id"])
-    changes2 = [c for c in changes1 if c["path"] != ".projectignore"]
+    changes2 = [c for c in changes2 if c["path"] != ".projectignore"]
     assert changes2 == [], changes2
 
 
@@ -353,10 +353,10 @@ def test_project_deployments(cli_deployment):
 
 def test_deploy_patch(cli_deployment):
     prec, drec = cli_deployment
-    flag = "--private" if drec["public"].lower() == "true" else "--public"
+    flag = "--private" if drec["public"] is True else "--public"
     drec2 = _cmd("deployment", "patch", flag, drec["id"])
     assert drec2["public"] != drec["public"]
-    flag = "--private" if drec2["public"].lower() == "true" else "--public"
+    flag = "--private" if drec2["public"] is True else "--public"
     drec3 = _cmd("deployment", "patch", flag, drec["id"])
     assert drec3["public"] == drec["public"]
 

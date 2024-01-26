@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import os
 import shlex
@@ -59,19 +60,19 @@ def _cmd(*cmd, table=True):
     print(f"Executing: ae5 {cmd_str}")
     cmd = ("coverage", "run", "--source=ae5_tools", "-m", "ae5_tools.cli.main") + cmd + ("--yes",)
     if table:
-        cmd += "--format", "csv"
+        cmd += "--format", "json"
     print(f"Executing: {cmd}")
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=open(os.devnull))
     stdoutb, stderrb = p.communicate()
     if p.returncode != 0:
         raise CMDException(cmd_str, p.returncode, stdoutb, stderrb)
-    text = stdoutb.decode()
-    if not table or not text.strip():
-        return text
-    result = list(csv.DictReader(StringIO(text)))
-    if result and list(result[0].keys()) == ["field", "value"]:
-        return {rec["field"]: rec["value"] for rec in result}
-    return result
+    text = stdoutb.decode(encoding="utf-8")
+    try:
+        json_result: dict = json.loads(text)
+        return json_result
+    except Exception:
+        pass
+    return text
 
 
 def _compare_tarfiles(fname1, fname2):
@@ -90,7 +91,7 @@ def _compare_tarfiles(fname1, fname2):
         if c1 == c2:
             continue
         if not msg:
-            msg.append("Comparing: f1={}, f2={}".format(fname, fname2))
+            msg.append("Comparing: f1={}, f2={}".format(fname1, fname2))
         if c1 is None or c2 is None:
             msg.append("File {} only found in {}".format(k, "f1" if c1 else "f2"))
         else:
