@@ -69,7 +69,7 @@ def _cmd(*cmd, table=True):
     try:
         return json.loads(text)
     except Exception:
-        # Not json parable, so return as-is to caller
+        # Not json parse-able, so return as-is to caller
         pass
     return text
 
