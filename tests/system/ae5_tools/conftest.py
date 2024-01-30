@@ -19,7 +19,7 @@ def user_session():
     username: str = local_account["username"]
     password: str = local_account["password"]
 
-    s = AEUserSession(hostname, username, password)
+    s = AEUserSession(hostname, username, password, persist=False)
     for run in s.run_list():
         if run["owner"] == username:
             s.run_delete(run)
@@ -68,6 +68,6 @@ def user_session():
 @pytest.fixture(scope="session")
 def admin_session():
     hostname, username, password = _get_vars("AE5_HOSTNAME", "AE5_ADMIN_USERNAME", "AE5_ADMIN_PASSWORD")
-    s = AEAdminSession(hostname, username, password)
+    s = AEAdminSession(hostname, username, password, persist=False)
     yield s
     del s

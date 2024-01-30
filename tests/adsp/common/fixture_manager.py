@@ -50,8 +50,8 @@ class FixtureManager:
 
     @staticmethod
     def _resolve_conn_params(
-        hostname: str | None = None, username: str | None = None, password: str | None = None, admin: bool = False
-    ) -> tuple[str, str, str]:
+        hostname: str | None = None, username: str | None = None, password: str | None = None, admin: bool = False, persist: bool = False
+    ) -> tuple[str, str, str, str]:
         hostname = hostname if hostname else demand_env_var(name="AE5_HOSTNAME")
 
         if not username:
@@ -66,7 +66,7 @@ class FixtureManager:
             else:
                 password = demand_env_var(name="AE5_PASSWORD")
 
-        return hostname, username, password
+        return hostname, username, password, persist
 
     @staticmethod
     def build_session(
