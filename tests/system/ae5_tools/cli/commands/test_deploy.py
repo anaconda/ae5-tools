@@ -13,7 +13,7 @@ def user_session():
     local_account: dict = load_account(id="1")
     username: str = local_account["username"]
     password: str = local_account["password"]
-    s = AEUserSession(hostname, username, password, persist=False)
+    s = AEUserSession(hostname, username, password)
     yield s
     s.disconnect()
 

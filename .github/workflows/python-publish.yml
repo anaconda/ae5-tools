@@ -7,9 +7,9 @@ on:
       - '*'
 jobs:
   package:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
 # This is still pending IT response
-#    runs-on: self-hosted-amd64-small-privileged
+    runs-on: self-hosted-amd64-small-privileged
 #    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
     defaults:
       run:
@@ -21,7 +21,7 @@ jobs:
         fetch-depth: 0
     - name: Install dependencies
       # https://github.com/conda-incubator/setup-miniconda
-      uses: conda-incubator/setup-miniconda@3b0f2504dd76ef23b6d31f291f4913fb60ab5ff3 # v2
+      uses: conda-incubator/setup-miniconda@11b562958363ec5770fef326fe8ef0366f8cbf8a # v3
       with:
         channels: defaults
         auto-activate-base: true
