@@ -38,6 +38,7 @@ jobs:
       run: |
         mkdir build
         conda build conda-recipe --debug --no-anaconda-upload --no-test --output-folder build
+        echo $?
     - name: Run Integration Tests
       run: |
         anaconda-project run test:integration:slipstream
