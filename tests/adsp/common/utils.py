@@ -32,4 +32,3 @@ def _cmd(*cmd, table=True):
         # Not json parse-able, so return as-is to caller
         pass
     return text
-
