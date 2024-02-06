@@ -5,7 +5,8 @@ on:
       - master
 jobs:
   build:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: self-hosted
     defaults:
       run:
         shell: bash -el {0}
@@ -25,9 +26,9 @@ jobs:
     - name: Conda Info
       run: |
         conda info
-    - name: Anaconda Project Setup
-      run: |
-        anaconda-project prepare --env-spec default
+#    - name: Anaconda Project Setup
+#      run: |
+#        anaconda-project prepare --env-spec default
 #    - name: Linting
 #      run: |
 #        anaconda-project run lint
