@@ -18,7 +18,6 @@ There is already a fair amount of inline help, so type `ae5 --help` to get start
 For k8s service integration refer to:
 * [k8s Service Component Documentation](docs/source/K8S_SERVER.md)
 * [Project Commands Documentation](docs/source/COMMANDS.md)
-* [System and Load Testing](docs/source/SYSTEM_TESTS.md)
 * [Contributing](CONTRIBUTING.md)
 
 ## Installation

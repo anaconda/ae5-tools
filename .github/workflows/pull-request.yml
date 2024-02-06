@@ -5,10 +5,7 @@ on:
       - master
 jobs:
   build:
-#    runs-on: ubuntu-latest
-# This is still pending IT response
-    runs-on: self-hosted-amd64-small-privileged
-#    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash -el {0}
@@ -44,13 +41,6 @@ jobs:
     - name: Run Integration Tests
       run: |
         anaconda-project run test:integration:slipstream
-# This is still pending IT response
-    - name: Run System Tests
-      env:
-        AE5_HOSTNAME: dev2.ae.anacondaconnect.com
-        CI: True
-      run: |
-        anaconda-project run test:system
     - name: Upload to anaconda.org (Dev Build)
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
