@@ -7,8 +7,9 @@ jobs:
   build:
 #    runs-on: ubuntu-latest
 # This is still pending IT response
-    runs-on: self-hosted-amd64-small-privileged
-#    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
+    runs-on: 
+      labels: self-hosted-amd64-small-privileged
+#     labels: self-hosted-amd64-large-privileged-on-demand-storage
     defaults:
       run:
         shell: bash -el {0}
