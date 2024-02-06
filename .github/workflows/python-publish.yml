@@ -30,7 +30,7 @@ jobs:
     - name: Build Conda Package
       run: |
         mkdir build
-        conda build conda-recipe --output-folder build
+        conda build conda-recipe --debug --no-anaconda-upload --no-test --output-folder build
     - name: Upload to anaconda.org
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
