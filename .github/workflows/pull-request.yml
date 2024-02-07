@@ -37,7 +37,7 @@ jobs:
     - name: Build Conda Package
       run: |
         mkdir build
-        conda build conda-recipe --debug --no-anaconda-upload --no-test --output-folder build
+        ./build-package.sh
     - name: Run Integration Tests
       run: |
         anaconda-project run test:integration:slipstream
