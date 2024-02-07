@@ -1787,11 +1787,20 @@ class AEAdminSession(AESessionBase):
         self.session.headers["Authorization"] = f'Bearer {self._sdata["access_token"]}'
 
     def _connect(self, password):
-        resp = self.session.post(
+        resp: requests.Session = self.session.post(
             self._login_base + "/token",
             data={"username": self.username, "password": password, "grant_type": "password", "client_id": "admin-cli"},
         )
+        print(resp.status_code)
+        print(resp.headers)
+        print(resp.text)
+
         self._sdata = {} if resp.status_code == 401 else resp.json()
+
+        # try:
+        #     self._sdata = {} if resp.status_code == 401 else resp.json()
+        # except requests.exceptions.JSONDecodeError as error:
+        #     self._sdata = {}
 
     def _disconnect(self):
         if self._sdata:
