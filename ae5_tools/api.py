@@ -332,6 +332,7 @@ class AESessionBase(object):
         pass
 
     def authorize(self):
+        self._set_cf_headers()
         key = f"{self.username}@{self.hostname}"
         need_password = self.password is None
         last_valid = True
