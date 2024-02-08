@@ -253,11 +253,22 @@ class AESessionBase(object):
         self.persist = persist
         self.prefix = prefix.lstrip("/")
         self.session: Session = AESessionBase._build_requests_session()
+        self._set_cf_headers()
         if self.persist:
             self._load()
         self.connected = self._connected()
         if self.connected:
             self._set_header()
+
+    def _set_cf_headers(self):
+        # If cloudflare auth is enabled, then  get and set the headers
+        # https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/#connect-your-service-to-access
+        # CF-Access-Client-Id: <Client ID>
+        # CF-Access-Client-Secret: <Client Secret>
+
+        if get_env_var(name="CF_ACCESS_CLIENT_ID") and get_env_var(name="CF_ACCESS_CLIENT_SECRET"):
+            self.session.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
+            self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
 
     @staticmethod
     def _build_requests_session() -> Session:
@@ -623,15 +634,7 @@ class AEUserSession(AESessionBase):
             if cookie.name == "_xsrf":
                 s.headers["x-xsrftoken"] = cookie.value
                 break
-
-        # If cloudflare auth is enabled, then  get and set the headers
-        # https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/#connect-your-service-to-access
-        # CF-Access-Client-Id: <Client ID>
-        # CF-Access-Client-Secret: <Client Secret>
-
-        if get_env_var(name="CF_ACCESS_CLIENT_ID") and get_env_var(name="CF_ACCESS_CLIENT_SECRET"):
-            s.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
-            s.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
+        self._set_cf_headers()
 
     def _load(self):
         s = self.session
