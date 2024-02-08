@@ -21,6 +21,7 @@ from requests.packages import urllib3
 from urllib3 import Retry
 
 from .archiver import create_tar_archive
+from .common.config.environment import demand_env_var, get_env_var
 from .config import config
 from .docker import build_image, get_condarc, get_dockerfile
 from .filter import filter_list_of_dicts, filter_vars, split_filter
@@ -622,6 +623,15 @@ class AEUserSession(AESessionBase):
             if cookie.name == "_xsrf":
                 s.headers["x-xsrftoken"] = cookie.value
                 break
+
+        # If cloudflare auth is enabled, then  get and set the headers
+        # https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/#connect-your-service-to-access
+        # CF-Access-Client-Id: <Client ID>
+        # CF-Access-Client-Secret: <Client Secret>
+
+        if get_env_var(name="CF_ACCESS_CLIENT_ID") and get_env_var(name="CF_ACCESS_CLIENT_SECRET"):
+            s.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
+            s.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
 
     def _load(self):
         s = self.session
