@@ -1829,11 +1829,32 @@ class AEAdminSession(AESessionBase):
         self.session.headers["Authorization"] = f'Bearer {self._sdata["access_token"]}'
 
     def _connect(self, password):
-        resp = self.session.post(
-            self._login_base + "/token",
-            data={"username": self.username, "password": password, "grant_type": "password", "client_id": "admin-cli"},
-        )
-        self._sdata = {} if resp.status_code == 401 else resp.json()
+        try:
+            resp = self.session.post(
+                self._login_base + "/token",
+                data={"username": self.username, "password": password, "grant_type": "password", "client_id": "admin-cli"},
+            )
+            self._sdata = {} if resp.status_code == 401 else resp.json()
+        except requests.exceptions.RetryError as error:
+            print("-------------------------")
+            print("Retry Error Detected")
+            print("-------------------------")
+            print(error)
+            print("-------------------------")
+            print(error.response)
+            print("-------------------------")
+            print(error.args)
+            print("-------------------------")
+            print(error.request)
+            print("-------------------------")
+            raise error
+        except Exception as error:
+            print("-------------------------")
+            print("Unknown Error Detected")
+            print("-------------------------")
+            print(error)
+            print("-------------------------")
+            raise error
 
     def _disconnect(self):
         if self._sdata:
