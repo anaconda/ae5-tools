@@ -291,7 +291,7 @@ class AESessionBase(object):
         retries: Retry = Retry(
             total=10,
             backoff_factor=0.1,
-            status_forcelist=[403, 502, 503, 504],
+            status_forcelist=[502, 503, 504],  # 403
             allowed_methods={"POST", "PUT", "PATCH", "GET", "DELETE", "OPTIONS", "HEAD"},
         )
 
@@ -1830,11 +1830,31 @@ class AEAdminSession(AESessionBase):
 
     def _connect(self, password):
         try:
+            self._sdata = {}
+
+            print("-------------------------")
+            print("Request Details")
+            print("-------------------------")
+            print(self.session.headers)
+            print("-------------------------")
+            print(self.session.cookies)
+            print("-------------------------")
             resp = self.session.post(
                 self._login_base + "/token",
                 data={"username": self.username, "password": password, "grant_type": "password", "client_id": "admin-cli"},
             )
-            self._sdata = {} if resp.status_code == 401 else resp.json()
+            print("-------------------------")
+            print("Response Details")
+            print("-------------------------")
+            print(resp.text)
+            print("-------------------------")
+            print(resp.headers)
+            print("-------------------------")
+            print(resp.status_code)
+            print("-------------------------")
+            if resp.status_code not in [401, 403]:
+                self._sdata = resp.json()
+
         except requests.exceptions.RetryError as error:
             print("-------------------------")
             print("Retry Error Detected")
