@@ -297,7 +297,7 @@ class AESessionBase(object):
         retries: Retry = Retry(
             total=10,
             backoff_factor=0.1,
-            status_forcelist=[502, 503, 504],  # 403
+            status_forcelist=[403, 502, 503, 504],
             allowed_methods={"POST", "PUT", "PATCH", "GET", "DELETE", "OPTIONS", "HEAD"},
         )
 
@@ -644,7 +644,7 @@ class AEUserSession(AESessionBase):
                 s.headers["x-xsrftoken"] = cookie.value
                 break
 
-        # Ensure that CoudFlare headers get added [back] to session when setting the other auth headers.
+        # Ensure that Cloudflare headers get added [back] to session when setting the other auth headers.
         self._set_cf_headers()
 
     def _load(self):
@@ -1841,51 +1841,51 @@ class AEAdminSession(AESessionBase):
 
     def _connect(self, password):
         try:
+            # Set the initial security data to an empty dictionary.
             self._sdata = {}
 
-            print("-------------------------")
-            print("Request Details")
-            print("-------------------------")
-            print(self.session.headers)
-            print("-------------------------")
-            print(self.session.cookies)
-            print("-------------------------")
-            resp = self.session.post(
+            # Get our auth
+            params: dict = {"username": self.username, "password": password, "grant_type": "password", "client_id": "admin-cli"}
+            resp: requests.Response = self.session.post(
                 self._login_base + "/token",
-                data={"username": self.username, "password": password, "grant_type": "password", "client_id": "admin-cli"},
+                data=params,
             )
-            print("-------------------------")
-            print("Response Details")
-            print("-------------------------")
-            print(resp.text)
-            print("-------------------------")
-            print(resp.headers)
-            print("-------------------------")
-            print(resp.status_code)
-            print("-------------------------")
-            if resp.status_code not in [401, 403]:
-                self._sdata = resp.json()
+            # print("-------------------------")
+            # print("Response Details")
+            # print("-------------------------")
+            # print(resp.text)
+            # print("-------------------------")
+            # print(resp.headers)
+            # print("-------------------------")
+            # print(resp.status_code)
+            # print("-------------------------")
+            if resp.status_code not in [401]:
+                try:
+                    self._sdata = resp.json()
+                except json.decoder.JSONDecodeError as error:
+                    # The response is not json parsable.
+                    # This is most likely some type of error (serialized, or html content, etc).
+                    print(f"Received an unexpected response.\nStatus Code: {resp.status_code}\n{resp.text}")
 
-        except requests.exceptions.RetryError as error:
-            print("-------------------------")
-            print("Retry Error Detected")
-            print("-------------------------")
-            print(error)
-            print("-------------------------")
-            print(error.response)
-            print("-------------------------")
-            print(error.args)
-            print("-------------------------")
-            print(error.request)
-            print("-------------------------")
-            raise error
+        except requests.exceptions.RetryError:
+            message: str = f"Exceeded maximum retry limit on call to {self._login_base}/token"
+            try:
+                message += f", response code seen: {resp.status_code}, last response: {resp.text}"
+            except NameError:
+                # if `resp` is not defined, just pass.
+                pass
+
+            print(message)
+
         except Exception as error:
-            print("-------------------------")
-            print("Unknown Error Detected")
-            print("-------------------------")
-            print(error)
-            print("-------------------------")
-            raise error
+            message: str = f"Unknown error calling {self._login_base}/token"
+            try:
+                message += f", response code seen: {resp.status_code}, last response: {resp.text}"
+            except NameError:
+                # if `resp` is not defined, just pass.
+                pass
+            print(message)
+            print(str(error))
 
     def _disconnect(self):
         if self._sdata:
