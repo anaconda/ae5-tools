@@ -1850,15 +1850,7 @@ class AEAdminSession(AESessionBase):
                 self._login_base + "/token",
                 data=params,
             )
-            # print("-------------------------")
-            # print("Response Details")
-            # print("-------------------------")
-            # print(resp.text)
-            # print("-------------------------")
-            # print(resp.headers)
-            # print("-------------------------")
-            # print(resp.status_code)
-            # print("-------------------------")
+
             if resp.status_code not in [401]:
                 try:
                     self._sdata = resp.json()
