@@ -253,7 +253,11 @@ class AESessionBase(object):
         self.persist = persist
         self.prefix = prefix.lstrip("/")
         self.session: Session = AESessionBase._build_requests_session()
+
+        # Cloudflare headers need to be present on all requests (even before auth can be start).
         self._set_cf_headers()
+
+        # Proceed with auth flow
         if self.persist:
             self._load()
         self.connected = self._connected()
@@ -261,17 +265,16 @@ class AESessionBase(object):
             self._set_header()
 
     def _set_cf_headers(self):
-        # If cloudflare auth is enabled, then  get and set the headers
-        # https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/#connect-your-service-to-access
-        # CF-Access-Client-Id: <Client ID>
-        # CF-Access-Client-Secret: <Client Secret>
+        """
+        If cloudflare auth is enabled, then get and set the headers
+        https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/#connect-your-service-to-access
+        CF-Access-Client-Id: <Client ID>
+        CF-Access-Client-Secret: <Client Secret>
+        """
 
         if get_env_var(name="CF_ACCESS_CLIENT_ID") and get_env_var(name="CF_ACCESS_CLIENT_SECRET"):
             self.session.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
             self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
-            print("--- ADDED CF HEADERS --------------------------------------------------------")
-        else:
-            print("--- NO CF HEADERS -----------------------------------------------------------")
 
     @staticmethod
     def _build_requests_session() -> Session:
@@ -335,7 +338,9 @@ class AESessionBase(object):
         pass
 
     def authorize(self):
+        # Cloudflare headers need to be present on all requests (even before auth can be start).
         self._set_cf_headers()
+
         key = f"{self.username}@{self.hostname}"
         need_password = self.password is None
         last_valid = True
@@ -638,6 +643,8 @@ class AEUserSession(AESessionBase):
             if cookie.name == "_xsrf":
                 s.headers["x-xsrftoken"] = cookie.value
                 break
+
+        # Ensure that CoudFlare headers get added [back] to session when setting the other auth headers.
         self._set_cf_headers()
 
     def _load(self):
