@@ -269,6 +269,9 @@ class AESessionBase(object):
         if get_env_var(name="CF_ACCESS_CLIENT_ID") and get_env_var(name="CF_ACCESS_CLIENT_SECRET"):
             self.session.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
             self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
+            print("--- ADDED CF HEADERS --------------------------------------------------------")
+        else:
+            print("--- NO CF HEADERS -----------------------------------------------------------")
 
     @staticmethod
     def _build_requests_session() -> Session:
