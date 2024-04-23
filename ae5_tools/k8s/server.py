@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import re
 import sys
 from urllib.parse import unquote, urlencode
 
@@ -176,12 +177,14 @@ def main(url=None, token=None, namespace=None, port=None, promql_port=None):
         namespace = os.environ.get("AE5_K8S_NAMESPACE")
         print("Namespace supplied by AE5_K8S_NAMESPACE")
     for token_file in (os.environ.get("AE5_K8S_TOKEN_FILE"),) + DEFAULT_K8S_TOKEN_FILES:
-        if token is None and (token_file and os.path.exists(token_file)):
+        if not token_file:
+            continue
+        if token is None and os.path.exists(token_file):
             print("API token supplied in file:", token_file)
             with open(token_file, "r") as fp:
                 token = fp.read().strip()
-        ns_file = token_file[-5:] + "namespace"
-        if not namespace and (token_file and os.path.exists(ns_file)):
+        ns_file = re.sub(r"([_/])token$", r"\1namespace", token_file)
+        if namespace is None and os.path.exists(ns_file):
             print("Namespace supplied in file:", ns_file)
             with open(ns_file, "r") as fp:
                 namespace = fp.read().strip()

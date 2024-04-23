@@ -113,18 +113,12 @@ def _k8s_pod_to_record(pRec):
         name = cRec["name"]
         if name == "app":
             cid = "app"
-        elif name == "app-proxy":
+        elif "proxy" in name:
             cid = "proxy"
-        elif name.startswith("tool-anaconda-platform-sync-"):
+        elif "sync" in name:
             cid = "sync"
-        elif not name.startswith("tool-proxy-"):
-            cid = "editor"
-        elif name.rsplit("-", 1)[-1] in [
-            c["name"].rsplit("-", 1)[-1] for c in pRec["spec"]["containers"] if c["name"].startswith("tool-anaconda-platform-sync-")
-        ]:
-            cid = "sync-proxy"
         else:
-            cid = "proxy"
+            cid = "editor"
         ncRec = {
             "name": name,
             "ready": cRec["ready"],
@@ -209,7 +203,7 @@ class AE5BaseTransformer(object):
         self._headers = headers
         self._session = None
         self._url = url.rstrip("/")
-        self._has_metrics = None
+        self._metrics_url = None
 
     async def connect(self):
         if self._session is None:
@@ -225,13 +219,15 @@ class AE5BaseTransformer(object):
             loop = asyncio.get_event_loop()
             return loop.run_until_complete(self.close())
 
-    async def get(self, path, type="json", ok404=False):
+    async def get(self, path, type="json", ok404=False, ok403=False):
         await self.connect()
         if not path.startswith("/"):
             path = "/api/v1/" + path
         url = self._url + path
         async with self._session.get(url, headers=self._headers) as resp:
             if resp.status == 404 and ok404:
+                return
+            if resp.status == 403 and ok403:
                 return
             resp.raise_for_status()
             if type == "json":
@@ -243,20 +239,25 @@ class AE5BaseTransformer(object):
 
 
 class AE5K8STransformer(AE5BaseTransformer):
-    async def has_metrics(self):
-        if self._has_metrics is None:
-            result = await self.get("/apis/metrics.k8s.io/v1beta1", ok404=True)
-            self._has_metrics = result is not None
-        return self._has_metrics
+    async def metrics_url(self):
+        if self._metrics_url is None:
+            for url in ("/apis/metrics.k8s.io/v1beta1", "namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1"):
+                resp = await self.get(url, ok404=True, ok403=True)
+                if resp is not None:
+                    self._metrics_url = f"{url}/namespaces/{self._ns}/pods"
+                    break
+            else:
+                self._metrics_url = ""
+        return self._metrics_url
 
     async def _pod_info(self, id, return_exceptions=False):
         if not re.match(r"[a-f0-9]{2}-[a-f0-9]{32}", id) or not id.startswith(("a1", "a2")):
             return _or_raise(ValueError(f"Invalid ID: {id}"), return_exceptions)
         prefix, slug = id.split("-", 1)
         if prefix == "a1":
-            queries = (f"anaconda-session-id={slug}",)
+            queries = (f"anaconda-session-id={slug}", f"session-id={slug}")
         else:
-            queries = (f"anaconda-app-id={slug}", f"job-name=anaconda-job-{slug}")
+            queries = (f"app-id={slug}", f"anaconda-app-id={slug}", f"job-id={slug}", f"job-name=anaconda-job-{slug}")
         for query in queries:
             query = urlencode({"labelSelector": query, "limit": 1})
             path = f"namespaces/{self._ns}/pods?{query}"
@@ -266,9 +267,9 @@ class AE5K8STransformer(AE5BaseTransformer):
         else:
             return _or_raise(KeyError(f"Pod not found: {id}"), return_exceptions)
 
-    async def _exec_pod(self, pod, namespace, container, command):
+    async def _exec_pod(self, pod, container, command):
         await self.connect()
-        path = f"/api/v1/namespaces/{namespace}/pods/{pod}/exec"
+        path = f"/api/v1/namespaces/{self._ns}/pods/{pod}/exec"
         params = {
             "command": command,
             "container": container,
@@ -334,14 +335,10 @@ class AE5K8STransformer(AE5BaseTransformer):
         if isinstance(nrec, Exception):
             return nrec
         name = nrec["name"]
-        if await self.has_metrics():
-            url = f"/apis/metrics.k8s.io/v1beta1/namespaces/{self._ns}/pods/{name}"
-        else:
-            url = f"namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/namespaces/{self._ns}/pods/{name}"
-        if id.startswith("a2-"):
-            resp2, resp3 = await self.get(url, ok404=True), None
-        else:
-            resp2, resp3 = await asyncio.gather(self.get(url, ok404=True), self._pod_changes(nrec))
+        url = await self.metrics_url()
+        resp2 = self.get(f"{url}/{name}", ok404=True) if url else self._none()
+        resp3 = self._none() if id.startswith("a2-") else self._none()
+        resp2, resp3 = await asyncio.gather(resp2, resp3)
         _pod_merge_metrics(nrec, resp2)
         if resp3 is not None:
             nrec["changes"] = resp3
@@ -372,14 +369,17 @@ class AE5K8STransformer(AE5BaseTransformer):
             await stream.write(data)
         await stream.finish()
 
+    async def _empty_list(self):
+        return {"items": []}
+
+    async def _none(self):
+        return None
+
     async def node_info(self):
         resp1 = self.get("nodes")
         resp2 = self.get("pods")
-        if await self.has_metrics():
-            url = "/apis/metrics.k8s.io/v1beta1/pods"
-        else:
-            url = "namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/pods"
-        resp3 = self.get(url)
+        url = await self.metrics_url()
+        resp3 = self.get(url) if url else self._empty_list()
         resp1, resp2, resp3 = await asyncio.gather(resp1, resp2, resp3)
         resp1, resp2, resp3 = resp1["items"], resp2["items"], resp3["items"]
 
