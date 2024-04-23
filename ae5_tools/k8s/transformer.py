@@ -201,10 +201,11 @@ class FileStream(object):
 
 
 class AE5BaseTransformer(object):
-    def __init__(self, url=None, token=None):
+    def __init__(self, url=None, token=None, namespace=None):
         headers = {"accept": "application/json"}
         if token:
             headers["authorization"] = f"Bearer {token}"
+        self._ns = namespace or "default"
         self._headers = headers
         self._session = None
         self._url = url.rstrip("/")
@@ -258,7 +259,7 @@ class AE5K8STransformer(AE5BaseTransformer):
             queries = (f"anaconda-app-id={slug}", f"job-name=anaconda-job-{slug}")
         for query in queries:
             query = urlencode({"labelSelector": query, "limit": 1})
-            path = f"namespaces/default/pods?{query}"
+            path = f"namespaces/{self._ns}/pods?{query}"
             resp1 = await self.get(path)
             if isinstance(resp1, dict) and resp1.get("items"):
                 return _k8s_pod_to_record(resp1["items"][0])
@@ -334,9 +335,9 @@ class AE5K8STransformer(AE5BaseTransformer):
             return nrec
         name = nrec["name"]
         if await self.has_metrics():
-            url = f"/apis/metrics.k8s.io/v1beta1/namespaces/default/pods/{name}"
+            url = f"/apis/metrics.k8s.io/v1beta1/namespaces/{self._ns}/pods/{name}"
         else:
-            url = f"namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/namespaces/default/pods/{name}"
+            url = f"namespaces/monitoring/services/heapster/proxy/apis/metrics/v1alpha1/namespaces/{self._ns}/pods/{name}"
         if id.startswith("a2-"):
             resp2, resp3 = await self.get(url, ok404=True), None
         else:
@@ -358,7 +359,7 @@ class AE5K8STransformer(AE5BaseTransformer):
         if follow and (stream is None or isinstance(stream, io.TextIOWrapper)):
             stream = FileStream(stream)
         follow = str(bool(follow)).lower()
-        path = f"namespaces/default/pods/{pname}/log?container={cname}&follow={follow}"
+        path = f"namespaces/{self._ns}/pods/{pname}/log?container={cname}&follow={follow}"
         ctype = "text" if stream is None else "content"
         result = await self.get(path, type=ctype)
         if ctype == "text":

@@ -43,8 +43,8 @@ class WebStream(object):
 
 
 class AE5K8SHandler(object):
-    def __init__(self, url, token, prometheus_url=None):
-        self.xfrm = AE5K8STransformer(url, token)
+    def __init__(self, url, token, namespace, prometheus_url=None):
+        self.xfrm = AE5K8STransformer(url, token, namespace)
         if prometheus_url:
             self.promql = AE5PromQLTransformer(prometheus_url, token)
 
@@ -154,17 +154,40 @@ class AE5K8SHandler(object):
         raise web.HTTPUnprocessableEntity(reason=f'Prometheus query returned status {resp["status"]}.')
 
 
-def main(url=None, token=None, port=None, promql_port=None):
-    url = url or os.environ.get("AE5_K8S_URL", DEFAULT_K8S_URL)
-    if token is None:
+def main(url=None, token=None, namespace=None, port=None, promql_port=None):
+    if url:
+        print("API url supplied as argument")
+    elif os.environ.get("AE5_K8S_URL"):
+        url = os.environ.get("AE5_K8S_URL")
+        print("API url supplied as AE5_K8S_URL")
+    else:
+        url = DEFAULT_K8S_URL
+        print("API url default value used")
+    if token is False:
+        print("API token not required")
+    elif token:
+        print("API token supplied as argument")
+    elif os.environ.get("AE5_K8S_TOKEN"):
         token = os.environ.get("AE5_K8S_TOKEN")
-    if token is None:
-        for token_file in (os.environ.get("AE5_K8S_TOKEN_FILE"),) + DEFAULT_K8S_TOKEN_FILES:
-            if token_file and os.path.exists(token_file):
-                print("Using Kubernetes API token:", token_file)
-                with open(token_file, "r") as fp:
-                    token = fp.read().strip()
-                    break
+        print("API token supplied by AE5_K8S_TOKEN")
+    if namespace:
+        print("Namespace supplied as argument")
+    elif os.environ.get("AE5_K8S_NAMESPACE"):
+        namespace = os.environ.get("AE5_K8S_NAMESPACE")
+        print("Namespace supplied by AE5_K8S_NAMESPACE")
+    for token_file in (os.environ.get("AE5_K8S_TOKEN_FILE"),) + DEFAULT_K8S_TOKEN_FILES:
+        if token is None and (token_file and os.path.exists(token_file)):
+            print("API token supplied in file:", token_file)
+            with open(token_file, "r") as fp:
+                token = fp.read().strip()
+        ns_file = token_file[-5:] + "namespace"
+        if not namespace and (token_file and os.path.exists(ns_file)):
+            print("Namespace supplied in file:", ns_file)
+            with open(ns_file, "r") as fp:
+                namespace = fp.read().strip()
+    print("API url:", url)
+    print("API token:", "found" if token else "empty")
+    print("Namespace:", namespace)
 
     if promql_port is None:
         promql_port = os.environ.get("PROMETHEUS_PORT", DEFAULT_PROMETHEUS_PORT)
@@ -176,7 +199,7 @@ def main(url=None, token=None, port=None, promql_port=None):
         promql_url = None
 
     app = web.Application()
-    handler = AE5K8SHandler(url, token, promql_url)
+    handler = AE5K8SHandler(url, token, namespace, promql_url)
     app.add_routes(
         [
             web.get("/", handler.hello),
