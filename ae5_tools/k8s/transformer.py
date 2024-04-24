@@ -311,8 +311,9 @@ class AE5K8STransformer(AE5BaseTransformer):
         ]
         result = {"modified": [], "deleted": [], "added": [], "mtime": None}
         try:
-            output = await self._exec_pod(data["name"], "default", data["containers"]["sync"]["name"], cmd)
-        except RuntimeError:
+            output = await self._exec_pod(data["name"], data["containers"]["sync"]["name"], cmd)
+        except Exception as exc:
+            print("UNEXPECTED ERROR IN EXEC_POD:", type(exc), exc)
             return result
         found = False
         gitkeys = {" D": "deleted", "??": "added"}
@@ -336,9 +337,13 @@ class AE5K8STransformer(AE5BaseTransformer):
             return nrec
         name = nrec["name"]
         url = await self.metrics_url()
-        resp2 = self.get(f"{url}/{name}", ok404=True) if url else self._none()
-        resp3 = self._none() if id.startswith("a2-") else self._none()
-        resp2, resp3 = await asyncio.gather(resp2, resp3)
+        # self._pod_changes is not working and it's not clear how long that has been the case.
+        # for now we are skipping it. It relies on _pod_exec and websockets. To debug it, put
+        # the original gather code back.
+        resp2 = self.get(f"{url}/{name}", ok404=True, ok403=True) if url else self._none()
+        # resp3 = self._none() if id.startswith("a2-") else self._pod_changes(nrec)
+        # resp2, resp3 = await asyncio.gather(resp2, resp3)
+        resp2, resp3 = await resp2, None
         _pod_merge_metrics(nrec, resp2)
         if resp3 is not None:
             nrec["changes"] = resp3
