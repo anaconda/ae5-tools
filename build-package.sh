@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Perform the build
-conda build conda-recipe --debug --no-anaconda-upload --no-test --output-folder build
+conda build conda-recipe --no-anaconda-upload --no-test --output-folder build
 
 # Check the exit status of the cp command
 if [ $? -eq 0 ]; then
