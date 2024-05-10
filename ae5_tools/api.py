@@ -1864,7 +1864,8 @@ class AEAdminSession(AESessionBase):
             try:
                 message += f", response code seen: {resp.status_code}, last response: {resp.text}"
             except NameError:
-                # if `resp` is not defined, just pass.
+                # if `resp` is not defined, then we hit the retry max before it was declared
+                # during the `session.post` operation.
                 pass
 
             print(message)
