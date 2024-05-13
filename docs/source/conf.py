@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "AE5 Tools"
-copyright = "2023, Anaconda, Inc."
+copyright = "2024, Anaconda, Inc."
 author = "Anaconda, Inc. and friends"
 
 # -- General configuration ---------------------------------------------------

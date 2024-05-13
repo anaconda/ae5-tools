@@ -8,9 +8,6 @@ on:
 jobs:
   package:
     runs-on: ubuntu-latest
-#    runs-on: self-hosted
-#    runs-on: self-hosted-amd64-small-privileged
-#    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
     defaults:
       run:
         shell: bash -el {0}
@@ -33,7 +30,7 @@ jobs:
     - name: Build Conda Package
       run: |
         mkdir build
-        conda build conda-recipe --output-folder build
+        ./build-package.sh
     - name: Upload to anaconda.org
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}

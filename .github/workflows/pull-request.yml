@@ -6,9 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-#    runs-on: self-hosted
-#    runs-on: self-hosted-amd64-small-privileged
-#    runs-on: self-hosted-amd64-large-privileged-on-demand-storage
     defaults:
       run:
         shell: bash -el {0}
@@ -40,16 +37,10 @@ jobs:
     - name: Build Conda Package
       run: |
         mkdir build
-        conda build conda-recipe --output-folder build
+        ./build-package.sh
     - name: Run Integration Tests
       run: |
         anaconda-project run test:integration:slipstream
-#    - name: Run System Tests
-#      env:
-#        AE5_HOSTNAME: dev1.ae.anacondaconnect.com
-#        CI: true
-#      run: |
-#        anaconda-project run test:system
     - name: Upload to anaconda.org (Dev Build)
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}

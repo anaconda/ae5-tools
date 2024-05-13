@@ -18,7 +18,6 @@ There is already a fair amount of inline help, so type `ae5 --help` to get start
 For k8s service integration refer to:
 * [k8s Service Component Documentation](docs/source/K8S_SERVER.md)
 * [Project Commands Documentation](docs/source/COMMANDS.md)
-* [System and Load Testing](docs/source/SYSTEM_TESTS.md)
 * [Contributing](CONTRIBUTING.md)
 
 ## Installation
@@ -66,9 +65,10 @@ The package has the following particular dependencies:
       - `revision`: `list`, `info`, `download`
     - `sample`: `info`, `list`
     - `secret`: `list`, `add`, `delete`
+    - `role`: `add`, `remove`
     - `run`: `delete`, `info`, `list`, `log`, `stop`
     - `session`: `branches`, `changes`, `info`, `list`, `open`, `start`, `stop`
-    - `user`: `info`, `list`
+    - `user`: `info`, `list`, `create`, `delete`
 - Simple commands: `call`, `login`, `logout`
 - Login options: `--hostname`, `--username`, `--admin-username`, `--admin-hostname`, `--impersonate`
 - Output format options: `--format`, `--filter`, `--columns`, `--sort`, `--width`, `--wide`, `--no-header`

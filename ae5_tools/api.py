@@ -15,9 +15,13 @@ from tempfile import TemporaryDirectory
 
 import requests
 from dateutil import parser
+from requests import Session
+from requests.adapters import HTTPAdapter
 from requests.packages import urllib3
+from urllib3 import Retry
 
 from .archiver import create_tar_archive
+from .common.config.environment import demand_env_var, get_env_var
 from .config import config
 from .docker import build_image, get_condarc, get_dockerfile
 from .filter import filter_list_of_dicts, filter_vars, split_filter
@@ -222,8 +226,6 @@ class AEUnexpectedResponseError(AEException):
             msg.append(f'  json: {kwargs["json"]}')
         super(AEUnexpectedResponseError, self).__init__("\n".join(msg))
 
-    pass
-
 
 class AESessionBase(object):
     """Base class for AE5 API interactions."""
@@ -250,14 +252,59 @@ class AESessionBase(object):
         self.password = password
         self.persist = persist
         self.prefix = prefix.lstrip("/")
-        self.session = requests.Session()
-        self.session.verify = False
-        self.session.cookies = LWPCookieJar()
+        self.session: Session = AESessionBase._build_requests_session()
+
+        # Cloudflare headers need to be present on all requests (even before auth can be start).
+        self._set_cf_headers()
+
+        # Proceed with auth flow
         if self.persist:
             self._load()
         self.connected = self._connected()
         if self.connected:
             self._set_header()
+
+    def _set_cf_headers(self):
+        """
+        If cloudflare auth is enabled, then get and set the headers
+        https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/#connect-your-service-to-access
+        CF-Access-Client-Id: <Client ID>
+        CF-Access-Client-Secret: <Client Secret>
+        """
+
+        if get_env_var(name="CF_ACCESS_CLIENT_ID") and get_env_var(name="CF_ACCESS_CLIENT_SECRET"):
+            self.session.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
+            self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
+
+    @staticmethod
+    def _build_requests_session() -> Session:
+        """
+        Responsible for creating the requests session object.
+        This implementation is global right now, but future work should allow more granular
+        control of retries on a per-call basis.
+        """
+
+        session: Session = Session()
+        session.cookies = LWPCookieJar()
+
+        # TODO: This should be parameterized
+        session.verify = False
+
+        # Status Code Defaults
+        # 403, 501, 502 are seen when ae5 is behind CloudFlare
+        # 502, 503, 504 can be encountered when ae5 is under heavy load
+        # TODO: this should be definable on a per command basis, and parameterized.
+        retries: Retry = Retry(
+            total=10,
+            backoff_factor=0.1,
+            status_forcelist=[403, 502, 503, 504],
+            allowed_methods={"POST", "PUT", "PATCH", "GET", "DELETE", "OPTIONS", "HEAD"},
+        )
+
+        adapter: HTTPAdapter = HTTPAdapter(max_retries=retries)
+        session.mount(prefix="https://", adapter=adapter)
+
+        return session
 
     @staticmethod
     def _auth_message(msg, nl=True):
@@ -291,6 +338,9 @@ class AESessionBase(object):
         pass
 
     def authorize(self):
+        # Cloudflare headers need to be present on all requests (even before auth can be start).
+        self._set_cf_headers()
+
         key = f"{self.username}@{self.hostname}"
         need_password = self.password is None
         last_valid = True
@@ -593,6 +643,9 @@ class AEUserSession(AESessionBase):
             if cookie.name == "_xsrf":
                 s.headers["x-xsrftoken"] = cookie.value
                 break
+
+        # Ensure that Cloudflare headers get added [back] to session when setting the other auth headers.
+        self._set_cf_headers()
 
     def _load(self):
         s = self.session
@@ -1787,11 +1840,45 @@ class AEAdminSession(AESessionBase):
         self.session.headers["Authorization"] = f'Bearer {self._sdata["access_token"]}'
 
     def _connect(self, password):
-        resp = self.session.post(
-            self._login_base + "/token",
-            data={"username": self.username, "password": password, "grant_type": "password", "client_id": "admin-cli"},
-        )
-        self._sdata = {} if resp.status_code == 401 else resp.json()
+        try:
+            # Set the initial security data to an empty dictionary.
+            self._sdata = {}
+
+            # Get our auth
+            params: dict = {"username": self.username, "password": password, "grant_type": "password", "client_id": "admin-cli"}
+            resp: requests.Response = self.session.post(
+                self._login_base + "/token",
+                data=params,
+            )
+
+            if resp.status_code not in [401]:
+                try:
+                    self._sdata = resp.json()
+                except json.decoder.JSONDecodeError as error:
+                    # The response is not json parsable.
+                    # This is most likely some type of error (serialized, or html content, etc).
+                    print(f"Received an unexpected response.\nStatus Code: {resp.status_code}\n{resp.text}")
+
+        except requests.exceptions.RetryError:
+            message: str = f"Exceeded maximum retry limit on call to {self._login_base}/token"
+            try:
+                message += f", response code seen: {resp.status_code}, last response: {resp.text}"
+            except NameError:
+                # if `resp` is not defined, then we hit the retry max before it was declared
+                # during the `session.post` operation.
+                pass
+
+            print(message)
+
+        except Exception as error:
+            message: str = f"Unknown error calling {self._login_base}/token"
+            try:
+                message += f", response code seen: {resp.status_code}, last response: {resp.text}"
+            except NameError:
+                # if `resp` is not defined, just pass.
+                pass
+            print(message)
+            print(str(error))
 
     def _disconnect(self):
         if self._sdata:
