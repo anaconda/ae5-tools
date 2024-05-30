@@ -46,3 +46,8 @@ jobs:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
       run: |
         anaconda --verbose --token $ANACONDA_TOKEN upload --user ae5-admin --label dev build/noarch/ae5-tools-*.tar.bz2 --force
+    - uses: actions/upload-artifact@552bf3722c16e81001aea7db72d8cedf64eb5f68
+      with:
+        name: ae5-tools.tar.gz
+        path: |
+          build/noarch/ae5-tools-*.tar.bz2
