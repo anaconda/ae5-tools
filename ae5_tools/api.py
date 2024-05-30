@@ -299,6 +299,7 @@ class AESessionBase(object):
             backoff_factor=0.1,
             status_forcelist=[403, 502, 503, 504],
             allowed_methods={"POST", "PUT", "PATCH", "GET", "DELETE", "OPTIONS", "HEAD"},
+            redirect=30
         )
 
         adapter: HTTPAdapter = HTTPAdapter(max_retries=retries)
@@ -523,52 +524,33 @@ class AESessionBase(object):
             self.authorize()
             if self.password is not None:
                 allow_retry = False
-        retries = redirects = 0
         while True:
             try:
-                response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
-                retries = 0
+                print(f"{method}, {url}, {kwargs} ...")
+                response = getattr(self.session, method)(url, allow_redirects=False, timeout=1, **kwargs)
             except requests.exceptions.ConnectionError:
-                if retries == 3:
-                    raise AEUnexpectedResponseError("Unable to connect", method, url, **kwargs)
-                retries += 1
-                time.sleep(2)
-                continue
+                raise AEUnexpectedResponseError("Unable to connect", method, url, **kwargs)
             except requests.exceptions.Timeout:
                 raise AEUnexpectedResponseError("Connection timeout", method, url, **kwargs)
+
             if 300 <= response.status_code < 400:
                 # Redirection here happens for two reasons, described below. We
                 # handle them ourselves to provide better behavior than requests.
                 url2 = response.headers["location"].rstrip()
                 if url2.startswith("/"):
                     url2 = f"https://{subdomain}{self.hostname}{url2}"
-                if url2 == url:
-                    # Self-redirects happen sometimes when the deployment is not
-                    # fully ready. If the application code isn't ready, we usually
-                    # get a 502 response, though, so I think this has to do with the
-                    # preparation of the static endpoint. As evidence for this, they
-                    # seem to occur after a rapid deploy->stop->deploy combination
-                    # on the same endpoint. So we are blocking for up to a minute here
-                    # to wait for the endpoint to be established. If we let requests
-                    # handle the redirect it would quickly reach its redirect limit.
-                    if redirects == 30:
-                        raise AEUnexpectedResponseError("Too many self-redirects", method, url, **kwargs)
-                    redirects += 1
-                    time.sleep(2)
-                else:
+                if url2 != url:
                     # In this case we are likely being redirected to auth to retrieve
                     # a cookie for the endpoint session itself. We will want to save
                     # this to avoid having to retrieve it every time. No need to sleep
                     # here since this is not an identical redirect
                     do_save = True
-                    redirects = 0
                 url = url2
                 method = "get"
             elif allow_retry and (response.status_code == 401 or self._is_login(response)):
                 self.authorize()
                 if self.password is not None:
                     allow_retry = False
-                redirects = 0
             elif response.status_code >= 400:
                 raise AEUnexpectedResponseError(response, method, url, **kwargs)
             else:
@@ -1437,8 +1419,7 @@ class AEUserSession(AESessionBase):
         open=False,
         frame=False,
         stop_on_error=False,
-        format=None,
-        _skip_endpoint_test=False,
+        format=None
     ):
         rrec = self._revision(ident, keep_latest=True)
         id, prec = rrec["project_id"], rrec["_project"]
@@ -1459,17 +1440,19 @@ class AEUserSession(AESessionBase):
         if endpoint:
             if not re.match(r"[A-Za-z0-9-]+", endpoint):
                 raise AEException(f"Invalid endpoint: {endpoint}")
-            if not _skip_endpoint_test:
-                try:
-                    self._head(f"/_errors/404.html", subdomain=endpoint)
-                    raise AEException('endpoint "{}" is already in use'.format(endpoint))
-                except AEUnexpectedResponseError:
-                    pass
             data["static_endpoint"] = endpoint
-        response = self._post_record(f"projects/{id}/deployments", api_kwargs={"json": data})
-        id = response["id"]
+
+        try:
+            response = self._post_record(f"projects/{id}/deployments", api_kwargs={"json": data})
+        except AEUnexpectedResponseError as error:
+            msg_text: str = str(error)
+            if "Deployment name is not unique" in msg_text:
+                raise AEException('endpoint "{}" is already in use'.format(endpoint)) from error
+            raise AEException("Error starting deployment: {}".format(msg_text)) from error
         if response.get("error"):
             raise AEException("Error starting deployment: {}".format(response["error"]["message"]))
+
+        id = response["id"]
         if collaborators:
             self.deployment_collaborator_list_set(id, collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
@@ -1513,6 +1496,7 @@ class AEUserSession(AESessionBase):
         # Complete the restart
         return self.deployment_start(
             "{}:{}".format(drec["project_id"], drec["revision"]),
+            name=drec["name"],
             endpoint=endpoint,
             command=drec["command"],
             resource_profile=drec["resource_profile"],
@@ -1522,8 +1506,7 @@ class AEUserSession(AESessionBase):
             open=open,
             frame=frame,
             stop_on_error=stop_on_error,
-            format=format,
-            _skip_endpoint_test=True,
+            format=format
         )
 
     def deployment_open(self, ident, frame=False, format=None):
