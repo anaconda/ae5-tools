@@ -295,7 +295,7 @@ class AESessionBase(object):
         # 502, 503, 504 can be encountered when ae5 is under heavy load
         # TODO: this should be definable on a per command basis, and parameterized.
         retries: Retry = Retry(
-            total=10,
+            total=3,
             backoff_factor=0.1,
             status_forcelist=[403, 502, 503, 504],
             allowed_methods={"POST", "PUT", "PATCH", "GET", "DELETE", "OPTIONS", "HEAD"},
