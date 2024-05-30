@@ -526,7 +526,6 @@ class AESessionBase(object):
                 allow_retry = False
         while True:
             try:
-                print(f"{method}, {url}, {kwargs} ...")
                 response = getattr(self.session, method)(url, allow_redirects=False, timeout=1, **kwargs)
             except requests.exceptions.ConnectionError:
                 raise AEUnexpectedResponseError("Unable to connect", method, url, **kwargs)
