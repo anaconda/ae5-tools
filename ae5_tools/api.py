@@ -299,7 +299,7 @@ class AESessionBase(object):
             backoff_factor=0.1,
             status_forcelist=[403, 502, 503, 504],
             allowed_methods={"POST", "PUT", "PATCH", "GET", "DELETE", "OPTIONS", "HEAD"},
-            redirect=30
+            redirect=30,
         )
 
         adapter: HTTPAdapter = HTTPAdapter(max_retries=retries)
@@ -1419,7 +1419,7 @@ class AEUserSession(AESessionBase):
         open=False,
         frame=False,
         stop_on_error=False,
-        format=None
+        format=None,
     ):
         rrec = self._revision(ident, keep_latest=True)
         id, prec = rrec["project_id"], rrec["_project"]
@@ -1506,7 +1506,7 @@ class AEUserSession(AESessionBase):
             open=open,
             frame=frame,
             stop_on_error=stop_on_error,
-            format=format
+            format=format,
         )
 
     def deployment_open(self, ident, frame=False, format=None):

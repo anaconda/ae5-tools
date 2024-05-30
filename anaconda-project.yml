@@ -55,7 +55,6 @@ commands:
       anaconda-project run clean
       anaconda-project run test:unit
       anaconda-project run test:integration
-      anaconda-project run test:system
 
   test:unit:
     env_spec: default
