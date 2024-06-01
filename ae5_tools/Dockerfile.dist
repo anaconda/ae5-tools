@@ -1,6 +1,6 @@
 # The base image is flexible; it simply needs to be able
 # to support Anaconda-built glibc binaries.
-FROM centos:8
+FROM centos:8.4.2105@sha256:a27fd8080b517143cbbbab9dfb7c8571c40d67d534bbdee55bd6c473f432b177
 
 # Miniconda is a minimal Python environment, consisting only of Python
 # and the conda package manager. Instead of hosting it in the same directory
