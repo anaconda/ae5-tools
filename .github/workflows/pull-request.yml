@@ -16,7 +16,7 @@ jobs:
         fetch-depth: 0
     - name: Install dependencies
       # https://github.com/conda-incubator/setup-miniconda
-      uses: conda-incubator/setup-miniconda@030178870c779d9e5e1b4e563269f3aa69b04081 # v3
+      uses: conda-incubator/setup-miniconda@a4260408e20b96e80095f42ff7f1a15b27dd94ca # v3
       with:
         channels: defaults
         auto-activate-base: true

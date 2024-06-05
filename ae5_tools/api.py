@@ -1037,6 +1037,8 @@ class AEUserSession(AESessionBase):
     def project_download(self, ident, filename=None, format=None):
         rrec = self._revision(ident, keep_latest=True)
         prec, rev = rrec["_project"], rrec["id"]
+        if rrec["name"] == "latest":
+            rev = "latest"
         need_filename = not bool(filename)
         if need_filename:
             revdash = f'-{rrec["name"]}' if rrec["name"] != "latest" else ""
