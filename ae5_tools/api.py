@@ -1515,6 +1515,7 @@ class AEUserSession(AESessionBase):
         # Complete the restart
         return self.deployment_start(
             "{}:{}".format(drec["project_id"], drec["revision"]),
+            name=drec["name"],
             endpoint=endpoint,
             command=drec["command"],
             resource_profile=drec["resource_profile"],
