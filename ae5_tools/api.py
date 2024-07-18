@@ -306,10 +306,6 @@ class AESessionBase(object):
             if get_env_var(name="AE5_CLIENT_CERT_PATH"):
                 self.session.cert = demand_env_var(name="AE5_CLIENT_CERT_PATH")
 
-        if get_env_var(name="CF_ACCESS_CLIENT_ID") and get_env_var(name="CF_ACCESS_CLIENT_SECRET"):
-            self.session.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
-            self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
-
     @staticmethod
     def _build_requests_session() -> Session:
         """
