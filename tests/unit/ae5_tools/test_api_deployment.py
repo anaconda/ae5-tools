@@ -39,8 +39,9 @@ def test_deployment_restart_with_same_name():
         frame=True,
         stop_on_error=False,
         format="json",
-        _skip_endpoint_test=True
+        _skip_endpoint_test=True,
     )
+
 
 def test_deployment_start():
     user_session: AEUserSession = AEUserSession(**base_params)

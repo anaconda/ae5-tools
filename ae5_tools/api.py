@@ -17,18 +17,16 @@ import requests
 from dateutil import parser
 from requests import Session
 from requests.adapters import HTTPAdapter
-from requests.packages import urllib3
 from urllib3 import Retry
 
 from .archiver import create_tar_archive
-from .common.config.environment import demand_env_var, get_env_var
+from .common.config.environment import demand_env_var, demand_env_var_as_bool, get_env_var
+from .common.contracts.errors.environment_variable_not_found_error import EnvironmentVariableNotFoundError
 from .config import config
 from .docker import build_image, get_condarc, get_dockerfile
 from .filter import filter_list_of_dicts, filter_vars, split_filter
 from .identifier import Identifier
 from .k8s.client import AE5K8SLocalClient, AE5K8SRemoteClient
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Maximum page size in keycloak
 KEYCLOAK_PAGE_MAX = int(os.environ.get("KEYCLOAK_PAGE_MAX", "1000"))
@@ -257,6 +255,9 @@ class AESessionBase(object):
         # Cloudflare headers need to be present on all requests (even before auth can be start).
         self._set_cf_headers()
 
+        # Set TLS verification settings
+        self._set_tls_verify()
+
         # Proceed with auth flow
         if self.persist:
             self._load()
@@ -276,6 +277,39 @@ class AESessionBase(object):
             self.session.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
             self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
 
+    def _set_tls_verify(self):
+        """Configure TLS for client communications."""
+
+        # 1. AE5_TLS_VERIFY is not defined
+        #      verify=False (default)
+        # 2. AE5_TLS_VERIFY=True
+        #      verify=True
+        # 3. AE5_TLS_VERIFY=False
+        #      verify=False
+        # 4. AE5_TLS_VERIFY= [OTHER]
+        #      verify=False (default)
+
+        if get_env_var(name="AE5_TLS_VERIFY"):
+            try:
+                verify: bool = demand_env_var_as_bool(name="AE5_TLS_VERIFY")
+                self.session.verify = verify
+            except EnvironmentVariableNotFoundError as error:
+                self.session.verify = False
+        else:
+            # Prior default behavior was `False`, honoring this expectation.
+            self.session.verify = False
+
+        if self.session.verify:
+            # Then check if we also need custom certs
+            if get_env_var(name="AE5_CA_BUNDLE_CERT_PATH"):
+                self.session.verify = demand_env_var(name="AE5_CA_BUNDLE_CERT_PATH")
+            if get_env_var(name="AE5_CLIENT_CERT_PATH"):
+                self.session.cert = demand_env_var(name="AE5_CLIENT_CERT_PATH")
+
+        if get_env_var(name="CF_ACCESS_CLIENT_ID") and get_env_var(name="CF_ACCESS_CLIENT_SECRET"):
+            self.session.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
+            self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
+
     @staticmethod
     def _build_requests_session() -> Session:
         """
@@ -287,7 +321,7 @@ class AESessionBase(object):
         session: Session = Session()
         session.cookies = LWPCookieJar()
 
-        # TODO: This should be parameterized
+        # Disable by default (previous behavior default)
         session.verify = False
 
         # Status Code Defaults
