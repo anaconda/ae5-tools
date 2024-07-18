@@ -1421,6 +1421,7 @@ class AEUserSession(AESessionBase):
         frame=False,
         stop_on_error=False,
         format=None,
+        _skip_endpoint_test=False,
     ):
         rrec = self._revision(ident, keep_latest=True)
         id, prec = rrec["project_id"], rrec["_project"]
@@ -1441,19 +1442,17 @@ class AEUserSession(AESessionBase):
         if endpoint:
             if not re.match(r"[A-Za-z0-9-]+", endpoint):
                 raise AEException(f"Invalid endpoint: {endpoint}")
+            if not _skip_endpoint_test:
+                try:
+                    self._head("/_errors/404.html", subdomain=endpoint)
+                    raise AEException('endpoint "{}" is already in use'.format(endpoint))
+                except AEUnexpectedResponseError:
+                    pass
             data["static_endpoint"] = endpoint
-
-        try:
-            response = self._post_record(f"projects/{id}/deployments", api_kwargs={"json": data})
-        except AEUnexpectedResponseError as error:
-            msg_text: str = str(error)
-            if "Deployment name is not unique" in msg_text:
-                raise AEException('endpoint "{}" is already in use'.format(endpoint)) from error
-            raise AEException("Error starting deployment: {}".format(msg_text)) from error
+        response = self._post_record(f"projects/{id}/deployments", api_kwargs={"json": data})
+        id = response["id"]
         if response.get("error"):
             raise AEException("Error starting deployment: {}".format(response["error"]["message"]))
-
-        id = response["id"]
         if collaborators:
             self.deployment_collaborator_list_set(id, collaborators)
         # The _wait method doesn't work here. The action isn't even updated, it seems
@@ -1508,6 +1507,7 @@ class AEUserSession(AESessionBase):
             frame=frame,
             stop_on_error=stop_on_error,
             format=format,
+            _skip_endpoint_test=True,
         )
 
     def deployment_open(self, ident, frame=False, format=None):
