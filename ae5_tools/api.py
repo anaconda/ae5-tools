@@ -282,16 +282,12 @@ class AESessionBase(object):
         """
         Configure TLS for client communications.
             Logic and order of precedence for TLS verify usage:
-            1. AE5_TLS_VERIFY is not defined
-                 verify=False (default)
-            2. AE5_TLS_VERIFY=True
-                 verify=True
-            3. AE5_TLS_VERIFY=False
-                 verify=False
-            4. AE5_TLS_VERIFY=[OTHER]
-                 verify=False (default)
-            5. AE5_TLS_VERIFY=True AND either server OR client cert is specified
+            1. AE5_TLS_VERIFY=True
+                 verify=True (use system defined certs)
+            2. Either server OR client cert is specified
                 verify=Tue (specified certs used)
+            3. AE5_TLS_VERIFY is not defined or `FALSE`
+                 verify=False (default)
         """
         if get_env_var(name="AE5_TLS_VERIFY"):
             try:
@@ -304,12 +300,12 @@ class AESessionBase(object):
             self.session.verify = False
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        if self.session.verify:
-            # Then check if we also need custom certs
-            if get_env_var(name="AE5_CA_BUNDLE_CERT_PATH"):
-                self.session.verify = demand_env_var(name="AE5_CA_BUNDLE_CERT_PATH")
-            if get_env_var(name="AE5_CLIENT_CERT_PATH"):
-                self.session.cert = demand_env_var(name="AE5_CLIENT_CERT_PATH")
+        if get_env_var(name="AE5_CA_BUNDLE_CERT_PATH"):
+            self.session.verify = True
+            self.session.verify = demand_env_var(name="AE5_CA_BUNDLE_CERT_PATH")
+        if get_env_var(name="AE5_CLIENT_CERT_PATH"):
+            self.session.verify = True
+            self.session.cert = demand_env_var(name="AE5_CLIENT_CERT_PATH")
 
     @staticmethod
     def _build_requests_session() -> Session:
