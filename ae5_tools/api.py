@@ -17,6 +17,7 @@ import requests
 from dateutil import parser
 from requests import Session
 from requests.adapters import HTTPAdapter
+from requests.packages import urllib3
 from urllib3 import Retry
 
 from .archiver import create_tar_archive
@@ -299,8 +300,9 @@ class AESessionBase(object):
             except EnvironmentVariableNotFoundError:
                 self.session.verify = False
         else:
-            # Previous default behavior was `False`, honoring this expectation.
+            # Previous default behavior was `False` with warning disabled -- honoring this expectation.
             self.session.verify = False
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         if self.session.verify:
             # Then check if we also need custom certs
