@@ -278,25 +278,28 @@ class AESessionBase(object):
             self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
 
     def _set_tls_verify(self):
-        """Configure TLS for client communications."""
-
-        # 1. AE5_TLS_VERIFY is not defined
-        #      verify=False (default)
-        # 2. AE5_TLS_VERIFY=True
-        #      verify=True
-        # 3. AE5_TLS_VERIFY=False
-        #      verify=False
-        # 4. AE5_TLS_VERIFY= [OTHER]
-        #      verify=False (default)
-
+        """
+        Configure TLS for client communications.
+            Logic and order of precedence for TLS verify usage:
+            1. AE5_TLS_VERIFY is not defined
+                 verify=False (default)
+            2. AE5_TLS_VERIFY=True
+                 verify=True
+            3. AE5_TLS_VERIFY=False
+                 verify=False
+            4. AE5_TLS_VERIFY=[OTHER]
+                 verify=False (default)
+            5. AE5_TLS_VERIFY=True AND either server OR client cert is specified
+                verify=Tue (specified certs used)
+        """
         if get_env_var(name="AE5_TLS_VERIFY"):
             try:
                 verify: bool = demand_env_var_as_bool(name="AE5_TLS_VERIFY")
                 self.session.verify = verify
-            except EnvironmentVariableNotFoundError as error:
+            except EnvironmentVariableNotFoundError:
                 self.session.verify = False
         else:
-            # Prior default behavior was `False`, honoring this expectation.
+            # Previous default behavior was `False`, honoring this expectation.
             self.session.verify = False
 
         if self.session.verify:
