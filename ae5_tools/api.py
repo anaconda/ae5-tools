@@ -294,18 +294,20 @@ class AESessionBase(object):
                 verify: bool = demand_env_var_as_bool(name="AE5_TLS_VERIFY")
                 self.session.verify = verify
             except EnvironmentVariableNotFoundError:
+                # Previous default behavior was `False` with warning disabled -- honoring this expectation.
                 self.session.verify = False
         else:
             # Previous default behavior was `False` with warning disabled -- honoring this expectation.
             self.session.verify = False
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         if get_env_var(name="AE5_CA_BUNDLE_CERT_PATH"):
-            self.session.verify = True
             self.session.verify = demand_env_var(name="AE5_CA_BUNDLE_CERT_PATH")
         if get_env_var(name="AE5_CLIENT_CERT_PATH"):
             self.session.verify = True
             self.session.cert = demand_env_var(name="AE5_CLIENT_CERT_PATH")
+
+        if self.session.verify is False:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     @staticmethod
     def _build_requests_session() -> Session:
