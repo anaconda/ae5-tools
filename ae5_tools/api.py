@@ -279,33 +279,33 @@ class AESessionBase(object):
             self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
 
     def _set_tls_verify(self):
-        """
-        Configure TLS for client communications.
-            Logic and order of precedence for TLS verify usage:
-            1. AE5_TLS_VERIFY=True
-                 verify=True (use system defined certs)
-            2. Either server OR client cert is specified
-                verify=Tue (specified certs used)
-            3. AE5_TLS_VERIFY is not defined or `FALSE`
-                 verify=False (default)
-        """
+        """Configure TLS for client communications."""
+
+        # Default to the prior behavior of disabled.
+        self.session.verify = False
+
+        # Allow explicitly enabling TLS verification.
+        # This is only needed when wanting to use a system supplied certificate chain.
+        # To use a custom chain, use the environment variable `REQUESTS_CA_BUNDLE` instead.
         if get_env_var(name="AE5_TLS_VERIFY"):
             try:
-                verify: bool = demand_env_var_as_bool(name="AE5_TLS_VERIFY")
-                self.session.verify = verify
+                self.session.verify = demand_env_var_as_bool(name="AE5_TLS_VERIFY")
             except EnvironmentVariableNotFoundError:
-                # Previous default behavior was `False` with warning disabled -- honoring this expectation.
-                self.session.verify = False
-        else:
-            # Previous default behavior was `False` with warning disabled -- honoring this expectation.
-            self.session.verify = False
+                pass
 
-        if get_env_var(name="AE5_CA_BUNDLE_CERT_PATH"):
-            self.session.verify = demand_env_var(name="AE5_CA_BUNDLE_CERT_PATH")
+        # Allow the presence of `REQUESTS_CA_BUNDLE` to toggle TLS verification on.
+        # Reduces the need for additional flags for ae5-tools under this condition.
+        if get_env_var(name="REQUESTS_CA_BUNDLE"):
+            self.session.verify = True
+
+        # Support supplying a client cert. This most likely would only
+        # be needed in edge cases outside ae5.
         if get_env_var(name="AE5_CLIENT_CERT_PATH"):
             self.session.verify = True
             self.session.cert = demand_env_var(name="AE5_CLIENT_CERT_PATH")
 
+        # If we've determined that TLS verification is disabled, then also
+        # disable the warnings. (This replicates the prior behavior).
         if self.session.verify is False:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -319,9 +319,6 @@ class AESessionBase(object):
 
         session: Session = Session()
         session.cookies = LWPCookieJar()
-
-        # Disable by default (previous behavior default)
-        session.verify = False
 
         # Status Code Defaults
         # 403, 501, 502 are seen when ae5 is behind CloudFlare
