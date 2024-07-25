@@ -21,14 +21,13 @@ from requests.packages import urllib3
 from urllib3 import Retry
 
 from .archiver import create_tar_archive
-from .common.config.environment import demand_env_var, get_env_var
+from .common.config.environment import demand_env_var, demand_env_var_as_bool, get_env_var
+from .common.contracts.errors.environment_variable_not_found_error import EnvironmentVariableNotFoundError
 from .config import config
 from .docker import build_image, get_condarc, get_dockerfile
 from .filter import filter_list_of_dicts, filter_vars, split_filter
 from .identifier import Identifier
 from .k8s.client import AE5K8SLocalClient, AE5K8SRemoteClient
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Maximum page size in keycloak
 KEYCLOAK_PAGE_MAX = int(os.environ.get("KEYCLOAK_PAGE_MAX", "1000"))
@@ -257,6 +256,9 @@ class AESessionBase(object):
         # Cloudflare headers need to be present on all requests (even before auth can be start).
         self._set_cf_headers()
 
+        # Set TLS verification settings
+        self._set_tls_verify()
+
         # Proceed with auth flow
         if self.persist:
             self._load()
@@ -276,6 +278,37 @@ class AESessionBase(object):
             self.session.headers["CF-Access-Client-Id"] = demand_env_var(name="CF_ACCESS_CLIENT_ID")
             self.session.headers["CF-Access-Client-Secret"] = demand_env_var(name="CF_ACCESS_CLIENT_SECRET")
 
+    def _set_tls_verify(self):
+        """Configure TLS for client communications."""
+
+        # Default to the prior behavior of disabled.
+        self.session.verify = False
+
+        # Allow explicitly enabling TLS verification.
+        # This is only needed when wanting to use a system supplied certificate chain.
+        # To use a custom chain, use the environment variable `REQUESTS_CA_BUNDLE` instead.
+        if get_env_var(name="AE5_TLS_VERIFY"):
+            try:
+                self.session.verify = demand_env_var_as_bool(name="AE5_TLS_VERIFY")
+            except EnvironmentVariableNotFoundError:
+                pass
+
+        # Allow the presence of `REQUESTS_CA_BUNDLE` to toggle TLS verification on.
+        # Reduces the need for additional flags for ae5-tools under this condition.
+        if get_env_var(name="REQUESTS_CA_BUNDLE"):
+            self.session.verify = True
+
+        # Support supplying a client cert. This most likely would only
+        # be needed in edge cases outside ae5.
+        if get_env_var(name="AE5_CLIENT_CERT_PATH"):
+            self.session.verify = True
+            self.session.cert = demand_env_var(name="AE5_CLIENT_CERT_PATH")
+
+        # If we've determined that TLS verification is disabled, then also
+        # disable the warnings. (This replicates the prior behavior).
+        if self.session.verify is False:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
     @staticmethod
     def _build_requests_session() -> Session:
         """
@@ -287,18 +320,16 @@ class AESessionBase(object):
         session: Session = Session()
         session.cookies = LWPCookieJar()
 
-        # TODO: This should be parameterized
-        session.verify = False
-
         # Status Code Defaults
         # 403, 501, 502 are seen when ae5 is behind CloudFlare
         # 502, 503, 504 can be encountered when ae5 is under heavy load
         # TODO: this should be definable on a per command basis, and parameterized.
         retries: Retry = Retry(
-            total=10,
+            total=3,
             backoff_factor=0.1,
             status_forcelist=[403, 502, 503, 504],
             allowed_methods={"POST", "PUT", "PATCH", "GET", "DELETE", "OPTIONS", "HEAD"},
+            redirect=30,
         )
 
         adapter: HTTPAdapter = HTTPAdapter(max_retries=retries)
@@ -523,52 +554,32 @@ class AESessionBase(object):
             self.authorize()
             if self.password is not None:
                 allow_retry = False
-        retries = redirects = 0
         while True:
             try:
                 response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
-                retries = 0
             except requests.exceptions.ConnectionError:
-                if retries == 3:
-                    raise AEUnexpectedResponseError("Unable to connect", method, url, **kwargs)
-                retries += 1
-                time.sleep(2)
-                continue
+                raise AEUnexpectedResponseError("Unable to connect", method, url, **kwargs)
             except requests.exceptions.Timeout:
                 raise AEUnexpectedResponseError("Connection timeout", method, url, **kwargs)
+
             if 300 <= response.status_code < 400:
                 # Redirection here happens for two reasons, described below. We
                 # handle them ourselves to provide better behavior than requests.
                 url2 = response.headers["location"].rstrip()
                 if url2.startswith("/"):
                     url2 = f"https://{subdomain}{self.hostname}{url2}"
-                if url2 == url:
-                    # Self-redirects happen sometimes when the deployment is not
-                    # fully ready. If the application code isn't ready, we usually
-                    # get a 502 response, though, so I think this has to do with the
-                    # preparation of the static endpoint. As evidence for this, they
-                    # seem to occur after a rapid deploy->stop->deploy combination
-                    # on the same endpoint. So we are blocking for up to a minute here
-                    # to wait for the endpoint to be established. If we let requests
-                    # handle the redirect it would quickly reach its redirect limit.
-                    if redirects == 30:
-                        raise AEUnexpectedResponseError("Too many self-redirects", method, url, **kwargs)
-                    redirects += 1
-                    time.sleep(2)
-                else:
+                if url2 != url:
                     # In this case we are likely being redirected to auth to retrieve
                     # a cookie for the endpoint session itself. We will want to save
                     # this to avoid having to retrieve it every time. No need to sleep
                     # here since this is not an identical redirect
                     do_save = True
-                    redirects = 0
                 url = url2
                 method = "get"
             elif allow_retry and (response.status_code == 401 or self._is_login(response)):
                 self.authorize()
                 if self.password is not None:
                     allow_retry = False
-                redirects = 0
             elif response.status_code >= 400:
                 raise AEUnexpectedResponseError(response, method, url, **kwargs)
             else:
@@ -1463,7 +1474,7 @@ class AEUserSession(AESessionBase):
                 raise AEException(f"Invalid endpoint: {endpoint}")
             if not _skip_endpoint_test:
                 try:
-                    self._head(f"/_errors/404.html", subdomain=endpoint)
+                    self._head("/_errors/404.html", subdomain=endpoint)
                     raise AEException('endpoint "{}" is already in use'.format(endpoint))
                 except AEUnexpectedResponseError:
                     pass
