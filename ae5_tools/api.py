@@ -1551,7 +1551,19 @@ class AEUserSession(AESessionBase):
 
     def deployment_patch(self, ident, format=None, **kwargs):
         drec = self._ident_record("deployment", ident)
-        data = {k: v for k, v in kwargs.items() if v is not None}
+        data = {k: v for k, v in kwargs.items() if v is not None and v != drec[k]}
+        if '_revision' in ident:
+            # add to data if current deployed revision is not _revision
+            # validate the revision exists before patching
+            dep2proj = {
+                'id': ident['project_id'],
+                'url': ident['project_url'],
+                '_revision': ident['_revision'],
+                '_record_type': 'project',
+            }
+            rrec = self._revision(dep2proj)
+            if drec['revision'] != rrec['name']:
+                data['revision'] = rrec['name']
         if data:
             id = drec["id"]
             self._patch(f"deployments/{id}", json=data)

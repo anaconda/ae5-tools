@@ -82,14 +82,21 @@ def token(**kwargs):
 
 
 @deployment.command()
-@ident_filter("deployment", required=True)
+@ident_filter("deployment", handle_revision=True, required=True)
 @click.option("--public/--private", is_flag=True, default=None, help="Make the deployment public/private (default).")
+@click.option("--resource-profile", help="Update resource profile for this deployment.")
 @global_options
 def patch(**kwargs):
     """Change a deployment's public/private status.
 
     The DEPLOYMENT identifier need not be fully specified, and may even include
     wildcards. But it must match exactly one deployment.
+
+    An example to update/change the revision of the project-deployment:
+
+        ae5 deployment patch DEPLOYMENT_IDENTIFIER:<revision>
+
+    The 'revision' can be 'latest' or revision contained in 'ae5 project revision list'.
     """
     cluster_call("deployment_patch", **kwargs)
 
