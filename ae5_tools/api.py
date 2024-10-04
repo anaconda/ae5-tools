@@ -539,6 +539,7 @@ class AESessionBase(object):
     def _api(self, method, endpoint, **kwargs):
         format = kwargs.pop("format", None)
         subdomain = kwargs.pop("subdomain", None)
+        override_redirects = kwargs.pop("override_redirects", False)
         isabs, endpoint = endpoint.startswith("/"), endpoint.lstrip("/")
         if subdomain:
             subdomain += "."
@@ -556,7 +557,10 @@ class AESessionBase(object):
                 allow_retry = False
         while True:
             try:
-                response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
+                if override_redirects:
+                    response = getattr(self.session, method)(url, **kwargs)
+                else:
+                    response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
             except requests.exceptions.ConnectionError:
                 raise AEUnexpectedResponseError("Unable to connect", method, url, **kwargs)
             except requests.exceptions.Timeout:
