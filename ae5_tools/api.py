@@ -189,6 +189,22 @@ _DTYPES = {
     "time": "timestamp/ms",
 }
 
+# Used by _response_hook to help log redirected URLs
+last_redirect = None
+
+
+# This is a wrapper around session.request that enables us to do debug logging
+def _response_hook(resp, *args, **kwargs):
+    global last_redirect
+    req = resp.request
+    url = req.url
+    code = resp.status_code
+    prefix = req.method.upper()
+    if url == last_redirect:
+        prefix = "-> " + prefix
+    print(prefix, re.sub('[?].*', '?...', url), code, file=sys.stderr)
+    last_redirect = resp.headers['location'] if 300 <= code < 400 else None
+
 
 class EmptyRecordList(list):
     def __init__(self, record_type, columns=None):
@@ -334,6 +350,9 @@ class AESessionBase(object):
 
         adapter: HTTPAdapter = HTTPAdapter(max_retries=retries)
         session.mount(prefix="https://", adapter=adapter)
+
+        if get_env_var(name="API_DEBUG"):
+            session.hooks['response'].append(_response_hook)
 
         return session
 
