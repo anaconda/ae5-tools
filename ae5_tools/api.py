@@ -202,7 +202,7 @@ def _response_hook(resp, *args, **kwargs):
     prefix = req.method.upper()
     if url == last_redirect:
         prefix = "-> " + prefix
-    print(prefix, re.sub("[?].*", "?...", url), code, file=sys.stderr)
+    print(prefix, url, code, file=sys.stderr)
     last_redirect = resp.headers["location"] if 300 <= code < 400 else None
 
 
