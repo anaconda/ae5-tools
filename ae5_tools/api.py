@@ -202,8 +202,8 @@ def _response_hook(resp, *args, **kwargs):
     prefix = req.method.upper()
     if url == last_redirect:
         prefix = "-> " + prefix
-    print(prefix, re.sub('[?].*', '?...', url), code, file=sys.stderr)
-    last_redirect = resp.headers['location'] if 300 <= code < 400 else None
+    print(prefix, re.sub("[?].*", "?...", url), code, file=sys.stderr)
+    last_redirect = resp.headers["location"] if 300 <= code < 400 else None
 
 
 class EmptyRecordList(list):
@@ -352,7 +352,7 @@ class AESessionBase(object):
         session.mount(prefix="https://", adapter=adapter)
 
         if get_env_var(name="API_DEBUG"):
-            session.hooks['response'].append(_response_hook)
+            session.hooks["response"].append(_response_hook)
 
         return session
 
