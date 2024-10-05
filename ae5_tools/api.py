@@ -2120,7 +2120,7 @@ class AEAdminSession(AESessionBase):
             urec.setdefault("lastLogin", 0)
         return users
 
-    def user_list(self, filter: str | None = None, format: str | None = None, include_login=True):
+    def user_list(self, filter: str | None = None, format: str | None = None, include_login=True, fast=False):
         """
         Provides User details.
 
@@ -2132,6 +2132,8 @@ class AEAdminSession(AESessionBase):
             CLI output type.  If none is provided, `text` is the default.
         include_login: bool = True
             Used for `_post_user` post-processing of records.
+        fast: bool = False
+            Used for impersonation. Skips the group and role queries
 
         Returns
         -------
@@ -2141,6 +2143,11 @@ class AEAdminSession(AESessionBase):
 
         # Get user list
         users = self._get_paginated("users")
+
+        # Fast exit mode
+        if fast:
+            users = self._fix_records("user", users, filter)
+            return self._format_response(users, format=format)
 
         # Get realm roles user map
         role_maps: dict[str, list] = self._build_realm_role_user_map()
@@ -2388,12 +2395,12 @@ class AEAdminSession(AESessionBase):
             user["realm_groups"] = self._get_user_realm_groups(user=user, group_maps=group_maps)
         return users
 
-    def user_info(self, ident, format=None, quiet=False, include_login=True):
-        response = self._ident_record("user", ident, quiet=False, include_login=include_login)
+    def user_info(self, ident, format=None, quiet=False, include_login=True, fast=False):
+        response = self._ident_record("user", ident, quiet=False, include_login=include_login, fast=fast)
         return self._format_response(response, format)
 
     def impersonate(self, user_or_id):
-        record = self.user_info(user_or_id, include_login=False)
+        record = self.user_info(user_or_id, fast=True)
         old_headers = self.session.headers.copy()
         try:
             self._post(f'users/{record["id"]}/impersonation')
