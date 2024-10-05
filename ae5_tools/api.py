@@ -695,23 +695,23 @@ class AEUserSession(AESessionBase):
     def _connect(self, password):
         if isinstance(password, AEAdminSession):
             self.session.cookies = password.impersonate(self.username)
-        else:
-            params = {
-                "client_id": "anaconda-platform",
-                "scope": "openid",
-                "response_type": "code",
-                "redirect_uri": f"https://{self.hostname}/login",
-            }
-            url = f"https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth"
-            resp = self.session.get(url, params=params)
-            match = re.search(r'<form id="kc-form-login".*?action="([^"]*)"', resp.text, re.M)
-            if not match:
-                # Already logged in, apparently?
-                return
-            data = {"username": self.username, "password": password}
-            resp = self.session.post(match.groups()[0].replace("&amp;", "&"), data=data)
-            if "Invalid username or password." in resp.text:
-                self.session.cookies.clear()
+        params = {
+            "client_id": "anaconda-platform",
+            "scope": "openid",
+            "response_type": "code",
+            "redirect_uri": f"https://{self.hostname}/login",
+        }
+        url = f"https://{self.hostname}/auth/realms/AnacondaPlatform/protocol/openid-connect/auth"
+        resp = self.session.get(url, params=params)
+        match = re.search(r'<form id="kc-form-login".*?action="([^"]*)"', resp.text, re.M)
+        if not match:
+            # This means we are already logged in.
+            # This will reliably happen in impersonation mode
+            return
+        data = {"username": self.username, "password": password}
+        resp = self.session.post(match.groups()[0].replace("&amp;", "&"), data=data)
+        if "Invalid username or password." in resp.text:
+            self.session.cookies.clear()
 
     def _disconnect(self):
         # This will actually close out the session, so even if the cookie had
@@ -2417,9 +2417,7 @@ class AEAdminSession(AESessionBase):
                 "response_type": "code",
                 "redirect_uri": f"https://{self.hostname}/login",
             }
-            self._get("/auth/realms/AnacondaPlatform/protocol/openid-connect/auth", params=params)
-            cookies, self.session.cookies = self.session.cookies, LWPCookieJar()
-            return cookies
+            return self.session.cookies
         finally:
-            self.session.cookies.clear()
+            self.session.cookies = LWPCookieJar()
             self.session.headers = old_headers
