@@ -2404,12 +2404,6 @@ class AEAdminSession(AESessionBase):
         old_headers = self.session.headers.copy()
         try:
             self._post(f'users/{record["id"]}/impersonation')
-            params = {
-                "client_id": "anaconda-platform",
-                "scope": "openid",
-                "response_type": "code",
-                "redirect_uri": f"https://{self.hostname}/login",
-            }
             return self.session.cookies
         finally:
             self.session.cookies = LWPCookieJar()
