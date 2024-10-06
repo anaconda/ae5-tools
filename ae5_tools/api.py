@@ -12,6 +12,7 @@ from datetime import datetime
 from http.cookiejar import LWPCookieJar
 from os.path import abspath, basename, isdir, isfile, join
 from tempfile import TemporaryDirectory
+from urllib.parse import urljoin
 
 import requests
 from dateutil import parser
@@ -267,6 +268,7 @@ class AESessionBase(object):
         self.password = password
         self.persist = persist
         self.prefix = prefix.lstrip("/")
+        self.base = f"https://{self.hostname}/{self.prefix}/"
         self.session: Session = AESessionBase._build_requests_session()
 
         # Cloudflare headers need to be present on all requests (even before auth can be start).
@@ -558,15 +560,8 @@ class AESessionBase(object):
     def _api(self, method, endpoint, **kwargs):
         format = kwargs.pop("format", None)
         subdomain = kwargs.pop("subdomain", None)
-        isabs, endpoint = endpoint.startswith("/"), endpoint.lstrip("/")
-        if subdomain:
-            subdomain += "."
-            isabs = True
-        else:
-            subdomain = ""
-        if not isabs:
-            endpoint = f"{self.prefix}/{endpoint}"
-        url = f"https://{subdomain}{self.hostname}/{endpoint}"
+        base = self.base.replace("//", f"//{subdomain}.") if subdomain else self.base
+        url = urljoin(base, endpoint)
         do_save = False
         allow_retry = True
         if not self.connected:
@@ -584,9 +579,7 @@ class AESessionBase(object):
             if 300 <= response.status_code < 400:
                 # Redirection here happens for two reasons, described below. We
                 # handle them ourselves to provide better behavior than requests.
-                url2 = response.headers["location"].rstrip()
-                if url2.startswith("/"):
-                    url2 = f"https://{subdomain}{self.hostname}{url2}"
+                url2 = urljoin(url, response.headers["location"].rstrip())
                 if url2 != url:
                     # In this case we are likely being redirected to auth to retrieve
                     # a cookie for the endpoint session itself. We will want to save
