@@ -269,7 +269,8 @@ class AESessionBase(object):
         self.prefix = prefix.lstrip("/")
         self.session: Session = AESessionBase._build_requests_session()
 
-        # Cloudflare headers need to be present on all requests (even before auth can be start).
+        # Cloudflare headers need to be present on all requests.
+        # We have improved the logic here so this only needs to be called once
         self._set_cf_headers()
 
         # Set TLS verification settings
@@ -278,9 +279,7 @@ class AESessionBase(object):
         # Proceed with auth flow
         if self.persist:
             self._load()
-        self.connected = self._connected()
-        if self.connected:
-            self._set_header()
+        self._set_header()
 
     def _set_cf_headers(self):
         """
@@ -373,24 +372,10 @@ class AESessionBase(object):
                 return password
             cls._auth_message("Must supply a password.")
 
-    def __del__(self):
-        # Try to be a good citizen and shut down the active session.
-        # But fail silently if it does not work. In particular, if this
-        # destructor is called too late in the shutdown process, the call
-        # to requests will fail with an ImportError.
-        if sys.meta_path is not None and not getattr(self, "persist", True) and self.connected:
-            try:
-                self.disconnect()
-            except Exception:
-                pass
-
     def _is_login(self, response):
         pass
 
     def authorize(self):
-        # Cloudflare headers need to be present on all requests (even before auth can be start).
-        self._set_cf_headers()
-
         key = f"{self.username}@{self.hostname}"
         need_password = self.password is None
         last_valid = True
@@ -405,19 +390,16 @@ class AESessionBase(object):
             if not need_password:
                 raise AEException("Invalid username or password.")
             last_valid = False
-        if self._connected():
-            self.connected = True
-            self._set_header()
-            if self.persist:
-                self._save()
+        self._set_header()
+        if self.persist:
+            self._save()
 
     def disconnect(self):
         self._disconnect()
-        self.session.headers.clear()
+        self._set_header()
         self.session.cookies.clear()
         if self.persist:
             self._save()
-        self.connected = False
 
     def _filter_records(self, filter, records):
         if not filter or not records:
@@ -569,10 +551,9 @@ class AESessionBase(object):
         url = f"https://{subdomain}{self.hostname}/{endpoint}"
         do_save = False
         allow_retry = True
-        if not self.connected:
+        if not self._connected():
             self.authorize()
-            if self.password is not None:
-                allow_retry = False
+            allow_retry = False
         while True:
             try:
                 response = getattr(self.session, method)(url, allow_redirects=False, **kwargs)
@@ -597,8 +578,7 @@ class AESessionBase(object):
                 method = "get"
             elif allow_retry and (response.status_code == 401 or self._is_login(response)):
                 self.authorize()
-                if self.password is not None:
-                    allow_retry = False
+                allow_retry = False
             elif response.status_code >= 400:
                 raise AEUnexpectedResponseError(response, method, url, **kwargs)
             else:
@@ -669,13 +649,14 @@ class AEUserSession(AESessionBase):
 
     def _set_header(self):
         s = self.session
+        key = "x-xsrftoken"
         for cookie in s.cookies:
             if cookie.name == "_xsrf":
                 s.headers["x-xsrftoken"] = cookie.value
                 break
-
-        # Ensure that Cloudflare headers get added [back] to session when setting the other auth headers.
-        self._set_cf_headers()
+        else:
+            if key in s.headers:
+                del s.headers[key]
 
     def _load(self):
         s = self.session
@@ -1857,7 +1838,7 @@ class AEUserSession(AESessionBase):
 
 class AEAdminSession(AESessionBase):
     def __init__(self, hostname, username, password=None, persist=True):
-        self._sdata = None
+        self._sdata = {}
         self._login_base = f"https://{hostname}/auth/realms/master/protocol/openid-connect"
         super(AEAdminSession, self).__init__(hostname, username, password, prefix="auth/admin/realms/AnacondaPlatform", persist=persist)
 
@@ -1882,7 +1863,13 @@ class AEAdminSession(AESessionBase):
         return isinstance(self._sdata, dict) and "access_token" in self._sdata
 
     def _set_header(self):
-        self.session.headers["Authorization"] = f'Bearer {self._sdata["access_token"]}'
+        atoken = self._sdata.get("access_token")
+        headers = self.session.headers
+        key = "Authorization"
+        if atoken:
+            headers[key] = f'Bearer {atoken}'
+        elif key in headers:
+            del headers[key]
 
     def _connect(self, password):
         try:
