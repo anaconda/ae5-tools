@@ -93,7 +93,7 @@ COLUMNS = {
     ],
     "resource_profile": ["name", "description", "cpu", "memory", "gpu", "id"],
     "editor": ["name", "id", "is_default", "packages"],
-    "sample": ["name", "id", "is_template", "is_default", "description", "download_url", "owner", "created", "updated"],
+    "sample": ["name", "id", "is_template", "is_default", "description", "download_url", "owner", "created", "updated", "categories"],
     "deployment": [
         "endpoint",
         "name",
@@ -499,7 +499,7 @@ class AESessionBase(object):
     def _format_table(self, response, columns):
         is_series = isinstance(response, dict)
         rlist = [response] if is_series else response
-        csrc = list(rlist[0]) if rlist else getattr(response, "_columns", ())
+        csrc = set.union(*map(set, rlist)) if rlist else getattr(response, "_columns", ())
         columns = [c.lstrip("?") for c in (columns or ())]
         cdst = [c for c in columns if c in csrc]
         cdst.extend(c for c in csrc if c not in columns and not c.startswith("_"))
